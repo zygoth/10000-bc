@@ -2,6 +2,7 @@ import { PLANT_BY_ID, PLANT_CATALOG, getSeason, isDayInWindow } from './plantCat
 import { GROUND_FUNGUS_CATALOG, GROUND_FUNGUS_BY_ID, isDayInSeasonWindow } from './groundFungusCatalog.mjs';
 import { LOG_FUNGUS_CATALOG, LOG_FUNGUS_BY_ID, isDayInLogWindow } from './logFungusCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
+import { ITEM_BY_ID } from './itemCatalog.mjs';
 import { applyEnvironmentalVitality, recalculateDynamicShade } from './simEcology.mjs';
 import { clonePlant, cloneTile, createEmptyRecentDispersal } from './simState.mjs';
 import {
@@ -27,68 +28,118 @@ import {
   mulberry32,
   tileIndex,
 } from './simWorld.mjs';
-
-const DEFAULT_MAP_WIDTH = 80;
-const DEFAULT_MAP_HEIGHT = 80;
-const MAX_PLANTS_PER_TILE = 1;
-const WINTER_DAYS_PER_YEAR = 10;
-const PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE = 0.05;
-const PERENNIAL_WINTER_DAILY_DEATH_RATE = 1 - Math.pow(
-  1 - PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE,
-  1 / WINTER_DAYS_PER_YEAR,
-);
-const DEAD_LOG_DECAY_FERTILITY_BONUS_CENTER = 0.06;
-const DEAD_LOG_DECAY_FERTILITY_BONUS_ADJACENT = 0.03;
-const MIN_DAYS_FOR_GROUND_FUNGUS_ZONE_GENERATION = 400;
-const MIN_DAYS_FOR_BEEHIVE_GENERATION = 400;
-const MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION = 400;
-const MIN_DAYS_FOR_ANIMAL_ZONE_GENERATION = 400;
-const MIN_DAYS_FOR_FISH_POPULATION_GENERATION = 0;
-const FISH_DAILY_RECOVERY_RATIO = 0.07;
-const FISH_DENSITY_VARIATION_MIN = 0.8;
-const FISH_DENSITY_VARIATION_MAX = 1.2;
-const FISH_LARGE_SCALE_CELL_SIZE = 8;
-const FISH_LARGE_SCALE_WEIGHT = 0.65;
-const MAX_LOG_FUNGI_PER_LOG = 3;
-const ANIMAL_DENSITY_RADIUS_TILES = 5;
-const ROTTING_ORGANIC_ITEM_ID = 'rotting_organic';
-const ROTTING_ORGANIC_DECAY_DAYS = 2;
-const ROTTING_ORGANIC_FERTILITY_BONUS = 0.02;
-const RAISED_SLEEPING_PLATFORM_STATION_ID = 'raised_sleeping_platform';
-const WINDBREAK_REFLECTOR_WALL_STATION_ID = 'windbreak_reflector_wall';
-const CAMP_COMFORT_STATION_IDS = new Set([
+import {
+  applyDailyWaterFreezeState,
+  ensureDailyWeatherState,
+  initializeDailyWeatherState,
+  rollDailyWeatherForCurrentDay,
+  windStrengthLabel,
+} from './simWeather.mjs';
+import {
+  animalTileDensityKey,
+  canGenerateAnimalZonesInternal,
+  getAnimalDensityAtTile,
+} from './simAnimalZones.mjs';
+import {
+  computeAnimalPlantContribution,
+  distanceFalloffWeight,
+  generateAnimalZonesInternal,
+} from './simAnimalZoneGeneration.mjs';
+import {
+  buildSquirrelDensityByTile,
+  computeSquirrelCacheTargetCount,
+} from './simSquirrelDensity.mjs';
+import {
+  canGenerateSquirrelCachesInternal,
+  clearSquirrelCaches,
+  resolveSquirrelCacheItemPool,
+  selectSquirrelCacheCandidatesWithSpread,
+} from './simSquirrelCaches.mjs';
+import {
+  applyFishPopulationRecovery,
+  canGenerateFishPopulationsInternal,
+  generateFishPopulationsInternal,
+  getFishDensityAtTile,
+} from './simFishPopulation.mjs';
+export { getAnimalDensityAtTile, getFishDensityAtTile };
+import {
+  createInProgressActionEnvelope,
+  isInProgressActionEnvelope,
+  normalizeInProgressTicks,
+} from './simTickEnvelope.mjs';
+import {
+  ANIMAL_DENSITY_RADIUS_TILES,
+  AUTO_ROD_ATTRACTION_MULTIPLIER,
+  AUTO_ROD_OVERNIGHT_ATTEMPTS,
+  BEEHIVE_BEESWAX_RANGE_GRAMS,
+  BEEHIVE_HONEY_RANGE_GRAMS,
+  BEEHIVE_LARVAE_RANGE_GRAMS,
+  BEEHIVE_SPECIES_ID,
+  CAMP_COMFORT_STATION_IDS,
+  COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK,
+  DEADFALL_DAILY_RELIABILITY_DECAY,
+  DEADFALL_MAX_CATCH_WEIGHT_G,
+  DEADFALL_MIN_RELIABILITY,
+  DEADFALL_TRAP_CATCH_MODIFIER,
+  DEAD_LOG_DECAY_FERTILITY_BONUS_ADJACENT,
+  DEAD_LOG_DECAY_FERTILITY_BONUS_CENTER,
+  DEFAULT_MAP_HEIGHT,
+  DEFAULT_MAP_WIDTH,
+  EARTHWORM_DECAY_DAYS,
+  EARTHWORM_ITEM_ID,
+  EQUIPPABLE_ITEM_TO_SLOT,
+  FISH_DAILY_RECOVERY_RATIO,
+  FISH_DENSITY_VARIATION_MAX,
+  FISH_DENSITY_VARIATION_MIN,
+  FISH_LARGE_SCALE_CELL_SIZE,
+  FISH_LARGE_SCALE_WEIGHT,
+  FISH_TRAP_ATTEMPTS_PER_DAY,
+  FISH_TRAP_DAILY_RELIABILITY_DECAY,
+  FISH_TRAP_MAX_STORED_CATCH,
+  FISH_TRAP_MIN_RELIABILITY,
+  HARVEST_TOOL_INVENTORY_ALIASES,
+  ITEM_FOOTPRINT_OVERRIDES,
+  LINE_SNAP_BASE_PROBABILITY,
+  LINE_SNAP_BASE_WEIGHT_G,
+  MAX_LOG_FUNGI_PER_LOG,
+  MAX_PLANTS_PER_TILE,
+  MIN_DAYS_FOR_BEEHIVE_GENERATION,
+  MIN_DAYS_FOR_FISH_POPULATION_GENERATION,
+  MIN_DAYS_FOR_GROUND_FUNGUS_ZONE_GENERATION,
+  MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION,
+  PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE,
+  PERENNIAL_WINTER_DAILY_DEATH_RATE,
   RAISED_SLEEPING_PLATFORM_STATION_ID,
+  ROTTING_ORGANIC_DECAY_DAYS,
+  ROTTING_ORGANIC_FERTILITY_BONUS,
+  ROTTING_ORGANIC_ITEM_ID,
+  SAP_FILLED_VESSEL_ITEM_ID,
+  SAP_TAP_DAILY_FILL_UNITS,
+  SAP_TAP_VESSEL_CAPACITY_UNITS,
+  SIMPLE_SNARE_BASE_CATCH_CHANCE,
+  SIMPLE_SNARE_DAILY_RELIABILITY_DECAY,
+  SIMPLE_SNARE_MIN_RELIABILITY,
+  SIMPLE_SNARE_POACH_DAY_1_CHANCE,
+  SIMPLE_SNARE_POACH_DAY_2_CHANCE,
+  SIMPLE_SNARE_POACH_DAY_3_CHANCE,
+  SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE,
+  SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
+  TICKS_PER_DAY,
+  WATERSKIN_DRINK_THIRST_GAIN,
+  WATERSKIN_EMPTY_ITEM_ID,
+  WATERSKIN_GUT_ILLNESS_CHANCE_POND,
+  WATERSKIN_GUT_ILLNESS_CHANCE_RIVER,
   WINDBREAK_REFLECTOR_WALL_STATION_ID,
-]);
-const BEEHIVE_SPECIES_ID = 'bombus_pennsylvanicus_colony';
-const BEEHIVE_HONEY_RANGE_GRAMS = [50, 200];
-const BEEHIVE_LARVAE_RANGE_GRAMS = [50, 150];
-const BEEHIVE_BEESWAX_RANGE_GRAMS = [20, 60];
-const SAP_TAP_DAILY_FILL_UNITS = 1;
-const SAP_TAP_VESSEL_CAPACITY_UNITS = 10;
-const SAP_FILLED_VESSEL_ITEM_ID = 'tool:hide_pitch_vessel_filled_sap';
-const EARTHWORM_ITEM_ID = 'earthworm';
-const EARTHWORM_DECAY_DAYS = 1;
-const SIMPLE_SNARE_BASE_CATCH_CHANCE = 0.1;
-const SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT = 0.55;
-const SIMPLE_SNARE_DAILY_RELIABILITY_DECAY = 0.08;
-const SIMPLE_SNARE_MIN_RELIABILITY = 0.35;
-const SIMPLE_SNARE_POACH_DAY_1_CHANCE = 0;
-const SIMPLE_SNARE_POACH_DAY_2_CHANCE = 0.2;
-const SIMPLE_SNARE_POACH_DAY_3_CHANCE = 0.5;
-const SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE = 1;
-const DEADFALL_MAX_CATCH_WEIGHT_G = 4000;
-const DEADFALL_TRAP_CATCH_MODIFIER = 1.4;
-const DEADFALL_DAILY_RELIABILITY_DECAY = 0.04;
-const DEADFALL_MIN_RELIABILITY = 0.5;
-const FISH_TRAP_ATTEMPTS_PER_DAY = 2;
-const FISH_TRAP_MAX_STORED_CATCH = 3;
-const FISH_TRAP_DAILY_RELIABILITY_DECAY = 0.03;
-const FISH_TRAP_MIN_RELIABILITY = 0.55;
-const AUTO_ROD_ATTRACTION_MULTIPLIER = 0.5;
-const AUTO_ROD_OVERNIGHT_ATTEMPTS = 200;
-const LINE_SNAP_BASE_PROBABILITY = 0.1;
-const LINE_SNAP_BASE_WEIGHT_G = 500;
+} from './simCore.constants.mjs';
+import {
+  cloneAnimalDensityByZone,
+  cloneCampState,
+  cloneFishDensityByTile,
+  cloneStringArray,
+  cloneWorldItemsByTile,
+} from './simCore.shared.mjs';
+import { advanceDayImpl } from './advanceDay/index.mjs';
+import { advanceTickImpl, buildAdvanceOneTick } from './advanceTick/index.mjs';
 const DEADFALL_CANDIDATE_SPECIES_IDS = Object.values(ANIMAL_BY_ID || {})
   .filter((species) => {
     const waterRequired = species?.waterRequired === true || species?.water_required === true;
@@ -114,7 +165,6 @@ const FISH_TRAP_CANDIDATE_SPECIES_IDS = Object.values(ANIMAL_BY_ID || {})
   .map((species) => species.id)
   .filter((speciesId) => typeof speciesId === 'string' && speciesId)
   .sort();
-
 function hasActorInventoryItem(actor, itemId, quantity = 1) {
   const normalizedQty = Math.max(1, Math.floor(Number(quantity) || 1));
   const stacks = Array.isArray(actor?.inventory?.stacks) ? actor.inventory.stacks : [];
@@ -122,6 +172,188 @@ function hasActorInventoryItem(actor, itemId, quantity = 1) {
     stack?.itemId === itemId
     && Math.floor(Number(stack?.quantity) || 0) >= normalizedQty
   ));
+}
+
+function ensureInventoryEquipment(inventory) {
+  if (!inventory || typeof inventory !== 'object') {
+    return { gloves: null, coat: null };
+  }
+
+  if (!inventory.equipment || typeof inventory.equipment !== 'object') {
+    inventory.equipment = { gloves: null, coat: null };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
+    inventory.equipment.gloves = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'coat')) {
+    inventory.equipment.coat = null;
+  }
+
+  return inventory.equipment;
+}
+
+function hasEquippedItem(actor, itemId) {
+  const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
+  if (!slot) {
+    return false;
+  }
+
+  const equipment = ensureInventoryEquipment(actor?.inventory || {});
+  return equipment?.[slot]?.itemId === itemId;
+}
+
+function isActorAtCampAnchor(state, actor) {
+  if (!state || !actor) {
+    return false;
+  }
+  const campX = Number(state?.camp?.anchorX);
+  const campY = Number(state?.camp?.anchorY);
+  if (!Number.isInteger(campX) || !Number.isInteger(campY)) {
+    return false;
+  }
+  return Number(actor.x) === campX && Number(actor.y) === campY;
+}
+
+function applyColdExposureTick(state) {
+  const player = state?.actors?.player;
+  if (!player || (Number(player.health) || 0) <= 0) {
+    return;
+  }
+
+  if (isActorAtCampAnchor(state, player)) {
+    return;
+  }
+
+  const band = typeof state?.dailyTemperatureBand === 'string'
+    ? state.dailyTemperatureBand.toLowerCase()
+    : 'mild';
+  if (band !== 'cold' && band !== 'freezing') {
+    return;
+  }
+
+  if (hasEquippedItem(player, 'tool:coat')) {
+    return;
+  }
+
+  player.health = clamp01((Number(player.health) || 0) - COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK);
+}
+
+function hasHarvestInjuryTool(actor, toolKey) {
+  if (typeof toolKey !== 'string' || !toolKey) {
+    return false;
+  }
+
+  const aliases = Array.isArray(HARVEST_TOOL_INVENTORY_ALIASES[toolKey])
+    ? HARVEST_TOOL_INVENTORY_ALIASES[toolKey]
+    : [];
+  const candidateItemIds = [`tool:${toolKey}`, ...aliases];
+  return candidateItemIds.some((itemId) => {
+    if (EQUIPPABLE_ITEM_TO_SLOT[itemId]) {
+      return hasEquippedItem(actor, itemId);
+    }
+    return hasActorInventoryItem(actor, itemId, 1);
+  });
+}
+
+function resolveItemFootprint(itemId) {
+  const override = ITEM_FOOTPRINT_OVERRIDES[itemId] || null;
+  if (override) {
+    return { footprintW: override.w, footprintH: override.h };
+  }
+
+  const item = ITEM_BY_ID[itemId] || null;
+  const footprintW = Number.isInteger(item?.footprintW) && item.footprintW > 0 ? item.footprintW : 1;
+  const footprintH = Number.isInteger(item?.footprintH) && item.footprintH > 0 ? item.footprintH : 1;
+  return { footprintW, footprintH };
+}
+
+function resolvePlantSubStage(speciesId, partName, subStageId) {
+  const species = PLANT_BY_ID[speciesId] || null;
+  const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+  return (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+}
+
+function createHarvestInjuryRng(state, actor, action) {
+  const actorHash = String(actor?.id || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const actionHash = String(action?.actionId || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const seed = (
+    ((Number(state?.seed) || 0) * 173)
+    + ((Number(state?.totalDaysSimulated) || 0) * 41)
+    + ((Number(state?.dayTick) || 0) * 19)
+    + actorHash
+    + actionHash
+  ) >>> 0;
+  return mulberry32(seed);
+}
+
+function applyHarvestInjuryFromSubStage(state, actor, action, speciesId, partName, subStageId, appliedActions) {
+  const count = Math.max(0, Math.floor(Number(appliedActions) || 0));
+  if (count <= 0) {
+    return;
+  }
+
+  const subStage = resolvePlantSubStage(speciesId, partName, subStageId);
+  const injury = subStage?.on_harvest_injury;
+  if (!injury || typeof injury !== 'object') {
+    return;
+  }
+
+  const baseProbability = Math.max(0, Math.min(1, Number(injury.base_probability) || 0));
+  if (baseProbability <= 0) {
+    return;
+  }
+
+  const toolModifiers = injury?.tool_probability_modifiers && typeof injury.tool_probability_modifiers === 'object'
+    ? injury.tool_probability_modifiers
+    : {};
+  let multiplier = 1;
+  for (const [toolKey, modifierRaw] of Object.entries(toolModifiers)) {
+    const modifier = Number(modifierRaw);
+    if (!Number.isFinite(modifier) || modifier < 0) {
+      continue;
+    }
+    if (hasHarvestInjuryTool(actor, toolKey)) {
+      multiplier = Math.min(multiplier, modifier);
+    }
+  }
+
+  const effectiveProbability = Math.max(0, Math.min(1, baseProbability * multiplier));
+  if (effectiveProbability <= 0) {
+    actor.lastHarvestInjury = {
+      applied: false,
+      type: injury.type || null,
+      baseProbability,
+      effectiveProbability,
+      appliedActions: count,
+      triggerCount: 0,
+    };
+    return;
+  }
+
+  const healthHit = Number(injury.health_hit);
+  const healthDelta = Number.isFinite(healthHit) && healthHit > 0 ? healthHit : 0;
+  const rng = createHarvestInjuryRng(state, actor, action);
+  let triggerCount = 0;
+  for (let idx = 0; idx < count; idx += 1) {
+    const roll = rng();
+    if (roll <= effectiveProbability) {
+      triggerCount += 1;
+      if (healthDelta > 0) {
+        actor.health = clamp01((Number(actor.health) || 0) - healthDelta);
+      }
+    }
+  }
+
+  actor.lastHarvestInjury = {
+    applied: triggerCount > 0,
+    type: injury.type || null,
+    baseProbability,
+    effectiveProbability,
+    appliedActions: count,
+    triggerCount,
+    healthHit: healthDelta,
+  };
 }
 
 function collectFishableWaterTargetsAround(state, centerX, centerY) {
@@ -158,6 +390,90 @@ function collectFishableWaterTargetsAround(state, centerX, centerY) {
 
 function collectFishRodWaterTargets(state, actor) {
   return collectFishableWaterTargetsAround(state, Number(actor?.x), Number(actor?.y));
+}
+
+function parseWaterskinStateItemId(itemId) {
+  if (itemId === WATERSKIN_EMPTY_ITEM_ID) {
+    return { sourceType: null, drinks: 0 };
+  }
+  if (typeof itemId !== 'string') {
+    return null;
+  }
+  const match = /^tool:waterskin_(safe|river|pond)_([1-3])$/.exec(itemId);
+  if (!match) {
+    return null;
+  }
+  return {
+    sourceType: match[1],
+    drinks: Number(match[2]),
+  };
+}
+
+function ensureActorConditionsList(actor) {
+  if (!Array.isArray(actor?.conditions)) {
+    actor.conditions = [];
+  }
+  return actor.conditions;
+}
+
+function createWaterskinOutcomeRng(state, actor, action, salt = 0) {
+  const actorHash = String(actor?.id || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const actionHash = String(action?.actionId || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const seed = (
+    ((Number(state?.seed) || 0) * 131)
+    + ((Number(state?.totalDaysSimulated) || 0) * 37)
+    + ((Number(state?.dayTick) || 0) * 17)
+    + actorHash
+    + actionHash
+    + salt
+  ) >>> 0;
+  return mulberry32(seed);
+}
+
+function maybeApplyGutIllnessFromWaterskin(state, actor, action, sourceType) {
+  let chance = 0;
+  if (sourceType === 'river') {
+    chance = WATERSKIN_GUT_ILLNESS_CHANCE_RIVER;
+  } else if (sourceType === 'pond') {
+    chance = WATERSKIN_GUT_ILLNESS_CHANCE_POND;
+  }
+  if (chance <= 0) {
+    return null;
+  }
+
+  const rng = createWaterskinOutcomeRng(state, actor, action, sourceType === 'pond' ? 907 : 401);
+  const roll = rng();
+  if (roll > chance) {
+    return {
+      applied: false,
+      chance,
+      roll,
+    };
+  }
+
+  const durationDaysRemaining = 2 + Math.floor(rng() * 3);
+  const conditions = ensureActorConditionsList(actor);
+  const sequence = conditions.filter((entry) => entry?.condition_id === 'gut_illness').length + 1;
+  const dayContracted = Number(state?.totalDaysSimulated) || 0;
+  conditions.push({
+    condition_id: 'gut_illness',
+    instance_id: `gut_illness_${dayContracted}_${sequence}`,
+    day_contracted: dayContracted,
+    duration_days_remaining: durationDaysRemaining,
+    treated: false,
+    effects: [
+      { type: 'nausea_ceiling_cap', value: 0.5 },
+    ],
+    treatable_by: ['tannin_tea'],
+    source_type: sourceType,
+  });
+
+  return {
+    applied: true,
+    chance,
+    roll,
+    durationDaysRemaining,
+  };
 }
 
 function resolveSpeciesSeasonModifier(species, dayOfYear) {
@@ -629,12 +945,6 @@ const SQUIRREL_NUT_TREE_MATURITY_SIZE = 8;
 // Nut tree species that are maturity-gated for squirrel population contribution.
 const SQUIRREL_NUT_TREE_SPECIES = new Set(['juglans_nigra', 'carya_ovata', 'quercus_alba', 'fagus_grandifolia', 'corylus_americana']);
 
-const YEAR_LENGTH_DAYS = 40;
-const TEMPERATURE_MIN_F = 15;
-const TEMPERATURE_MAX_F = 88;
-const TEMPERATURE_VARIANCE_MIN_F = -6;
-const TEMPERATURE_VARIANCE_MAX_F = 6;
-
 
 function stageForDay(plant, age, dayOfYear) {
   let chosen = null;
@@ -902,78 +1212,6 @@ function applyDailyFishTrapResolution(state) {
   }
 }
 
-function selectSquirrelCacheCandidatesWithSpread(candidates, targetCount) {
-  if (!Array.isArray(candidates) || candidates.length === 0 || targetCount <= 0) {
-    return [];
-  }
-
-  const pool = candidates.map((entry) => ({
-    ...entry,
-    adjustedScore: Number(entry.score) || 0,
-  }));
-  const selected = [];
-
-  while (selected.length < targetCount && pool.length > 0) {
-    let bestIndex = 0;
-    let bestScore = pool[0].adjustedScore;
-    for (let i = 1; i < pool.length; i += 1) {
-      if (pool[i].adjustedScore > bestScore) {
-        bestScore = pool[i].adjustedScore;
-        bestIndex = i;
-      }
-    }
-
-    const chosen = pool[bestIndex];
-    selected.push(chosen);
-    pool.splice(bestIndex, 1);
-
-    for (const candidate of pool) {
-      const dx = candidate.tile.x - chosen.tile.x;
-      const dy = candidate.tile.y - chosen.tile.y;
-      const distance = Math.sqrt((dx * dx) + (dy * dy));
-      if (distance <= SQUIRREL_CACHE_SPREAD_RADIUS_NEAR) {
-        candidate.adjustedScore *= SQUIRREL_CACHE_SPREAD_NEAR_FACTOR;
-      } else if (distance <= SQUIRREL_CACHE_SPREAD_RADIUS_MID) {
-        candidate.adjustedScore *= SQUIRREL_CACHE_SPREAD_MID_FACTOR;
-      }
-    }
-  }
-
-  return selected;
-}
-
-function resolveSquirrelCacheItemPool(state) {
-  const preferred = ['juglans_nigra', 'carya_ovata', 'quercus_alba', 'fagus_grandifolia', 'corylus_americana'];
-  const items = [];
-
-  for (const species of PLANT_CATALOG) {
-    for (const part of species?.parts || []) {
-      for (const subStage of part?.subStages || []) {
-        if (subStage?.can_squirrel_cache !== true) {
-          continue;
-        }
-        items.push({
-          speciesId: species.id,
-          partName: part.name,
-          subStageId: subStage.id,
-        });
-      }
-    }
-  }
-
-  if (items.length === 0) {
-    return [];
-  }
-
-  const preferredSet = new Set(preferred);
-  const preferredItems = items.filter((item) => preferredSet.has(item.speciesId));
-  if (preferredItems.length > 0) {
-    return preferredItems;
-  }
-
-  return items;
-}
-
 function rollBeehiveYieldForDay(state, tile, range, salt) {
   const seed = (
     ((state.seed + 1) * 1000003)
@@ -1028,201 +1266,6 @@ function refillSquirrelCachesByYear(state) {
   generateSquirrelCachesInternal(state, rng, { regenerate: true });
 }
 
-function buildSquirrelDensityByTile(state) {
-  const existingDensity = state?.animalDensityByZone?.sciurus_carolinensis;
-  if (existingDensity && typeof existingDensity === 'object' && Object.keys(existingDensity).length > 0) {
-    return existingDensity;
-  }
-
-  const alivePlants = [];
-  for (const plant of Object.values(state.plants || {})) {
-    if (!plant?.alive) {
-      continue;
-    }
-    const species = PLANT_BY_ID[plant.speciesId];
-    if (!species) {
-      continue;
-    }
-    alivePlants.push({
-      plant,
-      species,
-      size: lifeStageSize(species, plant.stageName),
-    });
-  }
-
-  const rawByTile = {};
-  let maxRaw = 0;
-
-  for (const tile of state.tiles || []) {
-    if (!tile || tile.waterType || isRockTile(tile)) {
-      continue;
-    }
-
-    const tileKey = animalTileDensityKey(tile.x, tile.y);
-    let support = 0;
-    for (const { plant, species, size } of alivePlants) {
-      const dx = plant.x - tile.x;
-      const dy = plant.y - tile.y;
-      const distance = Math.sqrt((dx * dx) + (dy * dy));
-      const weight = distanceFalloffWeight(distance, ANIMAL_DENSITY_RADIUS_TILES);
-      if (weight <= 0) {
-        continue;
-      }
-      const contribution = computeAnimalPlantContribution('sciurus_carolinensis', plant, species, size);
-      if (contribution <= 0) {
-        continue;
-      }
-      support += contribution * weight;
-    }
-    rawByTile[tileKey] = support;
-    maxRaw = Math.max(maxRaw, support);
-  }
-
-  const squirrel = ANIMAL_BY_ID.sciurus_carolinensis;
-  const baseDensity = clamp01(Number(squirrel?.population?.startingDensity) || 0);
-  const densityByTile = {};
-
-  for (const tile of state.tiles || []) {
-    if (!tile || tile.waterType || isRockTile(tile)) {
-      continue;
-    }
-    const tileKey = animalTileDensityKey(tile.x, tile.y);
-    const raw = Number(rawByTile[tileKey] || 0);
-    const normalizedSupport = maxRaw > 0 ? raw / maxRaw : 0;
-    densityByTile[tileKey] = clamp01(baseDensity * 0.2 + normalizedSupport * 0.8);
-  }
-
-  return densityByTile;
-}
-
-function computeSquirrelCacheTargetCount(state, squirrelDensityByTile, totalCandidateCount) {
-  let densitySum = 0;
-  let densityPeak = 0;
-  let densitySamples = 0;
-
-  for (const tile of state.tiles || []) {
-    if (!tile || tile.waterType || isRockTile(tile)) {
-      continue;
-    }
-    const tileKey = animalTileDensityKey(tile.x, tile.y);
-    const density = clamp01(Number(squirrelDensityByTile[tileKey]) || 0);
-    densitySum += density;
-    densityPeak = Math.max(densityPeak, density);
-    densitySamples += 1;
-  }
-
-  const avgDensity = densitySamples > 0 ? densitySum / densitySamples : 0;
-  const densitySignal = clamp01(avgDensity * 0.62 + densityPeak * 0.38);
-  const coverage = SQUIRREL_CACHE_BASE_COVERAGE + (SQUIRREL_CACHE_DENSITY_BONUS_COVERAGE * densitySignal);
-  const desiredCount = Math.round(totalCandidateCount * coverage);
-  return Math.max(1, Math.min(totalCandidateCount, desiredCount));
-}
-
-function clearSquirrelCaches(state) {
-  for (const tile of state.tiles || []) {
-    if (tile?.squirrelCache) {
-      tile.squirrelCache = null;
-    }
-  }
-}
-
-function normalizeDayOfYear(dayOfYear) {
-  const value = Number(dayOfYear);
-  if (!Number.isFinite(value)) {
-    return 1;
-  }
-  const normalized = Math.floor(value);
-  if (normalized < 1) {
-    return 1;
-  }
-  if (normalized > YEAR_LENGTH_DAYS) {
-    return YEAR_LENGTH_DAYS;
-  }
-  return normalized;
-}
-
-function normalizeAngleRadians(radians) {
-  const value = Number(radians);
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  const fullTurn = Math.PI * 2;
-  const normalized = value % fullTurn;
-  return normalized < 0 ? normalized + fullTurn : normalized;
-}
-
-function temperatureBandFromFahrenheit(temperatureF) {
-  if (temperatureF < 25) {
-    return 'freezing';
-  }
-  if (temperatureF <= 40) {
-    return 'cold';
-  }
-  if (temperatureF <= 55) {
-    return 'cool';
-  }
-  if (temperatureF <= 75) {
-    return 'mild';
-  }
-  if (temperatureF <= 85) {
-    return 'warm';
-  }
-  return 'hot';
-}
-
-function windStrengthLabel(strength) {
-  if (strength < 0.2) {
-    return 'calm';
-  }
-  if (strength < 0.4) {
-    return 'low';
-  }
-  if (strength < 0.65) {
-    return 'medium';
-  }
-  if (strength < 0.82) {
-    return 'high';
-  }
-  return 'very_high';
-}
-
-function seasonalTemperatureBaselineF(dayOfYear) {
-  const day = normalizeDayOfYear(dayOfYear);
-  const midpoint = (TEMPERATURE_MIN_F + TEMPERATURE_MAX_F) / 2;
-  const amplitude = (TEMPERATURE_MAX_F - TEMPERATURE_MIN_F) / 2;
-  const radians = ((day - 15) / YEAR_LENGTH_DAYS) * Math.PI * 2;
-  return midpoint + (Math.cos(radians) * amplitude);
-}
-
-function seasonalWindStrengthBaseline(dayOfYear) {
-  const season = getSeason(normalizeDayOfYear(dayOfYear));
-  switch (season) {
-    case 'spring':
-      return 0.62;
-    case 'summer':
-      return 0.38;
-    case 'fall':
-      return 0.52;
-    case 'winter':
-    default:
-      return 0.58;
-  }
-}
-
-function buildWindVector(angleRadians, strength) {
-  const normalizedAngle = normalizeAngleRadians(angleRadians);
-  const normalizedStrength = clamp01(Number(strength) || 0);
-  const x = Number((Math.cos(normalizedAngle) * normalizedStrength).toFixed(4));
-  const y = Number((Math.sin(normalizedAngle) * normalizedStrength).toFixed(4));
-  return {
-    x,
-    y,
-    strength: Number(normalizedStrength.toFixed(4)),
-    strengthLabel: windStrengthLabel(normalizedStrength),
-    angleRadians: Number(normalizedAngle.toFixed(4)),
-  };
-}
-
 const RESUMABLE_PLAYER_ACTION_KINDS = new Set([
   'process_item',
   'tool_craft',
@@ -1236,108 +1279,6 @@ function isResumablePlayerAction(action) {
     return false;
   }
   return RESUMABLE_PLAYER_ACTION_KINDS.has(action?.kind);
-}
-
-function applyDailyWeatherState(state, weatherState) {
-  state.weatherTemperatureVarianceF = weatherState.weatherTemperatureVarianceF;
-  state.weatherWindAngleRadians = weatherState.weatherWindAngleRadians;
-  state.weatherWindStrength = weatherState.weatherWindStrength;
-  state.dailyTemperatureF = weatherState.dailyTemperatureF;
-  state.dailyTemperatureBand = weatherState.dailyTemperatureBand;
-  state.dailyWindVector = weatherState.dailyWindVector;
-}
-
-function buildWeatherForDay(dayOfYear, varianceOffsetF, windAngleRadians, windStrength) {
-  const normalizedVariance = Math.max(
-    TEMPERATURE_VARIANCE_MIN_F,
-    Math.min(TEMPERATURE_VARIANCE_MAX_F, Number(varianceOffsetF) || 0),
-  );
-  const baseline = seasonalTemperatureBaselineF(dayOfYear);
-  const dailyTemperatureF = baseline + normalizedVariance;
-  const roundedDailyTemperatureF = Number(dailyTemperatureF.toFixed(1));
-  return {
-    weatherTemperatureVarianceF: Number(normalizedVariance.toFixed(2)),
-    weatherWindAngleRadians: Number(normalizeAngleRadians(windAngleRadians).toFixed(4)),
-    weatherWindStrength: Number(clamp01(Number(windStrength) || 0).toFixed(4)),
-    dailyTemperatureF: roundedDailyTemperatureF,
-    dailyTemperatureBand: temperatureBandFromFahrenheit(roundedDailyTemperatureF),
-    dailyWindVector: buildWindVector(windAngleRadians, windStrength),
-  };
-}
-
-function initializeDailyWeatherState(state) {
-  const rng = mulberry32(state.seed * 97 + 19);
-  const baselineStrength = seasonalWindStrengthBaseline(state.dayOfYear);
-  const varianceOffsetF = (rng() - 0.5) * 4;
-  const windAngleRadians = rng() * Math.PI * 2;
-  const windStrength = clamp01(baselineStrength + ((rng() - 0.5) * 0.2));
-  const weather = buildWeatherForDay(state.dayOfYear, varianceOffsetF, windAngleRadians, windStrength);
-  applyDailyWeatherState(state, weather);
-}
-
-function rollDailyWeatherForCurrentDay(state, rng) {
-  const currentVariance = Number.isFinite(Number(state.weatherTemperatureVarianceF))
-    ? Number(state.weatherTemperatureVarianceF)
-    : 0;
-  const varianceDrift = (rng() - 0.5) * 6;
-  const nextVariance = Math.max(
-    TEMPERATURE_VARIANCE_MIN_F,
-    Math.min(TEMPERATURE_VARIANCE_MAX_F, currentVariance + varianceDrift),
-  );
-
-  const currentAngle = Number.isFinite(Number(state.weatherWindAngleRadians))
-    ? Number(state.weatherWindAngleRadians)
-    : rng() * Math.PI * 2;
-  const nextAngle = normalizeAngleRadians(currentAngle + ((rng() - 0.5) * (Math.PI / 2)));
-
-  const baselineStrength = seasonalWindStrengthBaseline(state.dayOfYear);
-  const currentStrength = Number.isFinite(Number(state.weatherWindStrength))
-    ? Number(state.weatherWindStrength)
-    : baselineStrength;
-  const nextStrength = clamp01((currentStrength * 0.55) + (baselineStrength * 0.45) + ((rng() - 0.5) * 0.24));
-
-  const weather = buildWeatherForDay(state.dayOfYear, nextVariance, nextAngle, nextStrength);
-  applyDailyWeatherState(state, weather);
-}
-
-function ensureDailyWeatherState(state) {
-  if (
-    Number.isFinite(Number(state?.dailyTemperatureF))
-    && typeof state?.dailyTemperatureBand === 'string'
-    && state?.dailyWindVector
-  ) {
-    return;
-  }
-  initializeDailyWeatherState(state);
-}
-
-function isStillWaterType(waterType) {
-  return waterType === 'pond';
-}
-
-function applyDailyWaterFreezeState(state) {
-  const band = typeof state?.dailyTemperatureBand === 'string'
-    ? state.dailyTemperatureBand.toLowerCase()
-    : 'mild';
-  const previousStreak = Number.isFinite(Number(state?.consecutiveFreezingDays))
-    ? Math.max(0, Math.floor(Number(state.consecutiveFreezingDays)))
-    : 0;
-  const freezingStreak = band === 'freezing' ? previousStreak + 1 : 0;
-  state.consecutiveFreezingDays = freezingStreak;
-
-  for (const tile of state.tiles || []) {
-    if (!tile?.waterType) {
-      tile.waterFrozen = false;
-      continue;
-    }
-
-    if (!isStillWaterType(tile.waterType)) {
-      tile.waterFrozen = false;
-      continue;
-    }
-
-    tile.waterFrozen = freezingStreak >= 2;
-  }
 }
 
 function isTileBlockedForPlantLife(tile) {
@@ -1402,80 +1343,6 @@ function canGenerateBeehivesInternal(state) {
     return false;
   }
   return Number(state?.totalDaysSimulated) >= MIN_DAYS_FOR_BEEHIVE_GENERATION;
-}
-
-function canGenerateSquirrelCachesInternal(state) {
-  if (state?.squirrelCachesGenerated) {
-    return false;
-  }
-  return Number(state?.totalDaysSimulated) >= MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION;
-}
-
-function cloneAnimalDensityByZone(input) {
-  const cloned = {};
-  for (const [speciesId, byZone] of Object.entries(input || {})) {
-    cloned[speciesId] = { ...(byZone || {}) };
-  }
-  return cloned;
-}
-
-function cloneFishDensityByTile(input) {
-  const cloned = {};
-  for (const [speciesId, byTile] of Object.entries(input || {})) {
-    cloned[speciesId] = { ...(byTile || {}) };
-  }
-  return cloned;
-}
-
-function cloneStringArray(input) {
-  return Array.isArray(input) ? [...input] : [];
-}
-
-function cloneWorldItemsByTile(input) {
-  const cloned = {};
-  for (const [tileKey, stacks] of Object.entries(input || {})) {
-    cloned[tileKey] = Array.isArray(stacks)
-      ? stacks.map((entry) => ({ ...(entry || {}) }))
-      : [];
-  }
-  return cloned;
-}
-
-function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {
-  const stockpileStacks = Array.isArray(camp?.stockpile?.stacks)
-    ? camp.stockpile.stacks.map((entry) => ({ ...(entry || {}) }))
-    : [];
-  const stationsUnlocked = Array.isArray(camp?.stationsUnlocked)
-    ? [...camp.stationsUnlocked]
-    : [];
-  const comforts = Array.isArray(camp?.comforts)
-    ? [...camp.comforts]
-    : [];
-  const activeTask = camp?.partnerTaskQueue?.active
-    ? { ...camp.partnerTaskQueue.active }
-    : null;
-  const queuedTasks = Array.isArray(camp?.partnerTaskQueue?.queued)
-    ? camp.partnerTaskQueue.queued.map((task) => ({ ...(task || {}) }))
-    : [];
-  const dryingRackSlots = Array.isArray(camp?.dryingRack?.slots)
-    ? camp.dryingRack.slots.map((entry) => ({ ...(entry || {}) }))
-    : [];
-
-  return {
-    anchorX: Number.isInteger(camp?.anchorX) ? camp.anchorX : fallbackX,
-    anchorY: Number.isInteger(camp?.anchorY) ? camp.anchorY : fallbackY,
-    stockpile: { stacks: stockpileStacks },
-    stationsUnlocked,
-    comforts,
-    partnerTaskQueue: {
-      active: activeTask,
-      queued: queuedTasks,
-    },
-    dryingRack: {
-      capacity: 4,
-      slots: dryingRackSlots,
-    },
-  };
 }
 
 function defaultCampState(width, height) {
@@ -1733,6 +1600,10 @@ function ensureActorInventory(actor) {
       gridHeight: 4,
       maxCarryWeightKg: 15,
       stacks: [],
+      equipment: {
+        gloves: null,
+        coat: null,
+      },
     };
     return;
   }
@@ -1740,6 +1611,8 @@ function ensureActorInventory(actor) {
   if (!Array.isArray(actor.inventory.stacks)) {
     actor.inventory.stacks = [];
   }
+
+  ensureInventoryEquipment(actor.inventory);
 }
 
 function normalizeStackFootprintValue(value) {
@@ -2944,6 +2817,74 @@ function applyActionEffect(state, action) {
     return;
   }
 
+  if (action.kind === 'waterskin_fill') {
+    const fromItemId = typeof action.payload?.fromItemId === 'string' ? action.payload.fromItemId : '';
+    const toItemId = typeof action.payload?.toItemId === 'string' ? action.payload.toItemId : '';
+    const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
+    if (!fromItemId || !toItemId) {
+      return;
+    }
+
+    const fromState = parseWaterskinStateItemId(fromItemId);
+    const toState = parseWaterskinStateItemId(toItemId);
+    if (!fromState || !toState || toState.drinks <= fromState.drinks) {
+      return;
+    }
+
+    const consumed = removeActorInventoryItem(actor, fromItemId, 1);
+    if (consumed <= 0) {
+      return;
+    }
+
+    addActorInventoryItemWithOverflowDrop(state, actor, toItemId, 1);
+    actor.lastWaterskin = {
+      type: 'fill',
+      fromItemId,
+      toItemId,
+      sourceType,
+      waterX: Number.isInteger(action.payload?.waterX) ? action.payload.waterX : null,
+      waterY: Number.isInteger(action.payload?.waterY) ? action.payload.waterY : null,
+      day: Number(state.totalDaysSimulated) || 0,
+      dayTick: Number(state.dayTick) || 0,
+    };
+    return;
+  }
+
+  if (action.kind === 'waterskin_drink') {
+    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+    const toItemId = typeof action.payload?.toItemId === 'string' ? action.payload.toItemId : '';
+    const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
+    if (!itemId || !toItemId) {
+      return;
+    }
+
+    const fromState = parseWaterskinStateItemId(itemId);
+    const toState = parseWaterskinStateItemId(toItemId);
+    if (!fromState || !toState || fromState.drinks <= toState.drinks) {
+      return;
+    }
+
+    const consumed = removeActorInventoryItem(actor, itemId, 1);
+    if (consumed <= 0) {
+      return;
+    }
+
+    addActorInventoryItemWithOverflowDrop(state, actor, toItemId, 1);
+    actor.thirst = clamp01((Number(actor.thirst) || 0) + WATERSKIN_DRINK_THIRST_GAIN);
+
+    const illness = maybeApplyGutIllnessFromWaterskin(state, actor, action, sourceType);
+    actor.lastWaterskin = {
+      type: 'drink',
+      fromItemId: itemId,
+      toItemId,
+      sourceType,
+      day: Number(state.totalDaysSimulated) || 0,
+      dayTick: Number(state.dayTick) || 0,
+      gutIllness: illness,
+    };
+    return;
+  }
+
   if (action.kind === 'process_item') {
     const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
     const requestedQty = Number.isInteger(action.payload?.quantity)
@@ -3719,6 +3660,57 @@ function applyActionEffect(state, action) {
     return;
   }
 
+  if (action.kind === 'equip_item') {
+    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+    const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
+    if (!slot) {
+      return;
+    }
+
+    ensureActorInventory(actor);
+    const equipment = ensureInventoryEquipment(actor.inventory);
+    if (equipment[slot]) {
+      return;
+    }
+
+    const consumed = removeActorInventoryItem(actor, itemId, 1);
+    if (consumed <= 0) {
+      return;
+    }
+
+    equipment[slot] = {
+      itemId,
+      equippedAtDay: Number(state.totalDaysSimulated) || 0,
+      equippedAtDayTick: Number(state.dayTick) || 0,
+    };
+    return;
+  }
+
+  if (action.kind === 'unequip_item') {
+    const slot = typeof action.payload?.equipmentSlot === 'string'
+      ? action.payload.equipmentSlot
+      : typeof action.payload?.slot === 'string' ? action.payload.slot : '';
+    if (slot !== 'gloves' && slot !== 'coat') {
+      return;
+    }
+
+    ensureActorInventory(actor);
+    const equipment = ensureInventoryEquipment(actor.inventory);
+    const equippedEntry = equipment[slot];
+    const itemId = typeof equippedEntry?.itemId === 'string' ? equippedEntry.itemId : '';
+    if (!itemId) {
+      return;
+    }
+
+    equipment[slot] = null;
+    const footprint = resolveItemFootprint(itemId);
+    addActorInventoryItemWithOverflowDrop(state, actor, itemId, 1, {
+      footprintW: footprint.footprintW,
+      footprintH: footprint.footprintH,
+    });
+    return;
+  }
+
   if (action.kind === 'fell_tree') {
     const plantId = typeof action.payload?.plantId === 'string' ? action.payload.plantId : '';
     const plant = state?.plants?.[plantId];
@@ -3851,6 +3843,16 @@ function applyActionEffect(state, action) {
         footprintH: normalizeStackFootprintValue(action.payload?.inventoryFootprintH),
         unitWeightKg: Number(action.payload?.inventoryUnitWeightKg),
       });
+
+      applyHarvestInjuryFromSubStage(
+        state,
+        actor,
+        action,
+        speciesId,
+        partName,
+        subStageId,
+        outcome.appliedActions,
+      );
     }
     return;
   }
@@ -3887,472 +3889,15 @@ function applyActionEffect(state, action) {
   }
 }
 
-function advanceOneTick(state) {
-  progressPartnerTaskQueueOneTick(state);
-  processAutoRodTickResolution(state);
-  state.dayTick += 1;
-  if (state.dayTick < 400) {
-    return state;
-  }
-
-  let rolled = advanceDay(state, 1);
-  ensureTickSystems(rolled);
-  rolled.dayTick = 0;
-  rolled.currentDayActionLog = [];
-
-  for (const actor of Object.values(rolled.actors || {})) {
-    const base = getActorDayStartTickBudgetBase(rolled, actor);
-    const carryOver = Number(actor.overdraftTicks) || 0;
-    actor.tickBudgetCurrent = Math.max(0, base - carryOver);
-    actor.overdraftTicks = 0;
-  }
-
-  return rolled;
-}
-
-function canGenerateAnimalZonesInternal(state) {
-  if (state?.animalZonesGenerated) {
-    return false;
-  }
-  return Number(state?.totalDaysSimulated) >= MIN_DAYS_FOR_ANIMAL_ZONE_GENERATION;
-}
-
-function canGenerateFishPopulationsInternal(state) {
-  if (state?.fishPopulationsGenerated) {
-    return false;
-  }
-  return Number(state?.totalDaysSimulated) >= MIN_DAYS_FOR_FISH_POPULATION_GENERATION;
-}
-
-function animalTileDensityKey(x, y) {
-  return `${x},${y}`;
-}
-
-function classifyWaterBody(tiles) {
-  const counts = {};
-  for (const tile of tiles) {
-    if (!tile?.waterType) {
-      continue;
-    }
-    counts[tile.waterType] = (counts[tile.waterType] || 0) + 1;
-  }
-
-  let dominantWaterType = 'pond';
-  let maxCount = -1;
-  for (const [waterType, count] of Object.entries(counts)) {
-    if (count > maxCount) {
-      dominantWaterType = waterType;
-      maxCount = count;
-    }
-  }
-
-  const waterBodyKind = dominantWaterType === 'pond' ? 'pond' : 'river';
-  return { dominantWaterType, waterBodyKind };
-}
-
-function buildWaterBodyMap(state) {
-  const width = state.width;
-  const height = state.height;
-  const visited = new Set();
-  const tileToBodyId = {};
-  const bodiesById = {};
-  let bodyIndex = 1;
-
-  for (const tile of state.tiles || []) {
-    if (!tile?.waterType) {
-      continue;
-    }
-    const key = animalTileDensityKey(tile.x, tile.y);
-    if (visited.has(key)) {
-      continue;
-    }
-
-    const queue = [{ x: tile.x, y: tile.y }];
-    visited.add(key);
-    const bodyTiles = [];
-
-    while (queue.length > 0) {
-      const current = queue.pop();
-      const currentTile = state.tiles[tileIndex(current.x, current.y, width)];
-      if (!currentTile?.waterType) {
-        continue;
-      }
-
-      bodyTiles.push(currentTile);
-
-      const neighbors = [
-        { x: current.x + 1, y: current.y },
-        { x: current.x - 1, y: current.y },
-        { x: current.x, y: current.y + 1 },
-        { x: current.x, y: current.y - 1 },
-      ];
-
-      for (const neighbor of neighbors) {
-        if (!inBounds(neighbor.x, neighbor.y, width, height)) {
-          continue;
-        }
-        const neighborTile = state.tiles[tileIndex(neighbor.x, neighbor.y, width)];
-        if (!neighborTile?.waterType) {
-          continue;
-        }
-        const neighborKey = animalTileDensityKey(neighbor.x, neighbor.y);
-        if (visited.has(neighborKey)) {
-          continue;
-        }
-        visited.add(neighborKey);
-        queue.push(neighbor);
-      }
-    }
-
-    const bodyId = `water_body_${bodyIndex}`;
-    bodyIndex += 1;
-    const classification = classifyWaterBody(bodyTiles);
-    bodiesById[bodyId] = {
-      bodyId,
-      tileCount: bodyTiles.length,
-      dominantWaterType: classification.dominantWaterType,
-      waterBodyKind: classification.waterBodyKind,
-      tileKeys: bodyTiles.map((waterTile) => animalTileDensityKey(waterTile.x, waterTile.y)),
-    };
-    for (const waterTile of bodyTiles) {
-      tileToBodyId[animalTileDensityKey(waterTile.x, waterTile.y)] = bodyId;
-    }
-  }
-
-  return { tileToBodyId, bodiesById };
-}
-
-function tileMatchesFishHabitat(fish, tile, waterBody) {
-  if (!fish || !tile?.waterType || !waterBody) {
-    return false;
-  }
-
-  const habitatSet = new Set(fish.habitat || []);
-  if (tile.waterType === 'pond') {
-    return habitatSet.has('pond')
-      || habitatSet.has(waterBody.dominantWaterType)
-      || habitatSet.has(waterBody.waterBodyKind);
-  }
-
-  if (tile.waterType !== 'river') {
-    return false;
-  }
-
-  if (habitatSet.has('river')) {
-    return true;
-  }
-
-  const allowedBands = new Set();
-  if (habitatSet.has('stream')) {
-    allowedBands.add('slow');
-  }
-  if (habitatSet.has('slow_river')) {
-    allowedBands.add('medium');
-  }
-  if (habitatSet.has('fast_river')) {
-    allowedBands.add('fast');
-  }
-  if (habitatSet.has('slow')) {
-    allowedBands.add('slow');
-  }
-  if (habitatSet.has('medium')) {
-    allowedBands.add('medium');
-  }
-  if (habitatSet.has('fast')) {
-    allowedBands.add('fast');
-  }
-
-  if (allowedBands.size === 0) {
-    return habitatSet.has(waterBody.dominantWaterType) || habitatSet.has(waterBody.waterBodyKind);
-  }
-
-  const band = typeof tile.waterCurrentBand === 'string' ? tile.waterCurrentBand : 'medium';
-  return allowedBands.has(band);
-}
-
-function fishTileDensityMultiplier(tile) {
-  let multiplier = tile.waterDepth === 'deep' ? 1.08 : 0.96;
-  const band = typeof tile?.waterCurrentBand === 'string' ? tile.waterCurrentBand : null;
-  if (band === 'fast') {
-    multiplier *= 0.9;
-  } else if (band === 'slow') {
-    multiplier *= 0.88;
-  } else if (band === 'medium') {
-    multiplier *= 1.03;
-  }
-  return multiplier;
-}
-
-function fnv1aHash32(input) {
-  const text = String(input ?? '');
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-    hash >>>= 0;
-  }
-  return hash >>> 0;
-}
-
-function hashToUnitFloat(input) {
-  return fnv1aHash32(input) / 0xFFFFFFFF;
-}
-
-function lerp(a, b, t) {
-  return a + ((b - a) * t);
-}
-
-function smoothStep01(value) {
-  const clamped = Math.max(0, Math.min(1, Number(value) || 0));
-  return clamped * clamped * (3 - (2 * clamped));
-}
-
-function coherentFishNoise2D(seedToken, x, y, cellSize) {
-  const safeCellSize = Math.max(1, Math.floor(Number(cellSize) || 1));
-  const sx = x / safeCellSize;
-  const sy = y / safeCellSize;
-
-  const x0 = Math.floor(sx);
-  const y0 = Math.floor(sy);
-  const x1 = x0 + 1;
-  const y1 = y0 + 1;
-
-  const tx = smoothStep01(sx - x0);
-  const ty = smoothStep01(sy - y0);
-
-  const v00 = hashToUnitFloat(`${seedToken}|${x0}|${y0}`);
-  const v10 = hashToUnitFloat(`${seedToken}|${x1}|${y0}`);
-  const v01 = hashToUnitFloat(`${seedToken}|${x0}|${y1}`);
-  const v11 = hashToUnitFloat(`${seedToken}|${x1}|${y1}`);
-
-  const top = lerp(v00, v10, tx);
-  const bottom = lerp(v01, v11, tx);
-  return lerp(top, bottom, ty);
-}
-
-function deterministicFishTileVariationFactor(state, fishId, tile) {
-  const normalizedSeed = Number.isFinite(Number(state?.seed))
-    ? Math.abs(Math.floor(Number(state.seed)))
-    : 0;
-  const speciesToken = fishId || 'unknown_fish';
-  const x = Number(tile?.x) || 0;
-  const y = Number(tile?.y) || 0;
-  const largeScaleNoise = coherentFishNoise2D(
-    `fish_large|${normalizedSeed}|${speciesToken}`,
-    x,
-    y,
-    FISH_LARGE_SCALE_CELL_SIZE,
-  );
-  const smallScaleNoise = hashToUnitFloat(`fish_small|${normalizedSeed}|${speciesToken}|${x}|${y}`);
-  const normalized = clamp01(
-    (largeScaleNoise * FISH_LARGE_SCALE_WEIGHT)
-      + (smallScaleNoise * (1 - FISH_LARGE_SCALE_WEIGHT)),
-  );
-  const span = FISH_DENSITY_VARIATION_MAX - FISH_DENSITY_VARIATION_MIN;
-  return FISH_DENSITY_VARIATION_MIN + (span * normalized);
-}
-
-function computeAnimalPlantContribution(animalId, plant, plantSpecies, plantSize) {
-  if (!animalId || !plant || !plantSpecies) {
-    return 0;
-  }
-
-  const diet = ANIMAL_BY_ID[animalId]?.diet || [];
-  const inDiet = diet.includes(plant.speciesId);
-
-  if (animalId === 'sylvilagus_floridanus') {
-    let contribution = inDiet ? 1 : 0;
-    if (plant.speciesId === 'daucus_carota') {
-      contribution += 4;
-    }
-    if (plantSize <= 3) {
-      contribution += 0.35;
-    }
-    if (plant.speciesId === 'urtica_dioica') {
-      contribution += 0.5;
-    }
-    return contribution;
-  }
-
-  if (animalId === 'sciurus_carolinensis') {
-    if (SQUIRREL_NUT_TREE_SPECIES.has(plant.speciesId) && plantSize < SQUIRREL_NUT_TREE_MATURITY_SIZE) {
-      return 0;
-    }
-
-    let contribution = inDiet ? 0.8 : 0;
-    if (plantSize >= 6) {
-      contribution += 0.4;
-    }
-    if (plantSize >= 8) {
-      contribution += 2.4;
-    }
-    if (plant.speciesId === 'juglans_nigra') {
-      contribution += 6;
-    }
-    return contribution;
-  }
-
-  return 0;
-}
-
-function distanceFalloffWeight(distance, radius) {
-  if (distance > radius) {
-    return 0;
-  }
-  return (radius - distance + 1) / (radius + 1);
-}
-
-function generateAnimalZonesInternal(state) {
-  if (state.animalZonesGenerated) {
-    return;
-  }
-
-  const animalIds = ['sylvilagus_floridanus', 'sciurus_carolinensis'].filter((id) => Boolean(ANIMAL_BY_ID[id]));
-  const alivePlants = [];
-  for (const plant of Object.values(state.plants || {})) {
-    if (!plant?.alive) {
-      continue;
-    }
-    const species = PLANT_BY_ID[plant.speciesId];
-    if (!species) {
-      continue;
-    }
-    alivePlants.push({
-      plant,
-      species,
-      size: lifeStageSize(species, plant.stageName),
-    });
-  }
-
-  const rawSupportBySpecies = {};
-  const densityBySpecies = {};
-
-  for (const animalId of animalIds) {
-    rawSupportBySpecies[animalId] = {};
-    densityBySpecies[animalId] = {};
-  }
-
-  for (const tile of state.tiles || []) {
-    if (!tile || tile.waterType) {
-      continue;
-    }
-
-    const tileKey = animalTileDensityKey(tile.x, tile.y);
-
-    for (const animalId of animalIds) {
-      let support = 0;
-      for (const { plant, species, size } of alivePlants) {
-        const dx = plant.x - tile.x;
-        const dy = plant.y - tile.y;
-        const distance = Math.sqrt((dx * dx) + (dy * dy));
-        const weight = distanceFalloffWeight(distance, ANIMAL_DENSITY_RADIUS_TILES);
-        if (weight <= 0) {
-          continue;
-        }
-        const contribution = computeAnimalPlantContribution(animalId, plant, species, size);
-        if (contribution <= 0) {
-          continue;
-        }
-        support += contribution * weight;
-      }
-      rawSupportBySpecies[animalId][tileKey] = support;
-    }
-  }
-
-  for (const animalId of animalIds) {
-    const animal = ANIMAL_BY_ID[animalId];
-    const baseDensity = clamp01(Number(animal?.population?.startingDensity) || 0);
-    const rawByTile = rawSupportBySpecies[animalId] || {};
-    const maxRaw = Math.max(0, ...Object.values(rawByTile).map((value) => Number(value) || 0));
-
-    for (const tile of state.tiles || []) {
-      if (!tile || tile.waterType) {
-        continue;
-      }
-      const tileKey = animalTileDensityKey(tile.x, tile.y);
-      const raw = Number(rawByTile[tileKey] || 0);
-      const normalizedSupport = maxRaw > 0 ? raw / maxRaw : 0;
-      const seededDensity = clamp01(baseDensity * 0.2 + normalizedSupport * 0.8);
-      densityBySpecies[animalId][tileKey] = seededDensity;
-    }
-  }
-
-  state.animalZoneGrid = null;
-  state.animalDensityByZone = densityBySpecies;
-  state.animalZonesGenerated = true;
-}
-
-function generateFishPopulationsInternal(state) {
-  if (state.fishPopulationsGenerated) {
-    return;
-  }
-
-  const fishSpecies = Object.values(ANIMAL_BY_ID).filter((animal) => animal.animalClass === 'fish');
-  const waterBodies = buildWaterBodyMap(state);
-  const densityBySpecies = {};
-
-  for (const fish of fishSpecies) {
-    const speciesDensity = {};
-    const startingDensity = Math.max(0, Number(fish.population?.startingDensity ?? 0));
-
-    for (const tile of state.tiles || []) {
-      if (!tile?.waterType) {
-        continue;
-      }
-
-      const tileKey = animalTileDensityKey(tile.x, tile.y);
-      const bodyId = waterBodies.tileToBodyId[tileKey];
-      const waterBody = waterBodies.bodiesById[bodyId];
-      if (!waterBody || !tileMatchesFishHabitat(fish, tile, waterBody)) {
-        speciesDensity[tileKey] = 0;
-        continue;
-      }
-
-      const bodyBase = waterBody.waterBodyKind === 'pond'
-        ? startingDensity * 0.8
-        : startingDensity;
-      const tileMultiplier = fishTileDensityMultiplier(tile);
-      const variationFactor = deterministicFishTileVariationFactor(state, fish.id, tile);
-      speciesDensity[tileKey] = clamp01(bodyBase * tileMultiplier * variationFactor);
-    }
-
-    densityBySpecies[fish.id] = speciesDensity;
-  }
-
-  state.fishWaterBodyByTile = waterBodies.tileToBodyId;
-  state.fishWaterBodies = waterBodies.bodiesById;
-  state.fishDensityByTile = densityBySpecies;
-  state.fishEquilibriumByTile = cloneFishDensityByTile(densityBySpecies);
-  state.fishPopulationsGenerated = true;
-}
-
-function applyFishPopulationRecovery(state) {
-  if (!state?.fishPopulationsGenerated) {
-    return;
-  }
-
-  const equilibriumBySpecies = state.fishEquilibriumByTile || {};
-  for (const [speciesId, equilibriumByTile] of Object.entries(equilibriumBySpecies)) {
-    if (!state.fishDensityByTile[speciesId]) {
-      state.fishDensityByTile[speciesId] = {};
-    }
-
-    for (const [tileKey, equilibriumDensityRaw] of Object.entries(equilibriumByTile || {})) {
-      const equilibriumDensity = clamp01(Number(equilibriumDensityRaw) || 0);
-      if (equilibriumDensity <= 0) {
-        state.fishDensityByTile[speciesId][tileKey] = 0;
-        continue;
-      }
-
-      const currentDensity = clamp01(Number(state.fishDensityByTile[speciesId][tileKey]) || 0);
-      const recoveredDensity = Math.min(
-        equilibriumDensity,
-        currentDensity + (equilibriumDensity * FISH_DAILY_RECOVERY_RATIO),
-      );
-      state.fishDensityByTile[speciesId][tileKey] = clamp01(recoveredDensity);
-    }
-  }
-}
+const advanceOneTick = buildAdvanceOneTick({
+  progressPartnerTaskQueueOneTick,
+  processAutoRodTickResolution,
+  applyColdExposureTick,
+  TICKS_PER_DAY,
+  advanceDay: (state, steps) => advanceDay(state, steps),
+  ensureTickSystems,
+  getActorDayStartTickBudgetBase,
+});
 
 function rollGroundFungusYield(zone, targetTile, rng) {
   const baseYield = rangeRollIntRandom(zone.perTileYieldRange, rng, 1);
@@ -4768,9 +4313,13 @@ function generateSquirrelCachesInternal(state, rng, options = {}) {
     clearSquirrelCaches(state);
   }
 
-  const cacheItemPool = resolveSquirrelCacheItemPool(state);
+  const cacheItemPool = resolveSquirrelCacheItemPool(PLANT_CATALOG);
   const runSpeciesPool = [...new Set(cacheItemPool.map((item) => item.speciesId))];
-  const squirrelDensityByTile = buildSquirrelDensityByTile(state);
+  const squirrelDensityByTile = buildSquirrelDensityByTile(state, {
+    lifeStageSize,
+    squirrelNutTreeSpecies: SQUIRREL_NUT_TREE_SPECIES,
+    squirrelNutTreeMaturitySize: SQUIRREL_NUT_TREE_MATURITY_SIZE,
+  });
   const groundCandidates = [];
   const deadTreeCandidates = [];
 
@@ -4824,9 +4373,19 @@ function generateSquirrelCachesInternal(state, rng, options = {}) {
   }
 
   const selectedCandidates = [
-    ...selectSquirrelCacheCandidatesWithSpread(groundCandidates, groundTarget)
+    ...selectSquirrelCacheCandidatesWithSpread(groundCandidates, groundTarget, {
+      nearRadius: SQUIRREL_CACHE_SPREAD_RADIUS_NEAR,
+      midRadius: SQUIRREL_CACHE_SPREAD_RADIUS_MID,
+      nearFactor: SQUIRREL_CACHE_SPREAD_NEAR_FACTOR,
+      midFactor: SQUIRREL_CACHE_SPREAD_MID_FACTOR,
+    })
       .map((entry) => ({ ...entry, placementType: 'ground' })),
-    ...selectSquirrelCacheCandidatesWithSpread(deadTreeCandidates, deadTarget)
+    ...selectSquirrelCacheCandidatesWithSpread(deadTreeCandidates, deadTarget, {
+      nearRadius: SQUIRREL_CACHE_SPREAD_RADIUS_NEAR,
+      midRadius: SQUIRREL_CACHE_SPREAD_RADIUS_MID,
+      nearFactor: SQUIRREL_CACHE_SPREAD_NEAR_FACTOR,
+      midFactor: SQUIRREL_CACHE_SPREAD_MID_FACTOR,
+    })
       .map((entry) => ({ ...entry, placementType: 'dead_tree' })),
   ];
 
@@ -4864,274 +4423,27 @@ export function generateGroundFungusZones(state) {
   return nextState;
 }
 
-function normalizeInProgressTicks(value, fallback = 1) {
-  const parsed = Number.isInteger(value)
-    ? value
-    : Math.floor(Number(value || 0));
-  if (parsed > 0) {
-    return parsed;
-  }
-  return Math.max(1, Math.floor(Number(fallback) || 1));
-}
-
-function isInProgressActionEnvelope(action) {
-  return Boolean(
-    action
-      && action.__inProgressAction === true
-      && action.normalizedAction
-      && typeof action.normalizedAction === 'object',
-  );
-}
-
-function createInProgressActionEnvelope(action, remainingTicks, totalTicks, budgetConsumed = false) {
-  const normalizedAction = action && typeof action === 'object'
-    ? {
-      ...action,
-      payload: action.payload && typeof action.payload === 'object'
-        ? { ...action.payload }
-        : {},
-    }
-    : {};
-
-  const normalizedTotal = normalizeInProgressTicks(totalTicks, normalizedAction.tickCost);
-  const normalizedRemaining = normalizeInProgressTicks(remainingTicks, normalizedTotal);
-
-  return {
-    __inProgressAction: true,
-    actionId: typeof normalizedAction.actionId === 'string' ? normalizedAction.actionId : null,
-    actorId: typeof normalizedAction.actorId === 'string' ? normalizedAction.actorId : null,
-    kind: typeof normalizedAction.kind === 'string' ? normalizedAction.kind : null,
-    issuedAtTick: Number.isInteger(normalizedAction.issuedAtTick)
-      ? normalizedAction.issuedAtTick
-      : 0,
-    normalizedAction,
-    remainingTicks: normalizedRemaining,
-    totalTicks: normalizedTotal,
-    budgetConsumed: budgetConsumed === true,
-  };
-}
-
 export function advanceTick(state, options = {}) {
-  let nextState = advanceDay(state, 0);
-  ensureTickSystems(nextState);
-
-  const incomingActions = Array.isArray(options?.actions)
-    ? options.actions.map((action) => ({ ...(action || {}) }))
-    : [];
-  const idleTicks = Number.isInteger(options?.idleTicks) ? Math.max(0, options.idleTicks) : 0;
-
-  nextState.pendingActionQueue = sortActionsDeterministically([
-    ...(nextState.pendingActionQueue || []),
-    ...incomingActions,
-  ]);
-
-  const processedLogEntries = [];
-  const deferredActions = [];
-  for (const rawAction of nextState.pendingActionQueue) {
-    let action = null;
-    let actor = null;
-    let totalTicks = 1;
-    let remainingTicks = 1;
-    let budgetConsumed = false;
-
-    if (isInProgressActionEnvelope(rawAction)) {
-      action = rawAction.normalizedAction;
-      actor = nextState.actors?.[action.actorId] || null;
-      totalTicks = normalizeInProgressTicks(rawAction.totalTicks, action.tickCost);
-      remainingTicks = normalizeInProgressTicks(rawAction.remainingTicks, totalTicks);
-      budgetConsumed = rawAction.budgetConsumed === true;
-
-      if (!actor) {
-        processedLogEntries.push({
-          actionId: typeof action?.actionId === 'string' ? action.actionId : null,
-          actorId: typeof action?.actorId === 'string' ? action.actorId : null,
-          kind: typeof action?.kind === 'string' ? action.kind : null,
-          status: 'rejected',
-          code: 'missing_actor',
-          message: 'in-progress action actor does not exist',
-          startedAtTick: nextState.dayTick,
-          endedAtTick: nextState.dayTick,
-        });
-        continue;
-      }
-    } else {
-      const validation = validateActionDefinition(nextState, rawAction, {
-        fallbackIssuedAtTick: nextState.dayTick,
-      });
-
-      if (!validation.ok) {
-        processedLogEntries.push({
-          actionId: typeof rawAction?.actionId === 'string' ? rawAction.actionId : null,
-          actorId: typeof rawAction?.actorId === 'string' ? rawAction.actorId : null,
-          kind: typeof rawAction?.kind === 'string' ? rawAction.kind : null,
-          status: 'rejected',
-          code: validation.code,
-          message: validation.message,
-          startedAtTick: nextState.dayTick,
-          endedAtTick: nextState.dayTick,
-        });
-        continue;
-      }
-
-      action = validation.normalizedAction;
-      actor = nextState.actors[action.actorId] || null;
-      totalTicks = Number.isInteger(action.tickCost) ? action.tickCost : 1;
-      remainingTicks = totalTicks;
-      budgetConsumed = false;
-    }
-
-    const startedAtTick = nextState.dayTick;
-    const resumable = isResumablePlayerAction(action);
-    if (!resumable) {
-      applyActionEffect(nextState, action);
-      if (actor) {
-        consumeActorTickBudget(actor, totalTicks);
-      }
-
-      for (let i = 0; i < totalTicks; i += 1) {
-        nextState = advanceOneTick(nextState);
-      }
-
-      processedLogEntries.push({
-        actionId: action.actionId,
-        actorId: action.actorId,
-        kind: action.kind,
-        status: 'applied',
-        code: null,
-        message: 'ok',
-        tickCost: totalTicks,
-        startedAtTick,
-        endedAtTick: nextState.dayTick,
-      });
-      continue;
-    }
-
-    const isFishRodCast = action.kind === 'fish_rod_cast';
-    if (!budgetConsumed && actor && !isFishRodCast) {
-      consumeActorTickBudget(actor, totalTicks);
-      budgetConsumed = true;
-    }
-
-    let ticksExecuted = 0;
-    let interrupted = false;
-    let fishBiteResolved = false;
-    while (ticksExecuted < remainingTicks) {
-      const currentActor = nextState.actors?.[action.actorId] || null;
-      if (!currentActor || (Number(currentActor.health) || 0) <= 0) {
-        interrupted = true;
-        break;
-      }
-
-      if (isFishRodCast) {
-        const fishTickOutcome = resolveFishRodTickOutcome(nextState, action, currentActor, ticksExecuted);
-        consumeActorTickBudget(currentActor, 1);
-        budgetConsumed = true;
-        nextState = advanceOneTick(nextState);
-        ticksExecuted += 1;
-        if (fishTickOutcome?.biteResolved === true) {
-          fishBiteResolved = true;
-          break;
-        }
-        continue;
-      }
-
-      nextState = advanceOneTick(nextState);
-      ticksExecuted += 1;
-    }
-
-    const ticksRemaining = Math.max(0, remainingTicks - ticksExecuted);
-    if (interrupted && ticksRemaining > 0) {
-      if (action.kind === 'dig') {
-        const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : null;
-        const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : null;
-        const canMarkTile = Number.isInteger(targetX)
-          && Number.isInteger(targetY)
-          && inBounds(targetX, targetY, nextState.width, nextState.height);
-        const digTicksRequired = Math.max(1, totalTicks);
-        const digTicksCompleted = Math.max(0, digTicksRequired - ticksRemaining);
-        const digCompletionRatio = Math.max(0, Math.min(1, digTicksCompleted / digTicksRequired));
-        const digProgressSnapshot = {
-          ticksRequired: digTicksRequired,
-          ticksCompleted: digTicksCompleted,
-          ticksRemaining,
-          completionRatio: Number(digCompletionRatio.toFixed(4)),
-          interrupted: true,
-        };
-
-        if (canMarkTile) {
-          const tile = nextState.tiles[tileIndex(targetX, targetY, nextState.width)];
-          if (tile) {
-            tile.disturbed = true;
-            tile.lastDigProgress = {
-              ...digProgressSnapshot,
-              actorId: action.actorId,
-              x: targetX,
-              y: targetY,
-              day: Number(nextState.totalDaysSimulated) || 0,
-              dayTick: Number(nextState.dayTick) || 0,
-            };
-          }
-        }
-
-        const digActor = nextState.actors?.[action.actorId] || null;
-        if (digActor) {
-          digActor.lastDig = {
-            x: canMarkTile ? targetX : Number(action.payload?.x) || Number(digActor.x) || 0,
-            y: canMarkTile ? targetY : Number(action.payload?.y) || Number(digActor.y) || 0,
-            day: Number(nextState.totalDaysSimulated) || 0,
-            dayTick: Number(nextState.dayTick) || 0,
-            interruptedBySquirrelCache: false,
-            ...digProgressSnapshot,
-          };
-        }
-      }
-
-      deferredActions.push(createInProgressActionEnvelope(action, ticksRemaining, totalTicks, budgetConsumed));
-      processedLogEntries.push({
-        actionId: action.actionId,
-        actorId: action.actorId,
-        kind: action.kind,
-        status: 'interrupted',
-        code: 'actor_unavailable',
-        message: 'action interrupted; progress preserved for later resume',
-        tickCost: totalTicks,
-        ticksExecuted,
-        ticksRemaining,
-        startedAtTick,
-        endedAtTick: nextState.dayTick,
-      });
-      continue;
-    }
-
-    if (!isFishRodCast) {
-      applyActionEffect(nextState, action);
-    }
-    processedLogEntries.push({
-      actionId: action.actionId,
-      actorId: action.actorId,
-      kind: action.kind,
-      status: 'applied',
-      code: null,
-      message: fishBiteResolved ? 'ok (bite_resolved_early)' : 'ok',
-      tickCost: isFishRodCast ? ticksExecuted : totalTicks,
-      ticksExecuted,
-      startedAtTick,
-      endedAtTick: nextState.dayTick,
-    });
-  }
-
-  nextState.pendingActionQueue = sortActionsDeterministically(deferredActions);
-
-  for (let i = 0; i < idleTicks; i += 1) {
-    nextState = advanceOneTick(nextState);
-  }
-
-  nextState.currentDayActionLog = [
-    ...(nextState.currentDayActionLog || []),
-    ...processedLogEntries,
-  ];
-
-  return nextState;
+  return advanceTickImpl(state, options, {
+    advanceDay: (innerState, steps) => advanceDay(innerState, steps),
+    ensureTickSystems,
+    sortActionsDeterministically,
+    isInProgressActionEnvelope,
+    normalizeInProgressTicks,
+    validateActionDefinition,
+    isResumablePlayerAction,
+    applyActionEffect,
+    consumeActorTickBudget,
+    resolveFishRodTickOutcome,
+    inBounds,
+    tileIndex,
+    createInProgressActionEnvelope,
+    progressPartnerTaskQueueOneTick,
+    processAutoRodTickResolution,
+    applyColdExposureTick,
+    TICKS_PER_DAY,
+    getActorDayStartTickBudgetBase,
+  });
 }
 
 export function validateAction(state, action, options = {}) {
@@ -5228,32 +4540,6 @@ export function generateAnimalZones(state) {
   };
   generateAnimalZonesInternal(nextState);
   return nextState;
-}
-
-export function getAnimalDensityAtTile(state, animalId, x, y) {
-  if (!state?.animalZonesGenerated || !animalId) {
-    return 0;
-  }
-  if (!inBounds(x, y, state.width, state.height)) {
-    return 0;
-  }
-  const tileKey = animalTileDensityKey(x, y);
-  return clamp01(Number(state?.animalDensityByZone?.[animalId]?.[tileKey]) || 0);
-}
-
-export function getFishDensityAtTile(state, speciesId, x, y) {
-  if (!state?.fishPopulationsGenerated || !speciesId) {
-    return 0;
-  }
-  if (!inBounds(x, y, state.width, state.height)) {
-    return 0;
-  }
-  const tile = state.tiles[tileIndex(x, y, state.width)];
-  if (!tile?.waterType) {
-    return 0;
-  }
-  const tileKey = animalTileDensityKey(x, y);
-  return clamp01(Number(state?.fishDensityByTile?.[speciesId]?.[tileKey]) || 0);
 }
 
 function maxLifeStageMinAge(species) {
@@ -6380,77 +5666,38 @@ export function createInitialGameState(seed = 10000, options = {}) {
 }
 
 export function advanceDay(state, steps = 1) {
-  const clonedPlants = {};
-  for (const [plantId, plant] of Object.entries(state.plants || {})) {
-    clonedPlants[plantId] = clonePlant(plant);
-  }
-
-  const nextState = {
-    ...state,
-    plants: clonedPlants,
-    tiles: Array.isArray(state.tiles) ? state.tiles.map(cloneTile) : [],
-    recentDispersal: createEmptyRecentDispersal(state.dayOfYear),
-    animalZoneGrid: state?.animalZoneGrid ? { ...state.animalZoneGrid } : null,
-    animalDensityByZone: cloneAnimalDensityByZone(state?.animalDensityByZone),
-    fishDensityByTile: cloneFishDensityByTile(state?.fishDensityByTile),
-    fishEquilibriumByTile: state?.fishEquilibriumByTile || {},
-    fishWaterBodyByTile: state?.fishWaterBodyByTile || {},
-    fishWaterBodies: state?.fishWaterBodies || {},
-    actors: cloneActors(state?.actors),
-    worldItemsByTile: cloneWorldItemsByTile(state?.worldItemsByTile),
-    camp: cloneCampState(state?.camp, Math.floor(state.width / 2), Math.floor(state.height / 2)),
-    pendingActionQueue: Array.isArray(state?.pendingActionQueue)
-      ? state.pendingActionQueue.map((action) => ({ ...(action || {}) }))
-      : [],
-    currentDayActionLog: Array.isArray(state?.currentDayActionLog)
-      ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
-      : [],
-  };
-
-  ensureDailyWeatherState(nextState);
-
-  const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 13);
-
-  for (let i = 0; i < steps; i += 1) {
-    applyDailyWaterFreezeState(nextState);
-    nextState.recentDispersal = createEmptyRecentDispersal(nextState.dayOfYear);
-    reconcilePlantOccupancy(nextState);
-
-    for (const plant of Object.values(nextState.plants)) {
-      updatePlantLife(nextState, plant, rng);
-    }
-
-    cleanupDeadPlants(nextState);
-    recalculateDynamicShade(nextState);
-    applyEnvironmentalVitality(nextState);
-    cleanupDeadPlants(nextState);
-    processDormantSeeds(nextState, rng);
-    reconcilePlantOccupancy(nextState);
-    applyLogFungusFruiting(nextState, rng);
-    applyGroundFungusFruiting(nextState, rng);
-    applyBeehiveSeasonalState(nextState);
-    applyFishPopulationRecovery(nextState);
-    applyDailyItemDecay(nextState);
-    applyDailySapTapFill(nextState);
-    applyDailySimpleSnareResolution(nextState);
-    applyDailyDeadfallTrapResolution(nextState);
-    applyDailyFishTrapResolution(nextState);
-    applyDailyAutoRodResolution(nextState);
-
-    nextState.dayOfYear += 1;
-    nextState.totalDaysSimulated += 1;
-
-    if (nextState.dayOfYear > 40) {
-      nextState.dayOfYear = 1;
-      nextState.year += 1;
-      advanceDeadLogDecayByYear(nextState);
-      refillSquirrelCachesByYear(nextState);
-    }
-
-    rollDailyWeatherForCurrentDay(nextState, rng);
-  }
-
-  return nextState;
+  return advanceDayImpl(state, steps, {
+    clonePlant,
+    cloneTile,
+    cloneActors,
+    createEmptyRecentDispersal,
+    cloneAnimalDensityByZone,
+    cloneFishDensityByTile,
+    cloneWorldItemsByTile,
+    cloneCampState,
+    ensureDailyWeatherState,
+    mulberry32,
+    applyDailyWaterFreezeState,
+    reconcilePlantOccupancy,
+    updatePlantLife,
+    cleanupDeadPlants,
+    recalculateDynamicShade,
+    applyEnvironmentalVitality,
+    processDormantSeeds,
+    applyLogFungusFruiting,
+    applyGroundFungusFruiting,
+    applyBeehiveSeasonalState,
+    applyFishPopulationRecovery,
+    applyDailyItemDecay,
+    applyDailySapTapFill,
+    applyDailySimpleSnareResolution,
+    applyDailyDeadfallTrapResolution,
+    applyDailyFishTrapResolution,
+    applyDailyAutoRodResolution,
+    rollDailyWeatherForCurrentDay,
+    advanceDeadLogDecayByYear,
+    refillSquirrelCachesByYear,
+  });
 }
 
 export function countDormantSeeds(state) {

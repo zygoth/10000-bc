@@ -1,0 +1,166 @@
+{
+  "reviewed_max_slot": 12,
+  "total_sprites": 12,
+  "failed_sprite_count": 12,
+  "regen_slots": [
+    {
+      "regen_slot": 1,
+      "original_slot": 1,
+      "sprite_id": "daucus_carota_seedling",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (seedling, root, umbel) rather than a single coherent plant sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 2,
+      "original_slot": 2,
+      "sprite_id": "daucus_carota_first_year_vegetative",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (flowers, seedlings, plant, root) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 3,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (stem, seeds, root) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 4,
+      "original_slot": 4,
+      "sprite_id": "daucus_carota_second_year_flowering",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (umbel, seeds, stem, leaf) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 5,
+      "original_slot": 5,
+      "sprite_id": "daucus_carota_second_year_seed_set",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains multiple tiny scattered sprites (a stem section and a floating leaf).",
+        "Incomplete plant - missing base, stem, and cohesive structure"
+      ]
+    },
+    {
+      "regen_slot": 6,
+      "original_slot": 6,
+      "sprite_id": "daucus_carota_root_first_year",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (umbels, root, leaf) rather than a single clear root sprite."
+      ]
+    },
+    {
+      "regen_slot": 7,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 1,
+      "issues": [
+        "Grid scale failure: Contains multiple tiny scattered sprites.",
+        "Wrong subject: Slot contains tiny seedlings and bizarrely, jewelry items (rings) instead of a woody taproot."
+      ]
+    },
+    {
+      "regen_slot": 8,
+      "original_slot": 8,
+      "sprite_id": "daucus_carota_leaf_green",
+      "variation_index": 1,
+      "issues": [
+        "Wrong subject: The 64x64 slot contains multiple tiny jewelry items (rings, necklaces, bags) instead of a green leaf.",
+        "Grid scale failure"
+      ]
+    },
+    {
+      "regen_slot": 9,
+      "original_slot": 9,
+      "sprite_id": "daucus_carota_stem_green",
+      "variation_index": 1,
+      "issues": [
+        "Wrong subject: The 64x64 slot contains multiple tiny jewelry items (necklaces, gem bags) instead of a green stem.",
+        "Grid scale failure"
+      ]
+    },
+    {
+      "regen_slot": 10,
+      "original_slot": 10,
+      "sprite_id": "daucus_carota_stem_dry",
+      "variation_index": 1,
+      "issues": [
+        "Wrong subject: The 64x64 slot contains multiple tiny jewelry items (rings) instead of a dry stem.",
+        "Grid scale failure"
+      ]
+    },
+    {
+      "regen_slot": 11,
+      "original_slot": 11,
+      "sprite_id": "daucus_carota_flower_fresh",
+      "variation_index": 1,
+      "issues": [
+        "Wrong subject: The 64x64 slot contains multiple tiny jewelry items (necklaces, gem bags) instead of a flower umbel.",
+        "Grid scale failure"
+      ]
+    },
+    {
+      "regen_slot": 12,
+      "original_slot": 12,
+      "sprite_id": "daucus_carota_seed_dry",
+      "variation_index": 1,
+      "issues": [
+        "Wrong subject: The 64x64 slot contains multiple tiny jewelry items (gem bags, loose gems) instead of dry seeds.",
+        "Grid scale failure"
+      ]
+    },
+    {
+      "regen_slot": 13,
+      "original_slot": 1,
+      "sprite_id": "daucus_carota_seedling",
+      "variation_index": 2,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (seedling, root, umbel) rather than a single coherent plant sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 14,
+      "original_slot": 2,
+      "sprite_id": "daucus_carota_first_year_vegetative",
+      "variation_index": 2,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (flowers, seedlings, plant, root) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 15,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 2,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (stem, seeds, root) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    },
+    {
+      "regen_slot": 16,
+      "original_slot": 4,
+      "sprite_id": "daucus_carota_second_year_flowering",
+      "variation_index": 2,
+      "issues": [
+        "Grid scale failure: The 64x64 slot contains a collage of multiple tiny scattered sprites (umbel, seeds, stem, leaf) rather than a single coherent sprite.",
+        "Incomplete plant - missing coherent full plant structure"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,355 @@
+{
+    "textures": [
+        {
+            "image": "spritesheet_rd_regen_loop_r1_aligned",
+            "format": "RGBA8888",
+            "size": {
+                "w": 256,
+                "h": 256
+            },
+            "scale": 1,
+            "frames": [
+                {
+                    "filename": "daucus_carota_seedling.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_first_year_vegetative.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 64,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_second_year_vegetative.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 128,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_second_year_flowering.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 192,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_second_year_seed_set.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 0,
+                        "y": 64,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_root_first_year.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 64,
+                        "y": 64,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_root_second_year.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 128,
+                        "y": 64,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_leaf_green.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 192,
+                        "y": 64,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_stem_green.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 0,
+                        "y": 128,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_stem_dry.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 64,
+                        "y": 128,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_flower_fresh.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 128,
+                        "y": 128,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_seed_dry.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 192,
+                        "y": 128,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_seedling.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 0,
+                        "y": 192,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_first_year_vegetative.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 64,
+                        "y": 192,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_second_year_vegetative.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 128,
+                        "y": 192,
+                        "w": 64,
+                        "h": 64
+                    }
+                },
+                {
+                    "filename": "daucus_carota_second_year_flowering.png",
+                    "rotated": false,
+                    "trimmed": false,
+                    "sourceSize": {
+                        "w": 64,
+                        "h": 64
+                    },
+                    "spriteSourceSize": {
+                        "x": 0,
+                        "y": 0,
+                        "w": 64,
+                        "h": 64
+                    },
+                    "frame": {
+                        "x": 192,
+                        "y": 192,
+                        "w": 64,
+                        "h": 64
+                    }
+                }
+            ]
+        }
+    ],
+    "meta": {
+        "app": "SpriteCentererScript",
+        "version": "1.0"
+    }
+}

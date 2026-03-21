@@ -1,0 +1,45 @@
+{
+  "id": "lepomis_macrochirus",
+  "name": "Bluegill",
+  "animal_class": "fish",
+  "physical_description": "Small deep-bodied sunfish with olive flanks and orange-yellow belly.",
+  "habitat": ["pond", "slow_river"],
+  "water_required": true,
+  "weight_range_g": [90, 450],
+  "behaviors": ["schooling", "bottom_feeder"],
+  "diet": ["insect_larvae", "gammarus_sp", "aquatic_vegetation"],
+  "population": {
+    "starting_density": 1.0,
+    "density_per_catch": -0.015,
+    "daily_recovery": 0.05,
+    "spillover_rate": 0.08,
+    "depletion_threshold": 0.15,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 0.9,
+      "summer": 1.0,
+      "fall": 0.8,
+      "winter": 0.5
+    }
+  },
+  "base_catch_rate": 0.55,
+  "rod_compatible": true,
+  "current_sensitivity": 0.2,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 175,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 200, "protein": 33, "carbs": 0, "fat": 9 },
+      "processing_options": [
+        { "id": "clean", "ticks": 5, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 2,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.1,
+      "flavor_profile": ["mild", "savory"],
+      "nausea_family": "fish"
+    }
+  ]
+}

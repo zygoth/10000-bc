@@ -1,0 +1,64 @@
+{
+  "selections": [
+    {
+      "original_slot": 7,
+      "sprite_id": "juglans_nigra_leaf_green",
+      "selected_regen_slot": 2,
+      "reasoning": "Shows a green compound leaf with scent lines, perfectly matching the 'strong spicy-citrus scent' description."
+    },
+    {
+      "original_slot": 8,
+      "sprite_id": "juglans_nigra_leaf_yellow",
+      "selected_regen_slot": 3,
+      "reasoning": "Shows a yellow, drying compound leaf preparing to drop."
+    },
+    {
+      "original_slot": 9,
+      "sprite_id": "juglans_nigra_branch_wood",
+      "selected_regen_slot": 5,
+      "reasoning": "Shows a stout branch with prominent leaf scars."
+    },
+    {
+      "original_slot": 10,
+      "sprite_id": "juglans_nigra_bark_rough",
+      "selected_regen_slot": 7,
+      "reasoning": "Shows a thick, deeply furrowed dark bark texture."
+    },
+    {
+      "original_slot": 14,
+      "sprite_id": "juglans_nigra_husk",
+      "selected_regen_slot": 15,
+      "reasoning": "Shows a pile of powder, representing the processed form of the fleshy husk."
+    },
+    {
+      "original_slot": 15,
+      "sprite_id": "juglans_nigra_whole_fruit_black",
+      "selected_regen_slot": 9,
+      "reasoning": "Contains a dark brown/black spherical husk alongside a green one, matching the mushy/dried whole fruit description."
+    },
+    {
+      "original_slot": 16,
+      "sprite_id": "juglans_nigra_husked_nut_whole",
+      "selected_regen_slot": 10,
+      "reasoning": "Shows whole, heavily ridged, dark brown nut shells."
+    },
+    {
+      "original_slot": 18,
+      "sprite_id": "juglans_nigra_nutshell",
+      "selected_regen_slot": 12,
+      "reasoning": "Shows empty half shells, fixing the issue by displaying 'just the processed empty nutshell' without meat."
+    },
+    {
+      "original_slot": 20,
+      "sprite_id": "juglans_nigra_husk_raw",
+      "selected_regen_slot": 14,
+      "reasoning": "Shows a pile of dark, fibrous chunks, matching the raw husk description."
+    },
+    {
+      "original_slot": 21,
+      "sprite_id": "juglans_nigra_nutshell_broken",
+      "selected_regen_slot": 16,
+      "reasoning": "Shows a pile of thick, woody, deeply ridged shell fragments."
+    }
+  ]
+}

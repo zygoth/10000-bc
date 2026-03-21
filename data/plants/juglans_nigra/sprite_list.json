@@ -1,0 +1,109 @@
+[
+  {
+    "id": "juglans_nigra_seedling",
+    "description": "A young, single-stemmed sapling with large pinnately compound leaves. It emits a pungent, spicy-citrus odor when bruised.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_sapling",
+    "description": "A slender young tree with smooth, gray-brown bark and a few sturdy branches bearing long compound leaves.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_mature_vegetative",
+    "description": "A towering canopy tree with dark, deeply furrowed bark. Its large compound leaves form a high, dappled canopy.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_mature_fruiting",
+    "description": "A towering canopy tree. Round, bright green fruits hang heavily among the large compound leaves.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_mature_seed_set",
+    "description": "The tree's leaves turn yellow and begin to drop. Large, yellowish-green to blackish fruits are visible on the branches and the ground.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_mature_dormant",
+    "description": "A massive, bare silhouette. Its dark, deeply furrowed bark forms interlacing diamond patterns on the thick trunk.",
+    "type": "life_stage"
+  },
+  {
+    "id": "juglans_nigra_leaf_green",
+    "description": "Long compound leaves with many small leaflets. Strong spicy-citrus scent when crushed.",
+    "type": "part_substage",
+    "part": "leaf",
+    "substage": "green"
+  },
+  {
+    "id": "juglans_nigra_leaf_yellow",
+    "description": "Yellow, drying compound leaves preparing to drop from the tree.",
+    "type": "part_substage",
+    "part": "leaf",
+    "substage": "yellow"
+  },
+  {
+    "id": "juglans_nigra_branch_wood",
+    "description": "Stout, dark brown branches bearing prominent leaf scars.",
+    "type": "part_substage",
+    "part": "branch",
+    "substage": "wood"
+  },
+  {
+    "id": "juglans_nigra_bark_rough",
+    "description": "Thick, deeply furrowed dark bark forming an interlacing diamond pattern.",
+    "type": "part_substage",
+    "part": "bark",
+    "substage": "rough"
+  },
+  {
+    "id": "juglans_nigra_root_woody",
+    "description": "A thick, deep taproot branching into dark, heavy lateral roots.",
+    "type": "part_substage",
+    "part": "root",
+    "substage": "woody"
+  },
+  {
+    "id": "juglans_nigra_whole_fruit_green",
+    "description": "A large, heavy, bright green sphere. The thick fleshy husk smells sharply of citrus and spice.",
+    "type": "part_substage",
+    "part": "whole_fruit",
+    "substage": "green"
+  },
+  {
+    "id": "juglans_nigra_whole_fruit_black",
+    "description": "A dark brown to black, mushy or dried spherical husk. It smells pungent and earthy.",
+    "type": "part_substage",
+    "part": "whole_fruit",
+    "substage": "black"
+  },
+  {
+    "id": "juglans_nigra_husked_nut_whole",
+    "description": "A very hard, heavily ridged, dark brown nut shell.",
+    "type": "part_substage",
+    "part": "husked_nut",
+    "substage": "whole"
+  },
+  {
+    "id": "juglans_nigra_walnut_meat_raw",
+    "description": "Rich, oily, intricately folded nut meat. Darker than most nuts.",
+    "type": "part_substage",
+    "part": "walnut_meat",
+    "substage": "raw"
+  },
+  {
+    "id": "juglans_nigra_husk_raw",
+    "description": "Chunks of thick, fibrous green or black husk. Stains everything it touches a dark brown.",
+    "type": "part_substage",
+    "part": "husk",
+    "substage": "raw"
+  },
+  {
+    "id": "juglans_nigra_nutshell_broken",
+    "description": "Thick, woody, deeply ridged shell fragments.",
+    "type": "part_substage",
+    "part": "nutshell",
+    "substage": "broken"
+  }
+]

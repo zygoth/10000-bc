@@ -1,0 +1,16 @@
+{
+  "selections": [
+    {
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "selected_regen_slot": 8,
+      "reasoning": "Shows a tall green stem rising from a rosette of leaves, perfectly matching the vegetative stage description."
+    },
+    {
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "selected_regen_slot": 11,
+      "reasoning": "Clearly displays a prominent, pale whitish taproot, fixing the issue of the missing root."
+    }
+  ]
+}

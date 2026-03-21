@@ -1,0 +1,98 @@
+{
+  "overall_quality": "fair",
+  "sprites": [
+    {
+      "slot": 1,
+      "quality": "fair",
+      "matches_description": true,
+      "issues": [
+        "Seedling leaves are somewhat generic and not distinctly lacy, but acceptable."
+      ],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 2,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 3,
+      "quality": "poor",
+      "matches_description": false,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 4,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 5,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 6,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [
+        "Shows two roots instead of one, but accurately depicts the pale whitish taproot described."
+      ],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 7,
+      "quality": "poor",
+      "matches_description": false,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 8,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 9,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 10,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 11,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 12,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    }
+  ],
+  "summary": "Most sprites are of good quality and match their descriptions well. However, slot 3 is missing its defining structural feature (a tall stem), and slot 7 is completely the wrong subject (showing leaves instead of a root), requiring regeneration for those two."
+}

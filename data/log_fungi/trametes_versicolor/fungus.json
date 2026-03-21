@@ -1,0 +1,13 @@
+{
+  "id": "trametes_versicolor",
+  "type": "log_fungus",
+  "common_name": "Turkey Tail",
+  "latin_name": "Trametes versicolor",
+  "host_trees": ["any_hardwood"],
+  "preferred_decay_stages": [2, 3, 4],
+  "base_spawn_chance": 0.55,
+  "fruiting_windows": [
+    { "start": "mid_spring", "end": "late_fall" }
+  ],
+  "per_log_yield_range": [120, 320]
+}

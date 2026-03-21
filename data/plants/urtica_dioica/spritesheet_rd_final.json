@@ -1,0 +1,361 @@
+{
+  "textures": [
+    {
+      "image": "spritesheet_rd_final_loop_r1",
+      "format": "RGBA8888",
+      "size": {
+        "w": 256,
+        "h": 256
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "urtica_dioica_seedling.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_vegetative.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_flowering.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_seed_set.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_senescent.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_leaf_young.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_leaf_mature.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_stalk_green.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_stalk_dry.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_root_rhizome.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_flower_bloom.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_seed_cluster.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_seedling.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_vegetative.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_flowering.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "urtica_dioica_seed_set.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "CompositeFinalSheet",
+    "version": "1.0",
+    "replacements": {
+      "6": 1,
+      "9": 7,
+      "12": 2
+    },
+    "total_sprites": 16
+  }
+}

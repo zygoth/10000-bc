@@ -1,0 +1,45 @@
+{
+  "id": "semotilus_atromaculatus",
+  "name": "Creek Chub",
+  "animal_class": "fish",
+  "physical_description": "Small stream minnow with dark lateral stripe and terminal mouth.",
+  "habitat": ["stream", "slow_river"],
+  "water_required": true,
+  "weight_range_g": [50, 200],
+  "behaviors": ["schooling", "opportunistic_feeder"],
+  "diet": ["insect_larvae", "aquatic_insects", "detritus"],
+  "population": {
+    "starting_density": 1.05,
+    "density_per_catch": -0.012,
+    "daily_recovery": 0.055,
+    "spillover_rate": 0.1,
+    "depletion_threshold": 0.15,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 1.0,
+      "summer": 1.05,
+      "fall": 0.85,
+      "winter": 0.45
+    }
+  },
+  "base_catch_rate": 0.58,
+  "rod_compatible": true,
+  "current_sensitivity": 0.7,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 80,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 85, "protein": 13, "carbs": 0, "fat": 3 },
+      "processing_options": [
+        { "id": "clean", "ticks": 4, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 2,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.1,
+      "flavor_profile": ["mild", "savory"],
+      "nausea_family": "fish"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+A 4x4 grid (16 total sprites) of different stages of growth and individual plant parts of a Wild Carrot (Daucus Carota). Each sprite must fit within its 64x64 pixel box. For full plants show the whole plant from where it comes out of the ground to the top, no roots. White background. Use botanical drawing style with black outlines for every sprite. No text.
+
+The 4x4 grid has sprites from top left, first row:
+1. Wild Carrot: Full plant: Tiny lacy cotyledons barely visible above the soil.
+2. Wild Carrot: Full plant: A low-growing rosette of finely divided, lacy, fern-like green leaves.
+3. Wild Carrot: Full plant: A tall, solid green stem covered in fine hairs rises from the lacy rosette of leaves.
+4. Wild Carrot: Full plant: The hairy stem is topped with flat umbels of small white flowers, featuring a single dark purple flower in the center.
+
+Second row:
+5. Wild Carrot: Full plant: The flower umbels have folded inward to form a concave 'bird's nest' shape, holding small bristly seeds. The stalk is browning.
+6. Wild Carrot: A pale whitish taproot, fleshy and smelling strongly of carrot.
+7. Wild Carrot: A pale whitish taproot, split, hard, and extremely woody.
+8. Wild Carrot: Finely divided, lacy, fern-like green leaves.
+
+Third row:
+9. Wild Carrot: A sturdy, solid green stem covered in fine hairs.
+10. Wild Carrot: A dry, brown, hollowed-out stalk.
+11. Wild Carrot: A flat umbel of tiny white flowers, with a single dark purple floret in the exact center.
+12. Wild Carrot: Small, strongly ribbed seeds covered in tiny bristles, gathered in a dry 'bird's nest' cup.
+
+Fourth row:
+13. Wild Carrot: Full plant: Tiny lacy cotyledons barely visible above the soil.
+14. Wild Carrot: Full plant: A low-growing rosette of finely divided, lacy, fern-like green leaves.
+15. Wild Carrot: Full plant: A tall, solid green stem covered in fine hairs rises from the lacy rosette of leaves.
+16. Wild Carrot: Full plant: The hairy stem is topped with flat umbels of small white flowers, featuring a single dark purple flower in the center.

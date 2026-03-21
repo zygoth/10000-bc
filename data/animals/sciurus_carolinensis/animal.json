@@ -1,0 +1,112 @@
+{
+  "id": "sciurus_carolinensis",
+  "name": "Eastern Gray Squirrel",
+  "animal_class": "mammal",
+  "physical_description": "Tree-dwelling squirrel with gray coat and bushy tail; common in mixed hardwood forests.",
+  "habitat": ["deciduous_forest", "forest_edge", "riparian_woods"],
+  "water_required": false,
+  "weight_range_g": [350, 800],
+  "behaviors": ["arboreal", "cache_builder", "diurnal"],
+  "diet": [
+    "juglans_nigra",
+    "quercus_alba",
+    "quercus_macrocarpa",
+    "quercus_rubra",
+    "carya_ovata",
+    "carya_cordiformis",
+    "fagus_grandifolia",
+    "ulmus_americana",
+    "ulmus_rubra",
+    "acer_saccharum",
+    "acer_rubrum",
+    "tilia_americana",
+    "corylus_americana",
+    "prunus_serotina",
+    "prunus_americana",
+    "malus_coronaria",
+    "rubus_allegheniensis",
+    "rubus_occidentalis",
+    "vitis_riparia",
+    "cornus_florida",
+    "sambucus_canadensis",
+    "asimina_triloba",
+    "diospyros_virginiana",
+    "celtis_occidentalis",
+    "morus_rubra",
+    "pinus_strobus",
+    "pinus_resinosa",
+    "helianthus_annuus",
+    "ambrosia_trifida",
+    "daucus_carota"
+  ],
+  "population": {
+    "starting_density": 0.6,
+    "density_per_catch": -0.025,
+    "daily_recovery": 0.012,
+    "spillover_rate": 0.04,
+    "depletion_threshold": 0.2,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 1,
+      "summer": 1,
+      "fall": 1,
+      "winter": 0.4
+    }
+  },
+  "base_catch_rate": 0.2,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 360,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 390, "protein": 45, "carbs": 0, "fat": 16 },
+      "processing_options": [
+        { "id": "butcher", "ticks": 9, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 3,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.2,
+      "flavor_profile": ["savory", "lean"],
+      "nausea_family": "lean_game"
+    },
+    {
+      "id": "hide",
+      "yield_grams": 420,
+      "unit_weight_g": 1,
+      "processing_options": [
+        {
+          "id": "scrape_and_dry",
+          "ticks": 70,
+          "location": "hide_frame",
+          "outputs": [
+            { "itemId": "dried_hide", "yield_fraction": 0.82, "output_unit_weight_g": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bone",
+      "yield_quantity": 1,
+      "yield_grams": 90,
+      "unit_weight_g": 90,
+      "nutrition": { "calories": 45, "protein": 7, "carbs": 0, "fat": 1 },
+      "can_dry": false,
+      "can_freeze": true,
+      "craft_tags": ["bone_tool_material"]
+    },
+    {
+      "id": "fat",
+      "yield_grams": 45,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 70, "protein": 0, "carbs": 0, "fat": 13 }
+    },
+    {
+      "id": "dried_hide",
+      "available_life_stages": [],
+      "unit_weight_g": 1,
+      "can_dry": false,
+      "craft_tags": ["hide_material"]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+[
+  {
+    "id": "daucus_carota_seedling",
+    "description": "Tiny lacy cotyledons barely visible above the soil.",
+    "type": "life_stage"
+  },
+  {
+    "id": "daucus_carota_first_year_vegetative",
+    "description": "A low-growing rosette of finely divided, lacy, fern-like green leaves.",
+    "type": "life_stage"
+  },
+  {
+    "id": "daucus_carota_second_year_vegetative",
+    "description": "A tall, solid green stem covered in fine hairs rises from the lacy rosette of leaves.",
+    "type": "life_stage"
+  },
+  {
+    "id": "daucus_carota_second_year_flowering",
+    "description": "The hairy stem is topped with flat umbels of small white flowers, featuring a single dark purple flower in the center.",
+    "type": "life_stage"
+  },
+  {
+    "id": "daucus_carota_second_year_seed_set",
+    "description": "The flower umbels have folded inward to form a concave 'bird's nest' shape, holding small bristly seeds. The stalk is browning.",
+    "type": "life_stage"
+  },
+  {
+    "id": "daucus_carota_root_first_year",
+    "description": "A pale whitish taproot, fleshy and smelling strongly of carrot.",
+    "type": "part_substage",
+    "part": "root",
+    "substage": "first_year"
+  },
+  {
+    "id": "daucus_carota_root_second_year",
+    "description": "A pale whitish taproot, split, hard, and extremely woody.",
+    "type": "part_substage",
+    "part": "root",
+    "substage": "second_year"
+  },
+  {
+    "id": "daucus_carota_leaf_green",
+    "description": "Finely divided, lacy, fern-like green leaves.",
+    "type": "part_substage",
+    "part": "leaf",
+    "substage": "green"
+  },
+  {
+    "id": "daucus_carota_stem_green",
+    "description": "A sturdy, solid green stem covered in fine hairs.",
+    "type": "part_substage",
+    "part": "stem",
+    "substage": "green"
+  },
+  {
+    "id": "daucus_carota_stem_dry",
+    "description": "A dry, brown, hollowed-out stalk.",
+    "type": "part_substage",
+    "part": "stem",
+    "substage": "dry"
+  },
+  {
+    "id": "daucus_carota_flower_fresh",
+    "description": "A flat umbel of tiny white flowers, with a single dark purple floret in the exact center.",
+    "type": "part_substage",
+    "part": "flower",
+    "substage": "fresh"
+  },
+  {
+    "id": "daucus_carota_seed_dry",
+    "description": "Small, strongly ribbed seeds covered in tiny bristles, gathered in a dry 'bird's nest' cup.",
+    "type": "part_substage",
+    "part": "seed",
+    "substage": "dry"
+  }
+]

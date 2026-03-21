@@ -1,0 +1,81 @@
+{
+  "name": "steam-game-template",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./public/electron.js",
+  "homepage": "./",
+  "build": {
+    "appId": "com.example.fishtfightstarter",
+    "productName": "Steam Game Template",
+    "files": [
+      "build/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "deb"
+    }
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build && npm run ccc:index",
+    "ccc:index": "./tools/ccc.cmd index",
+    "ccc:status": "./tools/ccc.cmd status",
+    "ccc:search": "./tools/ccc.cmd search",
+    "catalog:build": "node ./scripts/build-plant-catalog.mjs && node ./scripts/build-log-fungus-catalog.mjs && node ./scripts/build-ground-fungus-catalog.mjs && node ./scripts/build-animal-catalog.mjs && node ./scripts/build-plant-sprite-catalog.mjs",
+    "sim:phase1": "npm run catalog:build && node ./scripts/run-phase1-harness.mjs",
+    "test:sim": "npm run catalog:build && node ./tests/sim/run-sim-tests.mjs",
+    "test": "react-scripts test --passWithNoTests",
+    "eject": "react-scripts eject",
+    "copy-appid-file": "node ./scripts/copy-steam-appid.js",
+    "electron:start": "concurrently -k \"cross-env BROWSER=none npm run start\" \"wait-on http://127.0.0.1:3000 && electron .\"",
+    "electron:package:mac": "npm run build && electron-builder -m -c.extraMetadata.main=build/electron.js",
+    "electron:package:win": "npm run build && electron-builder -w -c.extraMetadata.main=build/electron.js && npm run copy-appid-file",
+    "electron:package:linux": "npm run build && electron-builder -l -c.extraMetadata.main=build/electron.js",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.7.1",
+    "@capacitor/app": "^5.0.7",
+    "@capacitor/core": "^5.7.8",
+    "@capacitor/filesystem": "^5.2.0",
+    "@capacitor/preferences": "^5.0.7",
+    "@capacitor/status-bar": "^5.0.7",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "5.0.0",
+    "steamworks.js": "^0.3.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.4",
+    "@capacitor/cli": "^5.7.8",
+    "concurrently": "^7.6.0",
+    "cross-env": "^7.0.3",
+    "electron": "^21.3.0",
+    "electron-builder": "^23.6.0",
+    "wait-on": "^6.0.1"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      "last 1 electron version"
+    ],
+    "development": [
+      "last 1 electron version"
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "catostomus_commersonii",
+  "name": "White Sucker",
+  "animal_class": "fish",
+  "physical_description": "Bottom-feeding sucker with subterminal mouth and bronze-olive body.",
+  "habitat": ["slow_river", "fast_river"],
+  "water_required": true,
+  "weight_range_g": [300, 1500],
+  "behaviors": ["schooling", "bottom_feeder", "spawning_run"],
+  "diet": ["detritus", "insect_larvae", "benthic_invertebrates"],
+  "population": {
+    "starting_density": 1.0,
+    "density_per_catch": -0.014,
+    "daily_recovery": 0.055,
+    "spillover_rate": 0.1,
+    "depletion_threshold": 0.15,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 2.5,
+      "summer": 1.0,
+      "fall": 0.8,
+      "winter": 0.5
+    }
+  },
+  "base_catch_rate": 0.62,
+  "rod_compatible": false,
+  "current_sensitivity": 0.9,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 605,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 740, "protein": 102, "carbs": 0, "fat": 21 },
+      "processing_options": [
+        { "id": "clean", "ticks": 5, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 2,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.1,
+      "flavor_profile": ["savory", "earthy"],
+      "nausea_family": "fish"
+    }
+  ]
+}

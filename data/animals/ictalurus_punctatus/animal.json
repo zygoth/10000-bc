@@ -1,0 +1,45 @@
+{
+  "id": "ictalurus_punctatus",
+  "name": "Channel Catfish",
+  "animal_class": "fish",
+  "physical_description": "Whiskered river catfish with spotted juvenile pattern and forked tail.",
+  "habitat": ["slow_river", "fast_river"],
+  "water_required": true,
+  "weight_range_g": [500, 4000],
+  "behaviors": ["bottom_feeder", "nocturnal"],
+  "diet": ["insect_larvae", "small_fish", "detritus", "crayfish"],
+  "population": {
+    "starting_density": 0.95,
+    "density_per_catch": -0.017,
+    "daily_recovery": 0.05,
+    "spillover_rate": 0.09,
+    "depletion_threshold": 0.15,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 0.95,
+      "summer": 1.1,
+      "fall": 0.9,
+      "winter": 0.5
+    }
+  },
+  "base_catch_rate": 0.5,
+  "rod_compatible": true,
+  "current_sensitivity": 0.6,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 1530,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 1910, "protein": 260, "carbs": 0, "fat": 58 },
+      "processing_options": [
+        { "id": "clean", "ticks": 7, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 2,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.1,
+      "flavor_profile": ["savory", "fatty"],
+      "nausea_family": "fish"
+    }
+  ]
+}

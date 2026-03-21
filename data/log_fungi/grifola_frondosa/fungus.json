@@ -1,0 +1,13 @@
+{
+  "id": "grifola_frondosa",
+  "type": "log_fungus",
+  "common_name": "Hen of the Woods",
+  "latin_name": "Grifola frondosa",
+  "host_trees": ["any_hardwood"],
+  "preferred_decay_stages": [3, 4],
+  "base_spawn_chance": 0.2,
+  "fruiting_windows": [
+    { "start": "early_fall", "end": "late_fall" }
+  ],
+  "per_log_yield_range": [350, 950]
+}

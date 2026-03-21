@@ -1,0 +1,14 @@
+{
+  "id": "pleurotus_ostreatus",
+  "type": "log_fungus",
+  "common_name": "Oyster Mushroom",
+  "latin_name": "Pleurotus ostreatus",
+  "host_trees": ["any_hardwood"],
+  "preferred_decay_stages": [2, 3],
+  "base_spawn_chance": 0.4,
+  "fruiting_windows": [
+    { "start": "mid_fall", "end": "early_winter" },
+    { "start": "early_spring", "end": "mid_spring" }
+  ],
+  "per_log_yield_range": [400, 900]
+}

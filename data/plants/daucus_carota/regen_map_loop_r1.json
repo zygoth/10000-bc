@@ -1,0 +1,151 @@
+{
+  "reviewed_max_slot": 12,
+  "total_sprites": 12,
+  "failed_sprite_count": 2,
+  "regen_slots": [
+    {
+      "regen_slot": 1,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 1,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 2,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 1,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 3,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 2,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 4,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 2,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 5,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 3,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 6,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 3,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 7,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 4,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 8,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 4,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 9,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 5,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 10,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 5,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 11,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 6,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 12,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 6,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 13,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 7,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 14,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 7,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    },
+    {
+      "regen_slot": 15,
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "variation_index": 8,
+      "issues": [
+        "Incomplete plant - missing tall solid green stem rising from the rosette. Appears only as a low cluster of leaves."
+      ]
+    },
+    {
+      "regen_slot": 16,
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "variation_index": 8,
+      "issues": [
+        "Completely wrong subject. Shows a cluster of green leaves instead of the described split, hard, woody pale taproot."
+      ]
+    }
+  ]
+}

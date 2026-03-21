@@ -1,0 +1,124 @@
+{
+  "files": {
+    "F:\\Old Projects\\10000BC\\data\\plants\\daucus_carota\\spritesheet_rd_final.png": {
+      "signature": "25704:1773436684807",
+      "frameOpaqueBottomByFilename": {
+        "daucus_carota_seedling.png": 41,
+        "daucus_carota_first_year_vegetative.png": 60,
+        "daucus_carota_second_year_vegetative.png": 56,
+        "daucus_carota_second_year_flowering.png": 59,
+        "daucus_carota_second_year_seed_set.png": 58,
+        "daucus_carota_root_first_year.png": 59,
+        "daucus_carota_root_second_year.png": 60,
+        "daucus_carota_leaf_green.png": 51,
+        "daucus_carota_stem_green.png": 53,
+        "daucus_carota_stem_dry.png": 58,
+        "daucus_carota_flower_fresh.png": 55,
+        "daucus_carota_seed_dry.png": 59
+      }
+    },
+    "F:\\Old Projects\\10000BC\\data\\plants\\juglans_nigra\\spritesheet_rd_final.png": {
+      "signature": "34950:1773724078082",
+      "frameOpaqueBottomByFilename": {
+        "juglans_nigra_seedling.png": 51,
+        "juglans_nigra_sapling.png": 56,
+        "juglans_nigra_mature_vegetative.png": 56,
+        "juglans_nigra_mature_fruiting.png": 60,
+        "juglans_nigra_mature_seed_set.png": 60,
+        "juglans_nigra_mature_dormant.png": 58,
+        "juglans_nigra_leaf_green.png": 60,
+        "juglans_nigra_leaf_yellow.png": 59,
+        "juglans_nigra_branch_wood.png": 60,
+        "juglans_nigra_bark_rough.png": 60,
+        "juglans_nigra_root_woody.png": 58,
+        "juglans_nigra_whole_fruit_green.png": 45,
+        "juglans_nigra_husked_nut.png": 49,
+        "juglans_nigra_husk.png": 46,
+        "juglans_nigra_whole_fruit_black.png": 52,
+        "juglans_nigra_husked_nut_whole.png": 43,
+        "juglans_nigra_walnut_meat.png": 50,
+        "juglans_nigra_nutshell.png": 49,
+        "juglans_nigra_walnut_meat_raw.png": 51,
+        "juglans_nigra_husk_raw.png": 53,
+        "juglans_nigra_nutshell_broken.png": 49
+      }
+    },
+    "F:\\Old Projects\\10000BC\\data\\plants\\urtica_dioica\\spritesheet_rd_final.png": {
+      "signature": "24903:1773427131089",
+      "frameOpaqueBottomByFilename": {
+        "urtica_dioica_seedling.png": 41,
+        "urtica_dioica_vegetative.png": 53,
+        "urtica_dioica_flowering.png": 60,
+        "urtica_dioica_seed_set.png": 61,
+        "urtica_dioica_senescent.png": 59,
+        "urtica_dioica_leaf_young.png": 56,
+        "urtica_dioica_leaf_mature.png": 52,
+        "urtica_dioica_stalk_green.png": 53,
+        "urtica_dioica_stalk_dry.png": 56,
+        "urtica_dioica_root_rhizome.png": 53,
+        "urtica_dioica_flower_bloom.png": 51,
+        "urtica_dioica_seed_cluster.png": 56
+      }
+    },
+    "f:\\Old Projects\\10000BC\\data\\plants\\daucus_carota\\spritesheet_rd_final.png": {
+      "signature": "25704:1773436684807",
+      "frameOpaqueBottomByFilename": {
+        "daucus_carota_seedling.png": 41,
+        "daucus_carota_first_year_vegetative.png": 60,
+        "daucus_carota_second_year_vegetative.png": 56,
+        "daucus_carota_second_year_flowering.png": 59,
+        "daucus_carota_second_year_seed_set.png": 58,
+        "daucus_carota_root_first_year.png": 59,
+        "daucus_carota_root_second_year.png": 60,
+        "daucus_carota_leaf_green.png": 51,
+        "daucus_carota_stem_green.png": 53,
+        "daucus_carota_stem_dry.png": 58,
+        "daucus_carota_flower_fresh.png": 55,
+        "daucus_carota_seed_dry.png": 59
+      }
+    },
+    "f:\\Old Projects\\10000BC\\data\\plants\\juglans_nigra\\spritesheet_rd_final.png": {
+      "signature": "34950:1773724078082",
+      "frameOpaqueBottomByFilename": {
+        "juglans_nigra_seedling.png": 51,
+        "juglans_nigra_sapling.png": 56,
+        "juglans_nigra_mature_vegetative.png": 56,
+        "juglans_nigra_mature_fruiting.png": 60,
+        "juglans_nigra_mature_seed_set.png": 60,
+        "juglans_nigra_mature_dormant.png": 58,
+        "juglans_nigra_leaf_green.png": 60,
+        "juglans_nigra_leaf_yellow.png": 59,
+        "juglans_nigra_branch_wood.png": 60,
+        "juglans_nigra_bark_rough.png": 60,
+        "juglans_nigra_root_woody.png": 58,
+        "juglans_nigra_whole_fruit_green.png": 45,
+        "juglans_nigra_husked_nut.png": 49,
+        "juglans_nigra_husk.png": 46,
+        "juglans_nigra_whole_fruit_black.png": 52,
+        "juglans_nigra_husked_nut_whole.png": 43,
+        "juglans_nigra_walnut_meat.png": 50,
+        "juglans_nigra_nutshell.png": 49,
+        "juglans_nigra_walnut_meat_raw.png": 51,
+        "juglans_nigra_husk_raw.png": 53,
+        "juglans_nigra_nutshell_broken.png": 49
+      }
+    },
+    "f:\\Old Projects\\10000BC\\data\\plants\\urtica_dioica\\spritesheet_rd_final.png": {
+      "signature": "24903:1773427131089",
+      "frameOpaqueBottomByFilename": {
+        "urtica_dioica_seedling.png": 41,
+        "urtica_dioica_vegetative.png": 53,
+        "urtica_dioica_flowering.png": 60,
+        "urtica_dioica_seed_set.png": 61,
+        "urtica_dioica_senescent.png": 59,
+        "urtica_dioica_leaf_young.png": 56,
+        "urtica_dioica_leaf_mature.png": 52,
+        "urtica_dioica_stalk_green.png": 53,
+        "urtica_dioica_stalk_dry.png": 56,
+        "urtica_dioica_root_rhizome.png": 53,
+        "urtica_dioica_flower_bloom.png": 51,
+        "urtica_dioica_seed_cluster.png": 56
+      }
+    }
+  }
+}

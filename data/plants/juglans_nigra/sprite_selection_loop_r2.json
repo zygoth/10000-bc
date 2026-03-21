@@ -1,0 +1,22 @@
+{
+  "selections": [
+    {
+      "original_slot": 15,
+      "sprite_id": "juglans_nigra_whole_fruit_black",
+      "selected_regen_slot": 4,
+      "reasoning": "Accurately depicts a dark brown/black dried spherical husk as requested."
+    },
+    {
+      "original_slot": 17,
+      "sprite_id": "juglans_nigra_walnut_meat",
+      "selected_regen_slot": 2,
+      "reasoning": "Clearly shows processed walnut meat completely removed from the shell."
+    },
+    {
+      "original_slot": 18,
+      "sprite_id": "juglans_nigra_nutshell",
+      "selected_regen_slot": 3,
+      "reasoning": "Shows an empty processed nutshell half with no meat inside."
+    }
+  ]
+}

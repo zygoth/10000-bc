@@ -1,0 +1,552 @@
+{
+  "id": "urtica_dioica",
+  "name": "Stinging Nettle",
+  "plant_family": "urticaceae",
+  "physical_description": "An upright herbaceous perennial reaching 1 to 2 meters tall. Its deeply veined, serrated leaves are arranged oppositely on a fibrous green stalk. The entire plant is covered in tiny, stiff, hollow hairs.",
+  "game_description": "The leaves are high in vitamins and make a good cooked green, as boiling completely destroys the stinging hairs. In late summer and fall, the mature stalks provide strong, high-quality fiber for cordage. Harvesting bare-handed will cause painful stings.",
+  "age_of_maturity": 10,
+  "scent": {
+    "strength": 0.3,
+    "primary_compound": "hexenal"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      8.0
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.1,
+        0.75
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.55,
+        1.0
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.5,
+        1.0
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.15,
+        0.85
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "late_summer",
+    "end": "early_fall"
+  },
+  "dispersal": {
+    "method": "wind",
+    "base_radius_tiles": 4,
+    "wind_radius_bonus": 3,
+    "water_dispersed": true,
+    "animal_dispersed": true,
+    "seeds_per_mature_plant": [
+      500,
+      2000
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": true,
+    "pioneer": true,
+    "viable_lifespan_days": 1800
+  },
+  "on_tile_entry_injury": {
+    "type": "sting",
+    "base_probability": 0.6,
+    "health_hit": 0.02,
+    "infection_chance": null,
+    "debuff": null,
+    "equipment_probability_modifiers": {
+      "gloves": 0.0,
+      "coat": 0.5
+    }
+  },
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "tea",
+        "poultice"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 5,
+      "peak_ticks": 30,
+      "duration_ticks": 120,
+      "processing_ticks": 240
+    },
+    "dose_response": [
+      {
+        "min_grams": 10,
+        "max_grams": null,
+        "treatment_tag": "analgesic",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "pain",
+            "modifier": 1.5
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "Small opposite leaves with prominent veins emerging from the soil. Even at this size, stinging hairs are visible along the stems and leaves."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 10,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 15
+      },
+      "size": 2,
+      "field_description": "A rapidly growing upright stalk bearing heavily veined, serrated green leaves covered in fine, glass-like bristles."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 11,
+      "seasonal_window": {
+        "start_day": 16,
+        "end_day": 25
+      },
+      "size": 3,
+      "field_description": "Tall leafy stalks with tiny, drooping clusters of greenish-white flowers emerging from the leaf axils. The plant is dense and bristling with stinging hairs."
+    },
+    {
+      "stage": "seed_set",
+      "min_age_days": 12,
+      "seasonal_window": {
+        "start_day": 26,
+        "end_day": 30
+      },
+      "size": 3,
+      "field_description": "The drooping flower clusters have turned into dense, heavy strings of tiny green and brown seeds."
+    },
+    {
+      "stage": "senescent",
+      "min_age_days": 13,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 35
+      },
+      "size": 2,
+      "field_description": "The leaves are yellowing, curling, and dropping off, leaving behind tough, fibrous stalks."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 14,
+      "seasonal_window": {
+        "start_day": 36,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "The above-ground plant has died back completely, leaving only a network of yellow rhizomes beneath the soil."
+    }
+  ],
+  "parts": [
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "young",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "mid_spring"
+          },
+          "field_description": "Tender, bright green leaves covered in fine, glass-like hairs.",
+          "game_description": "Painful to eat raw due to stinging hairs, causing harshness. Cooking completely destroys the sting, making it an edible and nutritious green.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "cooked_edibility_score": 0.9,
+          "cooked_harshness": 0.1,
+          "unit_weight_g": 2.0,
+          "nutrition": {
+            "calories": 0.8,
+            "protein": 0.05,
+            "carbs": 0.14,
+            "fat": 0.01
+          },
+          "texture": "tender",
+          "taste_notes": [
+            "earthy",
+            "spinach-like"
+          ],
+          "scent_notes": [
+            "green",
+            "fresh"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5,
+            "blickey": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              10,
+              25
+            ],
+            "actions_until_depleted": [
+              3,
+              6
+            ]
+          },
+          "harvest_damage": 0.2,
+          "on_harvest_injury": {
+            "type": "sting",
+            "base_probability": 0.7,
+            "health_hit": 0.02,
+            "infection_chance": null,
+            "debuff": null,
+            "tool_probability_modifiers": {
+              "knife": 0.4,
+              "gloves": 0.0
+            }
+          },
+          "regrowth_days": 5,
+          "regrowth_max_harvests": 3,
+          "decay_days": 3.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.1,
+          "cooking_detoxifies": true
+        },
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "late_spring",
+            "end": "late_summer"
+          },
+          "field_description": "Darker green leaves, slightly tough, with potent stinging hairs.",
+          "game_description": "Tougher than spring leaves but still edible when cooked. The stings are more potent, causing severe harshness if eaten raw.",
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 3.0,
+          "nutrition": {
+            "calories": 1.2,
+            "protein": 0.08,
+            "carbs": 0.2,
+            "fat": 0.02
+          },
+          "texture": "fibrous",
+          "taste_notes": [
+            "earthy",
+            "bitter"
+          ],
+          "scent_notes": [
+            "green",
+            "pungent"
+          ],
+          "potency_multiplier": 1.5,
+          "harvest_damage": 0.3
+        }
+      ]
+    },
+    {
+      "name": "stalk",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "senescent"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "mid_spring",
+            "end": "mid_summer"
+          },
+          "field_description": "A sturdy, square-ish green stalk bristling with stinging hairs.",
+          "game_description": "Contains strong fibers, but they are difficult to separate while the stalk is still green and alive.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 40.0,
+          "nutrition": {
+            "calories": 0.5,
+            "protein": 0.02,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "texture": "fibrous",
+          "taste_notes": [
+            "bitter"
+          ],
+          "scent_notes": [
+            "grassy",
+            "pungent"
+          ],
+          "average_fiber_length_cm": 40.0,
+          "fiber_strength_modifier": 1.5,
+          "fiberous": true,
+          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 5,
+          "harvest_tool_modifiers": {
+            "knife": 2.0
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.8,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 1,
+          "decay_days": 10.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "winter"
+          },
+          "field_description": "A brown, dry, hollow stalk. The stinging hairs have mostly fallen off.",
+          "game_description": "A source of strong, long fibers for cordage. Much easier to process than green stalks.",
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 0.2,
+            "protein": 0.0,
+            "carbs": 0.05,
+            "fat": 0.0
+          },
+          "texture": "woody",
+          "taste_notes": [],
+          "scent_notes": [
+            "dry",
+            "dusty"
+          ],
+          "potency_multiplier": 0.1,
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 60.0
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "senescent",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "rhizome",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "Creeping, bright yellow roots spreading horizontally through the soil.",
+          "game_description": "Tough and fibrous. Contains minimal calories but can be steeped for mild medicinal effects.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.4,
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 5.0,
+            "protein": 0.1,
+            "carbs": 1.0,
+            "fat": 0.0
+          },
+          "texture": "tough",
+          "taste_notes": [
+            "earthy",
+            "astringent"
+          ],
+          "scent_notes": [
+            "dirt",
+            "musky"
+          ],
+          "average_fiber_length_cm": 5.0,
+          "fiber_strength_modifier": 0.2,
+          "fiberous": true,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.5,
+          "regrowth_days": 20,
+          "regrowth_max_harvests": 1,
+          "dig_ticks_to_discover": 20,
+          "decay_days": 14.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.2
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "bloom",
+          "seasonal_window": {
+            "start": "mid_summer",
+            "end": "late_summer"
+          },
+          "field_description": "Tiny, inconspicuous greenish-white flowers hanging in string-like clusters from the leaf axils.",
+          "game_description": "Insignificant for food, though they can be steeped in tea.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.3,
+          "unit_weight_g": 0.5,
+          "nutrition": {
+            "calories": 0.1,
+            "protein": 0.0,
+            "carbs": 0.02,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [
+            "bland"
+          ],
+          "scent_notes": [
+            "faint",
+            "green"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              10
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.05,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 2.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "seed",
+      "available_life_stages": [
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "cluster",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "early_fall"
+          },
+          "field_description": "Drooping clusters of tiny, flat, oval-shaped green and brown seeds.",
+          "game_description": "Very tiny but packed with calories. Can be eaten raw or added to stews, though gathering in quantity is slow work.",
+          "edibility_score": 0.8,
+          "edibility_harshness": 0.1,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 3.5,
+            "protein": 0.2,
+            "carbs": 0.5,
+            "fat": 0.1
+          },
+          "texture": "gritty",
+          "taste_notes": [
+            "nutty"
+          ],
+          "scent_notes": [
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.2,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.1
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              15
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "does_blickey_help_harvest": true,
+          "decay_days": 30.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.2
+        }
+      ]
+    }
+  ]
+}

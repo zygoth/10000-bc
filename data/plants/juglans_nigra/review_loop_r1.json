@@ -1,0 +1,173 @@
+{
+  "overall_quality": "fair",
+  "sprites": [
+    {
+      "slot": 1,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 2,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 3,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 4,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 5,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 6,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 7,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows rough bark texture instead of a green compound leaf"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 8,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a green compound leaf instead of yellow/drying leaves"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 9,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a single green leaf instead of a stout woody branch"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 10,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a branch with buds instead of rough bark texture"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 11,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 12,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 13,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 14,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows broken inner nutshells instead of the outer fleshy husk"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 15,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a clean husked nut instead of a black, mushy whole fruit/husk"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 16,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows an empty half shell instead of a whole husked nut"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 17,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 18,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows whole nuts and exposed meat instead of just the processed empty nutshell"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 19,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 20,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a pile of nut meat instead of chunks of fibrous raw husk"
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 21,
+      "quality": "good",
+      "matches_description": false,
+      "issues": [
+        "Shows a sack of nuts instead of broken nutshell fragments"
+      ],
+      "needs_regeneration": true
+    }
+  ],
+  "summary": "The plant growth stages (slots 1-6) and root system (slot 11) are well executed and match their descriptions perfectly. However, the sheet suffers from severe alignment issues starting at slot 7, where many items are generated in the wrong order or depict the wrong subject entirely (e.g., bark in the leaf slot, sacks in the nutshell slot). These misaligned sprites need to be regenerated to match their specific target descriptions."
+}

@@ -1,0 +1,76 @@
+{
+  "selections": [
+    {
+      "original_slot": 1,
+      "sprite_id": "daucus_carota_seedling",
+      "selected_regen_slot": 1,
+      "reasoning": "Perfect match for the tiny seedling with cotyledons barely visible above the soil."
+    },
+    {
+      "original_slot": 2,
+      "sprite_id": "daucus_carota_first_year_vegetative",
+      "selected_regen_slot": 2,
+      "reasoning": "Perfect match for the low-growing rosette of finely divided, lacy green leaves."
+    },
+    {
+      "original_slot": 3,
+      "sprite_id": "daucus_carota_second_year_vegetative",
+      "selected_regen_slot": 14,
+      "reasoning": "Shows a tall, solid green stem rising from a rosette, fitting the second-year vegetative structure best among available options."
+    },
+    {
+      "original_slot": 4,
+      "sprite_id": "daucus_carota_second_year_flowering",
+      "selected_regen_slot": 3,
+      "reasoning": "Perfect match for the hairy stem topped with flat umbels of small white flowers."
+    },
+    {
+      "original_slot": 5,
+      "sprite_id": "daucus_carota_second_year_seed_set",
+      "selected_regen_slot": 4,
+      "reasoning": "Perfect match for the browning stalk and umbels folded inward to form a concave 'bird's nest' shape."
+    },
+    {
+      "original_slot": 6,
+      "sprite_id": "daucus_carota_root_first_year",
+      "selected_regen_slot": 7,
+      "reasoning": "Perfect match for the pale whitish, fleshy first-year taproot."
+    },
+    {
+      "original_slot": 7,
+      "sprite_id": "daucus_carota_root_second_year",
+      "selected_regen_slot": 8,
+      "reasoning": "Perfect match for the split, hard, and woody second-year taproot."
+    },
+    {
+      "original_slot": 8,
+      "sprite_id": "daucus_carota_leaf_green",
+      "selected_regen_slot": 13,
+      "reasoning": "Provides a clear, abundant view of the finely divided, lacy, fern-like green leaves."
+    },
+    {
+      "original_slot": 9,
+      "sprite_id": "daucus_carota_stem_green",
+      "selected_regen_slot": 9,
+      "reasoning": "Perfect match for the sturdy, solid green stem."
+    },
+    {
+      "original_slot": 10,
+      "sprite_id": "daucus_carota_stem_dry",
+      "selected_regen_slot": 10,
+      "reasoning": "Shows a dry, brown stalk (topped with a dry umbel), fitting the dry stem description."
+    },
+    {
+      "original_slot": 11,
+      "sprite_id": "daucus_carota_flower_fresh",
+      "selected_regen_slot": 12,
+      "reasoning": "Perfect match for the flat umbel of tiny white flowers."
+    },
+    {
+      "original_slot": 12,
+      "sprite_id": "daucus_carota_seed_dry",
+      "selected_regen_slot": 6,
+      "reasoning": "Clearly shows the strongly ribbed seeds characteristic of the plant."
+    }
+  ]
+}

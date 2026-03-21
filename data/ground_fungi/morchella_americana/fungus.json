@@ -1,0 +1,20 @@
+{
+  "id": "morchella_americana",
+  "type": "ground_fungus",
+  "common_name": "Morel",
+  "latin_name": "Morchella americana",
+  "zone_count_range": [15, 28],
+  "zone_radius_range": [2, 4],
+  "annual_fruit_chance": 0.38,
+  "soil_requirements": {
+    "ph_range": [5.7, 7.2],
+    "drainage": { "tolerance_range": [0.35, 0.85] },
+    "fertility": { "tolerance_range": [0.3, 0.85] },
+    "moisture": { "tolerance_range": [0.38, 0.78] },
+    "shade": { "tolerance_range": [0.2, 0.7] }
+  },
+  "fruiting_windows": [
+    { "start": "mid_spring", "end": "late_spring" }
+  ],
+  "per_tile_yield_range": [18, 80]
+}

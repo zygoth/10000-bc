@@ -1,0 +1,18 @@
+{
+  "slug": "daucus_carota",
+  "max_rounds": 1,
+  "rounds": [
+    {
+      "round": 1,
+      "input_sheet": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\spritesheet_rd_final.png",
+      "review_path": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\review_loop_r1.json",
+      "failures": 6,
+      "regen_prompt": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\prompt_regen_loop_r1.txt",
+      "regen_map": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\regen_map_loop_r1.json",
+      "regen_aligned": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\spritesheet_rd_regen_loop_r1_aligned.png",
+      "selection": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\sprite_selection_loop_r1.json",
+      "final_sheet": "F:\\Old Projects\\AI Game Dev Attempts\\Plant Creation Workflow\\plants\\daucus_carota\\spritesheet_rd_final_loop_r1.png"
+    }
+  ],
+  "status": "max_rounds_reached"
+}

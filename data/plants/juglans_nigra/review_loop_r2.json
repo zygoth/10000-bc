@@ -1,0 +1,159 @@
+{
+  "overall_quality": "good",
+  "sprites": [
+    {
+      "slot": 1,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 2,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 3,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 4,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 5,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 6,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 7,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 8,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 9,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 10,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 11,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 12,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 13,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 14,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 15,
+      "quality": "fair",
+      "matches_description": false,
+      "issues": [
+        "Shows a greenish fruit and a bare nut instead of a dark brown/black mushy or dried spherical husk."
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 16,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 17,
+      "quality": "fair",
+      "matches_description": false,
+      "issues": [
+        "Should be just the processed walnut meat, but shows the meat still inside the shell."
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 18,
+      "quality": "fair",
+      "matches_description": false,
+      "issues": [
+        "Should be just the empty processed nutshells, but includes a shell that still contains meat."
+      ],
+      "needs_regeneration": true
+    },
+    {
+      "slot": 19,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 20,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    },
+    {
+      "slot": 21,
+      "quality": "good",
+      "matches_description": true,
+      "issues": [],
+      "needs_regeneration": false
+    }
+  ],
+  "summary": "Overall excellent quality and distinct items. The full plants are correctly drawn. A few processed nut items (15, 17, 18) need regeneration to correctly separate the components (meat vs shell vs black husk)."
+}

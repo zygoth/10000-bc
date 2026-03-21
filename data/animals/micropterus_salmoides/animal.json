@@ -1,0 +1,45 @@
+{
+  "id": "micropterus_salmoides",
+  "name": "Largemouth Bass",
+  "animal_class": "fish",
+  "physical_description": "Large predatory bass with a broad mouth and olive-green lateral stripe.",
+  "habitat": ["pond", "slow_river"],
+  "water_required": true,
+  "weight_range_g": [500, 3000],
+  "behaviors": ["ambush_predator", "structure_oriented"],
+  "diet": ["small_fish", "insect_larvae", "crayfish"],
+  "population": {
+    "starting_density": 0.9,
+    "density_per_catch": -0.018,
+    "daily_recovery": 0.045,
+    "spillover_rate": 0.08,
+    "depletion_threshold": 0.15,
+    "hibernates": false,
+    "season_modifiers": {
+      "spring": 1.1,
+      "summer": 1.0,
+      "fall": 1.1,
+      "winter": 0.45
+    }
+  },
+  "base_catch_rate": 0.48,
+  "rod_compatible": true,
+  "current_sensitivity": 0.3,
+  "parts": [
+    {
+      "id": "meat",
+      "yield_grams": 1140,
+      "unit_weight_g": 1,
+      "nutrition": { "calories": 1480, "protein": 210, "carbs": 0, "fat": 46 },
+      "processing_options": [
+        { "id": "clean", "ticks": 6, "location": "hand", "outputs": [] }
+      ],
+      "decay_days": 2,
+      "can_dry": true,
+      "can_freeze": true,
+      "stew_nutrition_factor": 1.1,
+      "flavor_profile": ["savory", "rich"],
+      "nausea_family": "fish"
+    }
+  ]
+}

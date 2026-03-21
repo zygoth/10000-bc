@@ -1,0 +1,151 @@
+{
+  "reviewed_max_slot": 21,
+  "total_sprites": 21,
+  "failed_sprite_count": 10,
+  "regen_slots": [
+    {
+      "regen_slot": 1,
+      "original_slot": 7,
+      "sprite_id": "juglans_nigra_leaf_green",
+      "variation_index": 1,
+      "issues": [
+        "Shows rough bark texture instead of a green compound leaf"
+      ]
+    },
+    {
+      "regen_slot": 2,
+      "original_slot": 8,
+      "sprite_id": "juglans_nigra_leaf_yellow",
+      "variation_index": 1,
+      "issues": [
+        "Shows a green compound leaf instead of yellow/drying leaves"
+      ]
+    },
+    {
+      "regen_slot": 3,
+      "original_slot": 9,
+      "sprite_id": "juglans_nigra_branch_wood",
+      "variation_index": 1,
+      "issues": [
+        "Shows a single green leaf instead of a stout woody branch"
+      ]
+    },
+    {
+      "regen_slot": 4,
+      "original_slot": 10,
+      "sprite_id": "juglans_nigra_bark_rough",
+      "variation_index": 1,
+      "issues": [
+        "Shows a branch with buds instead of rough bark texture"
+      ]
+    },
+    {
+      "regen_slot": 5,
+      "original_slot": 14,
+      "sprite_id": "juglans_nigra_husk",
+      "variation_index": 1,
+      "issues": [
+        "Shows broken inner nutshells instead of the outer fleshy husk"
+      ]
+    },
+    {
+      "regen_slot": 6,
+      "original_slot": 15,
+      "sprite_id": "juglans_nigra_whole_fruit_black",
+      "variation_index": 1,
+      "issues": [
+        "Shows a clean husked nut instead of a black, mushy whole fruit/husk"
+      ]
+    },
+    {
+      "regen_slot": 7,
+      "original_slot": 16,
+      "sprite_id": "juglans_nigra_husked_nut_whole",
+      "variation_index": 1,
+      "issues": [
+        "Shows an empty half shell instead of a whole husked nut"
+      ]
+    },
+    {
+      "regen_slot": 8,
+      "original_slot": 18,
+      "sprite_id": "juglans_nigra_nutshell",
+      "variation_index": 1,
+      "issues": [
+        "Shows whole nuts and exposed meat instead of just the processed empty nutshell"
+      ]
+    },
+    {
+      "regen_slot": 9,
+      "original_slot": 20,
+      "sprite_id": "juglans_nigra_husk_raw",
+      "variation_index": 1,
+      "issues": [
+        "Shows a pile of nut meat instead of chunks of fibrous raw husk"
+      ]
+    },
+    {
+      "regen_slot": 10,
+      "original_slot": 21,
+      "sprite_id": "juglans_nigra_nutshell_broken",
+      "variation_index": 1,
+      "issues": [
+        "Shows a sack of nuts instead of broken nutshell fragments"
+      ]
+    },
+    {
+      "regen_slot": 11,
+      "original_slot": 7,
+      "sprite_id": "juglans_nigra_leaf_green",
+      "variation_index": 2,
+      "issues": [
+        "Shows rough bark texture instead of a green compound leaf"
+      ]
+    },
+    {
+      "regen_slot": 12,
+      "original_slot": 8,
+      "sprite_id": "juglans_nigra_leaf_yellow",
+      "variation_index": 2,
+      "issues": [
+        "Shows a green compound leaf instead of yellow/drying leaves"
+      ]
+    },
+    {
+      "regen_slot": 13,
+      "original_slot": 9,
+      "sprite_id": "juglans_nigra_branch_wood",
+      "variation_index": 2,
+      "issues": [
+        "Shows a single green leaf instead of a stout woody branch"
+      ]
+    },
+    {
+      "regen_slot": 14,
+      "original_slot": 10,
+      "sprite_id": "juglans_nigra_bark_rough",
+      "variation_index": 2,
+      "issues": [
+        "Shows a branch with buds instead of rough bark texture"
+      ]
+    },
+    {
+      "regen_slot": 15,
+      "original_slot": 14,
+      "sprite_id": "juglans_nigra_husk",
+      "variation_index": 2,
+      "issues": [
+        "Shows broken inner nutshells instead of the outer fleshy husk"
+      ]
+    },
+    {
+      "regen_slot": 16,
+      "original_slot": 15,
+      "sprite_id": "juglans_nigra_whole_fruit_black",
+      "variation_index": 2,
+      "issues": [
+        "Shows a clean husked nut instead of a black, mushy whole fruit/husk"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "selections": [
+    {
+      "original_slot": 4,
+      "sprite_id": "juglans_nigra_mature_fruiting",
+      "selected_regen_slot": 1,
+      "reasoning": "Successfully depicts a full canopy tree with a visible trunk and base, fixing the incomplete plant issue."
+    },
+    {
+      "original_slot": 5,
+      "sprite_id": "juglans_nigra_mature_seed_set",
+      "selected_regen_slot": 2,
+      "reasoning": "Shows a complete tree structure with autumn foliage, fixing the issue of only showing a single floating leaf."
+    },
+    {
+      "original_slot": 6,
+      "sprite_id": "juglans_nigra_mature_dormant",
+      "selected_regen_slot": 3,
+      "reasoning": "Perfectly captures a massive, bare tree silhouette with trunk and branches, fixing the missing structure."
+    },
+    {
+      "original_slot": 7,
+      "sprite_id": "juglans_nigra_leaf_green",
+      "selected_regen_slot": 4,
+      "reasoning": "This is the only provided variation for this sprite, although it depicts bark texture rather than the requested compound leaves."
+    },
+    {
+      "original_slot": 8,
+      "sprite_id": "juglans_nigra_leaf_yellow",
+      "selected_regen_slot": 5,
+      "reasoning": "This is the only provided variation, showing a green compound leaf instead of the requested yellow drying leaves."
+    },
+    {
+      "original_slot": 9,
+      "sprite_id": "juglans_nigra_branch_wood",
+      "selected_regen_slot": 6,
+      "reasoning": "This is the only provided variation, depicting a single green leaf rather than stout dark brown branches."
+    },
+    {
+      "original_slot": 10,
+      "sprite_id": "juglans_nigra_bark_rough",
+      "selected_regen_slot": 7,
+      "reasoning": "This is the only provided variation, showing a branch with buds instead of deeply furrowed dark bark."
+    },
+    {
+      "original_slot": 11,
+      "sprite_id": "juglans_nigra_root_woody",
+      "selected_regen_slot": 8,
+      "reasoning": "Successfully depicts a thick, deep taproot branching into lateral roots, fixing the previous issue."
+    },
+    {
+      "original_slot": 12,
+      "sprite_id": "juglans_nigra_whole_fruit_green",
+      "selected_regen_slot": 9,
+      "reasoning": "Accurately shows large, bright green spherical fruits, fixing the issue of showing a shelled nut kernel."
+    },
+    {
+      "original_slot": 15,
+      "sprite_id": "juglans_nigra_whole_fruit_black",
+      "selected_regen_slot": 10,
+      "reasoning": "This is the only provided variation, showing a nut in its shell rather than a dark brown/black spherical husk."
+    },
+    {
+      "original_slot": 16,
+      "sprite_id": "juglans_nigra_husked_nut_whole",
+      "selected_regen_slot": 11,
+      "reasoning": "This is the only provided variation, showing an empty nutshell half rather than a whole heavily ridged nut."
+    },
+    {
+      "original_slot": 17,
+      "sprite_id": "juglans_nigra_walnut_meat",
+      "selected_regen_slot": 12,
+      "reasoning": "This is the only provided variation, showing a nutshell half containing meat."
+    },
+    {
+      "original_slot": 18,
+      "sprite_id": "juglans_nigra_nutshell",
+      "selected_regen_slot": 13,
+      "reasoning": "This is the only provided variation, showing whole and halved nuts."
+    },
+    {
+      "original_slot": 19,
+      "sprite_id": "juglans_nigra_walnut_meat_raw",
+      "selected_regen_slot": 14,
+      "reasoning": "Accurately depicts intricately folded, rich nut meat pieces."
+    },
+    {
+      "original_slot": 20,
+      "sprite_id": "juglans_nigra_husk_raw",
+      "selected_regen_slot": 15,
+      "reasoning": "This is the only provided variation, showing a pile of walnut meat rather than chunks of fibrous husk."
+    },
+    {
+      "original_slot": 21,
+      "sprite_id": "juglans_nigra_nutshell_broken",
+      "selected_regen_slot": 16,
+      "reasoning": "This is the only provided variation, showing a sack of nuts rather than broken shell fragments."
+    }
+  ]
+}

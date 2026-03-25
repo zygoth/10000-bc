@@ -13,6 +13,8 @@ import {
   TICKS_PER_DAY,
 } from './simCore.constants.mjs';
 import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
+import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
+import { ensureHarvestEntryState } from './harvestEntryState.mjs';
 
 const ACTION_KINDS = [
   'move',
@@ -1685,6 +1687,10 @@ function validateHoeAction(state, action, actor) {
 
   if (tile.waterType && tile.waterDepth !== 'shallow') {
     return { ok: false, code: 'hoe_blocked_tile', message: 'hoe target may only be land or shallow water' };
+  }
+
+  if (!hasInventoryItem(actor, 'tool:hoe')) {
+    return { ok: false, code: 'missing_required_tool', message: 'hoe requires tool:hoe in inventory' };
   }
 
   return {
@@ -3411,6 +3417,7 @@ function getHarvestReachToolState(actor) {
   };
 }
 
+/** Dig action tick-cost multiplier (lower = faster dig). Unearth progress per game tick uses its reciprocal — see `getDigUnearthProgressPerTick` in advanceTick/digRevealProgress.mjs (keep multipliers in sync). */
 function getDigToolModifier(actor) {
   if (hasInventoryItem(actor, 'tool:shovel')) {
     return 0.35;
@@ -4018,6 +4025,21 @@ function validateHarvestAction(state, action, actor) {
       return { ok: false, code: 'missing_harvest_plant', message: 'harvest target plant does not exist or is not alive' };
     }
 
+    const plantX0 = Number(plant?.x);
+    const plantY0 = Number(plant?.y);
+    if (!Number.isInteger(plantX0) || !Number.isInteger(plantY0) || !inBounds(state, plantX0, plantY0)) {
+      return { ok: false, code: 'missing_harvest_plant', message: 'harvest target plant has no valid map position' };
+    }
+    if (!isInteractionTargetInRange(actor, { x: plantX0, y: plantY0 })) {
+      return {
+        ok: false,
+        code: 'interaction_out_of_range',
+        message: 'harvest target must be on current or adjacent tile',
+      };
+    }
+
+    const species = PLANT_BY_ID[plant.speciesId] || null;
+    const subStageDef = getHarvestSubStageDefinition(species, partName, subStageId);
     const subStageEntry = Array.isArray(plant.activeSubStages)
       ? plant.activeSubStages.find((entry) => entry?.partName === partName && entry?.subStageId === subStageId) || null
       : null;
@@ -4025,9 +4047,23 @@ function validateHarvestAction(state, action, actor) {
       return { ok: false, code: 'inactive_harvest_sub_stage', message: 'harvest target sub-stage is not active' };
     }
 
-    const species = PLANT_BY_ID[plant.speciesId] || null;
-    const subStageDef = getHarvestSubStageDefinition(species, partName, subStageId);
-    const reachTier = typeof subStageDef?.reach_tier === 'string' ? subStageDef.reach_tier : 'ground';
+    ensureHarvestEntryState(subStageEntry, subStageDef, plant, species);
+
+    const requiresDigDiscovery = Number.isFinite(Number(subStageDef?.dig_ticks_to_discover))
+      && Number(subStageDef.dig_ticks_to_discover) > 0;
+    if (requiresDigDiscovery) {
+      const need = Math.max(1, Number(subStageDef.dig_ticks_to_discover));
+      const applied = Math.max(0, Number(subStageEntry.digRevealTicksApplied) || 0);
+      if (applied + 1e-9 < need) {
+        return {
+          ok: false,
+          code: 'harvest_target_underground',
+          message: `harvest target is still underground (${applied.toFixed(1)}/${need} dig progress)`,
+        };
+      }
+    }
+
+    const reachTier = resolveEffectiveReachTier(subStageDef, plant.stageName);
     const reachTools = getHarvestReachToolState(actor);
     const poolState = getHarvestActionPoolState(subStageEntry, reachTier);
     if (reachTier === 'canopy' && !reachTools.canAccessCanopyPool) {
@@ -4158,6 +4194,37 @@ function validateHarvestAction(state, action, actor) {
     };
   }
 
+  const activeLogFungi = Array.isArray(tile?.deadLog?.fungi)
+    ? tile.deadLog.fungi
+      .filter((entry) => Number(entry?.yield_current_grams) > 0 && typeof entry?.species_id === 'string' && entry.species_id)
+    : [];
+  if (activeLogFungi.length > 0) {
+    const requestedSpeciesId = typeof action.payload?.speciesId === 'string' ? action.payload.speciesId : '';
+    const selectedFungus = requestedSpeciesId
+      ? activeLogFungi.find((entry) => entry.species_id === requestedSpeciesId) || activeLogFungi[0]
+      : activeLogFungi[0];
+    const harvestGrams = Math.max(1, Math.floor(Number(selectedFungus?.yield_current_grams) || 0));
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: {
+          ...action.payload,
+          targetType: 'log_fungus',
+          x: target.x,
+          y: target.y,
+          speciesId: selectedFungus.species_id,
+          harvestGrams,
+          outputItemId: `log_fungus:${selectedFungus.species_id}:fruiting_body`,
+          outputUnitWeightKg: 0.001,
+        },
+        tickCost: 2,
+      },
+    };
+  }
+
   const cache = tile?.squirrelCache;
   if (!cache || cache.discovered !== true) {
     return { ok: false, code: 'missing_squirrel_cache', message: 'harvest cache target requires discovered squirrel cache on target tile' };
@@ -4166,6 +4233,34 @@ function validateHarvestAction(state, action, actor) {
   const availableGrams = Number(cache.nutContentGrams);
   if (!Number.isFinite(availableGrams) || availableGrams <= 0) {
     return { ok: false, code: 'empty_squirrel_cache', message: 'squirrel cache has no remaining content' };
+  }
+
+  const plantPartItemId = `${cache.cachedSpeciesId}:${cache.cachedPartName}:${cache.cachedSubStageId}`;
+  const cachePartDescriptor = parsePlantPartItemId(plantPartItemId);
+  if (!cachePartDescriptor) {
+    return {
+      ok: false,
+      code: 'invalid_squirrel_cache_plant_part',
+      message: 'squirrel cache does not resolve to a known plant part item',
+    };
+  }
+
+  const gramsPerUnit = Number(cachePartDescriptor.subStage?.unit_weight_g);
+  if (!Number.isFinite(gramsPerUnit) || gramsPerUnit <= 0) {
+    return {
+      ok: false,
+      code: 'invalid_squirrel_cache_unit_weight',
+      message: 'cached plant part has no usable unit weight for inventory',
+    };
+  }
+
+  const maxWholeUnits = Math.floor(availableGrams / gramsPerUnit);
+  if (maxWholeUnits < 1) {
+    return {
+      ok: false,
+      code: 'squirrel_cache_insufficient_mass',
+      message: 'cached mass is less than one plant part unit',
+    };
   }
 
   const requestedGrams = Math.max(1, Math.floor(availableGrams));
@@ -4182,7 +4277,7 @@ function validateHarvestAction(state, action, actor) {
         x: target.x,
         y: target.y,
         cacheGrams: requestedGrams,
-        inventoryUnitWeightKg: 0.001,
+        plantPartItemId,
       },
     },
   };
@@ -4726,6 +4821,10 @@ function validateMoveAction(state, action, actor) {
   const nextY = Number(actor.y) + dy;
   if (!inBounds(state, nextX, nextY)) {
     return { ok: false, code: 'move_out_of_bounds', message: 'move target is out of bounds' };
+  }
+  const tile = getTile(state, nextX, nextY);
+  if (!tile || tile.rockType) {
+    return { ok: false, code: 'move_blocked_tile', message: 'move target must not be a rock tile' };
   }
 
   return {

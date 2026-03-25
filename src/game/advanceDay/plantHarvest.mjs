@@ -1,3 +1,5 @@
+import { resolveEffectiveReachTier } from '../harvestReachTier.mjs';
+
 export function applyHarvestActionImpl(state, plantId, partName, subStageId, options = {}, deps) {
   const {
     PLANT_BY_ID,
@@ -35,12 +37,12 @@ export function applyHarvestActionImpl(state, plantId, partName, subStageId, opt
   const requestedActions = Math.max(1, Math.floor(options.actions ?? 1));
   const reachTier = typeof options?.reachTier === 'string'
     ? options.reachTier
-    : (typeof subStage?.reach_tier === 'string' ? subStage.reach_tier : 'ground');
+    : resolveEffectiveReachTier(subStage, plant.stageName);
   // Direct callers (tests/utilities) historically bypass reach-tool validation.
   // Validation-backed action execution passes an explicit boolean here.
   const canAccessElevatedPool = options?.canAccessElevatedPool !== false;
   const canAccessCanopyPool = options?.canAccessCanopyPool !== false;
-  ensureHarvestEntryState(entry, subStage);
+  ensureHarvestEntryState(entry, subStage, plant, species);
 
   let appliedActions = 0;
   let consumedGroundActions = 0;

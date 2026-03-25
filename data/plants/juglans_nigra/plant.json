@@ -220,6 +220,10 @@
             ]
           },
           "reach_tier": "canopy",
+          "reach_tier_by_life_stage": {
+            "seedling": "ground",
+            "sapling": "ground"
+          },
           "harvest_damage": 0.05,
           "regrowth_days": 15,
           "regrowth_max_harvests": 1,
@@ -240,6 +244,10 @@
           "edibility_harshness": 0.6,
           "potency_multiplier": 0.1,
           "reach_tier": "canopy",
+          "reach_tier_by_life_stage": {
+            "seedling": "ground",
+            "sapling": "ground"
+          },
           "harvest_yield": {
             "units_per_action": [
               20,

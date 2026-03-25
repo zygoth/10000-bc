@@ -1,3 +1,9 @@
+import {
+  applyDigRevealTicksToTile,
+  countUnearthedUndergroundPartsOnTile,
+  getDigUnearthProgressPerTick,
+} from './digRevealProgress.mjs';
+
 export function runActionQueue(nextState, options, hooks) {
   const {
     sortActionsDeterministically,
@@ -114,6 +120,18 @@ export function runActionQueue(nextState, options, hooks) {
     let ticksExecuted = 0;
     let interrupted = false;
     let fishBiteResolved = false;
+    let digUnearthedBaseline = null;
+    let digTargetX = null;
+    let digTargetY = null;
+    if (action.kind === 'dig') {
+      const tx = Number.isInteger(action.payload?.x) ? action.payload.x : null;
+      const ty = Number.isInteger(action.payload?.y) ? action.payload.y : null;
+      if (Number.isInteger(tx) && Number.isInteger(ty) && inBounds(tx, ty, nextState.width, nextState.height)) {
+        digTargetX = tx;
+        digTargetY = ty;
+        digUnearthedBaseline = countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY);
+      }
+    }
     while (ticksExecuted < remainingTicks) {
       const currentActor = nextState.actors?.[action.actorId] || null;
       if (!currentActor || (Number(currentActor.health) || 0) <= 0) {
@@ -136,6 +154,15 @@ export function runActionQueue(nextState, options, hooks) {
 
       nextState = advanceOneTick(nextState);
       ticksExecuted += 1;
+      if (action.kind === 'dig' && digUnearthedBaseline !== null && Number.isInteger(digTargetX) && Number.isInteger(digTargetY)) {
+        const digActor = nextState.actors?.[action.actorId] || null;
+        applyDigRevealTicksToTile(
+          nextState,
+          digTargetX,
+          digTargetY,
+          getDigUnearthProgressPerTick(digActor),
+        );
+      }
     }
 
     const ticksRemaining = Math.max(0, remainingTicks - ticksExecuted);
@@ -156,6 +183,9 @@ export function runActionQueue(nextState, options, hooks) {
           completionRatio: Number(digCompletionRatio.toFixed(4)),
           interrupted: true,
         };
+        const digUnearthedDelta = (digUnearthedBaseline !== null && Number.isInteger(digTargetX) && Number.isInteger(digTargetY))
+          ? Math.max(0, countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY) - digUnearthedBaseline)
+          : 0;
 
         if (canMarkTile) {
           const tile = nextState.tiles[tileIndex(targetX, targetY, nextState.width)];
@@ -180,6 +210,7 @@ export function runActionQueue(nextState, options, hooks) {
             day: Number(nextState.totalDaysSimulated) || 0,
             dayTick: Number(nextState.dayTick) || 0,
             interruptedBySquirrelCache: false,
+            discoveredUndergroundTargetsCount: digUnearthedDelta,
             ...digProgressSnapshot,
           };
         }
@@ -203,15 +234,40 @@ export function runActionQueue(nextState, options, hooks) {
     }
 
     if (!isFishRodCast) {
+      if (action.kind === 'dig' && actor && digUnearthedBaseline !== null && Number.isInteger(digTargetX) && Number.isInteger(digTargetY)) {
+        const delta = Math.max(0, countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY) - digUnearthedBaseline);
+        actor.pendingDigUnearthedDelta = delta;
+      }
       applyActionEffect(nextState, action);
     }
+    let completionMessage = fishBiteResolved ? 'ok (bite_resolved_early)' : 'ok';
+    if (action.kind === 'dig') {
+      const digMeta = nextState?.actors?.[action.actorId]?.lastDig || null;
+      const discoveredCache = digMeta?.interruptedBySquirrelCache === true;
+      const discoveredUndergroundCount = Math.max(0, Math.floor(Number(digMeta?.discoveredUndergroundTargetsCount) || 0));
+      if (discoveredCache || discoveredUndergroundCount > 0) {
+        const fragments = [];
+        if (discoveredCache) {
+          fragments.push('squirrel cache revealed');
+        }
+        if (discoveredUndergroundCount > 0) {
+          fragments.push(
+            discoveredUndergroundCount === 1
+              ? 'underground plant part uncovered'
+              : `underground plant parts uncovered (${discoveredUndergroundCount})`,
+          );
+        }
+        completionMessage = `dig discovery after ${Math.max(1, ticksExecuted)} ticks: ${fragments.join('; ')}`;
+      }
+    }
+
     processedLogEntries.push({
       actionId: action.actionId,
       actorId: action.actorId,
       kind: action.kind,
       status: 'applied',
       code: null,
-      message: fishBiteResolved ? 'ok (bite_resolved_early)' : 'ok',
+      message: completionMessage,
       tickCost: isFishRodCast ? ticksExecuted : totalTicks,
       ticksExecuted,
       startedAtTick,

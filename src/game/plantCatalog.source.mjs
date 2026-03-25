@@ -172,7 +172,7 @@ const PLANT_CATALOG_SOURCE = [
             "harvest_damage": 1,
             "regrowth_days": null,
             "regrowth_max_harvests": null,
-            "dig_ticks_to_discover": 25,
+            "dig_ticks_to_discover": 5,
             "decay_days": 14,
             "can_dry": false,
             "stew_nutrition_factor": 1.4,
@@ -318,8 +318,8 @@ const PLANT_CATALOG_SOURCE = [
                 2
               ],
               "actions_until_depleted": [
-                1,
-                2
+                4,
+                4
               ]
             },
             "harvest_damage": 0.8,
@@ -637,6 +637,10 @@ const PLANT_CATALOG_SOURCE = [
               ]
             },
             "reach_tier": "canopy",
+            "reach_tier_by_life_stage": {
+              "seedling": "ground",
+              "sapling": "ground"
+            },
             "harvest_damage": 0.05,
             "regrowth_days": 15,
             "regrowth_max_harvests": 1,
@@ -657,6 +661,10 @@ const PLANT_CATALOG_SOURCE = [
             "edibility_harshness": 0.6,
             "potency_multiplier": 0.1,
             "reach_tier": "canopy",
+            "reach_tier_by_life_stage": {
+              "seedling": "ground",
+              "sapling": "ground"
+            },
             "harvest_yield": {
               "units_per_action": [
                 20,

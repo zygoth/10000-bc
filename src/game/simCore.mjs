@@ -1,4 +1,7 @@
 import { PLANT_BY_ID, PLANT_CATALOG, getSeason, isDayInWindow } from './plantCatalog.mjs';
+import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
+import { scaledUnitsPerHarvestActionMidpoint } from './harvestYieldResolve.mjs';
+import { findPartAndSubStage, ensureHarvestEntryState } from './harvestEntryState.mjs';
 import { GROUND_FUNGUS_CATALOG, GROUND_FUNGUS_BY_ID, isDayInSeasonWindow } from './groundFungusCatalog.mjs';
 import { LOG_FUNGUS_CATALOG, LOG_FUNGUS_BY_ID, isDayInLogWindow } from './logFungusCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
@@ -2612,173 +2615,6 @@ function rangeRollInt(range, fallback = 1) {
   return Math.max(1, Math.round((low + high) / 2));
 }
 
-function findPartAndSubStage(species, partName, subStageId) {
-  const part = (species.parts || []).find((candidate) => candidate.name === partName);
-  if (!part) {
-    return { part: null, subStage: null };
-  }
-
-  const subStage = (part.subStages || []).find((candidate) => candidate.id === subStageId) || null;
-  return { part, subStage };
-}
-
-function normalizeHarvestActionPoolValue(value) {
-  if (!Number.isFinite(Number(value))) {
-    return null;
-  }
-  return Math.max(0, Math.floor(Number(value)));
-}
-
-function resolveHarvestCyclePoolDefaults(subStage, fallbackActions) {
-  const fallback = Math.max(1, Math.floor(Number(fallbackActions) || 1));
-  const reachTier = typeof subStage?.reach_tier === 'string' ? subStage.reach_tier : 'ground';
-  const groundAuthored = normalizeHarvestActionPoolValue(
-    subStage?.remaining_actions_ground ?? subStage?.harvest_yield?.remaining_actions_ground,
-  );
-  const elevatedAuthored = normalizeHarvestActionPoolValue(
-    subStage?.remaining_actions_elevated ?? subStage?.harvest_yield?.remaining_actions_elevated,
-  );
-  const canopyAuthored = normalizeHarvestActionPoolValue(
-    subStage?.remaining_actions_canopy ?? subStage?.harvest_yield?.remaining_actions_canopy,
-  );
-
-  const hasAuthoredPools = groundAuthored !== null || elevatedAuthored !== null || canopyAuthored !== null;
-  if (!hasAuthoredPools) {
-    if (reachTier === 'ground') {
-      return { ground: fallback, elevated: 0, canopy: 0 };
-    }
-    if (reachTier === 'canopy') {
-      return { ground: 0, elevated: 0, canopy: fallback };
-    }
-    return { ground: 0, elevated: fallback, canopy: 0 };
-  }
-
-  return {
-    ground: groundAuthored ?? (reachTier === 'ground' ? fallback : 0),
-    elevated: elevatedAuthored ?? (reachTier === 'ground' ? 0 : fallback),
-    canopy: canopyAuthored ?? (reachTier === 'canopy' ? fallback : 0),
-  };
-}
-
-function migrateLegacyRemainingActionsByReachTier(remainingActions, reachTier) {
-  const remaining = Math.max(0, Math.floor(Number(remainingActions) || 0));
-  if (reachTier === 'ground') {
-    return { ground: remaining, elevated: 0, canopy: 0 };
-  }
-  if (reachTier === 'canopy') {
-    return { ground: 0, elevated: 0, canopy: remaining };
-  }
-  return { ground: 0, elevated: remaining, canopy: 0 };
-}
-
-function ensureHarvestEntryState(entry, subStage) {
-  if (!entry || !subStage) {
-    return;
-  }
-
-  const rolledActions = rangeRollInt(subStage.harvest_yield?.actions_until_depleted, entry.initialActionsRoll || 1);
-  const cyclePoolDefaults = resolveHarvestCyclePoolDefaults(subStage, rolledActions);
-  const reachTier = typeof subStage?.reach_tier === 'string' ? subStage.reach_tier : 'ground';
-  const hasLegacyInitialRoll = Number.isInteger(entry.initialActionsRoll) && entry.initialActionsRoll > 0;
-  const hasInitialGround = Number.isInteger(entry.initialActionsGround) && entry.initialActionsGround >= 0;
-  const hasInitialElevated = Number.isInteger(entry.initialActionsElevated) && entry.initialActionsElevated >= 0;
-  const hasInitialCanopy = Number.isInteger(entry.initialActionsCanopy) && entry.initialActionsCanopy >= 0;
-  if (!hasInitialGround && !hasInitialElevated && !hasInitialCanopy && hasLegacyInitialRoll) {
-    const migratedInitial = migrateLegacyRemainingActionsByReachTier(entry.initialActionsRoll, reachTier);
-    entry.initialActionsGround = migratedInitial.ground;
-    entry.initialActionsElevated = migratedInitial.elevated;
-    entry.initialActionsCanopy = migratedInitial.canopy;
-  } else {
-    if (!hasInitialGround) {
-      entry.initialActionsGround = cyclePoolDefaults.ground;
-    }
-    if (!hasInitialElevated) {
-      entry.initialActionsElevated = cyclePoolDefaults.elevated;
-    }
-    if (!hasInitialCanopy) {
-      entry.initialActionsCanopy = cyclePoolDefaults.canopy;
-    }
-  }
-
-  let initialTotal = entry.initialActionsGround + entry.initialActionsElevated + entry.initialActionsCanopy;
-  if (initialTotal <= 0) {
-    if (Number.isInteger(entry.initialActionsRoll) && entry.initialActionsRoll > 0) {
-      const migrated = migrateLegacyRemainingActionsByReachTier(entry.initialActionsRoll, reachTier);
-      entry.initialActionsGround = migrated.ground;
-      entry.initialActionsElevated = migrated.elevated;
-      entry.initialActionsCanopy = migrated.canopy;
-      initialTotal = entry.initialActionsRoll;
-    } else {
-      entry.initialActionsGround = cyclePoolDefaults.ground;
-      entry.initialActionsElevated = cyclePoolDefaults.elevated;
-      entry.initialActionsCanopy = cyclePoolDefaults.canopy;
-      initialTotal = entry.initialActionsGround + entry.initialActionsElevated + entry.initialActionsCanopy;
-      if (initialTotal <= 0) {
-        entry.initialActionsGround = Math.max(1, rolledActions);
-        entry.initialActionsElevated = 0;
-        entry.initialActionsCanopy = 0;
-        initialTotal = entry.initialActionsGround;
-      }
-    }
-  }
-  entry.initialActionsRoll = initialTotal;
-
-  const regrowthMax = Number.isInteger(subStage.regrowth_max_harvests) && subStage.regrowth_max_harvests > 0
-    ? subStage.regrowth_max_harvests
-    : 1;
-  entry.seasonalHarvestBudgetActions = Math.max(1, entry.initialActionsRoll * regrowthMax);
-
-  const hasGroundRemaining = Number.isInteger(entry.remainingActionsGround) && entry.remainingActionsGround >= 0;
-  const hasElevatedRemaining = Number.isInteger(entry.remainingActionsElevated) && entry.remainingActionsElevated >= 0;
-  const hasCanopyRemaining = Number.isInteger(entry.remainingActionsCanopy) && entry.remainingActionsCanopy >= 0;
-  const legacyRemaining = Number.isInteger(entry.remainingActions) && entry.remainingActions >= 0
-    ? entry.remainingActions
-    : null;
-  const migratedRemaining = legacyRemaining !== null
-    ? migrateLegacyRemainingActionsByReachTier(legacyRemaining, reachTier)
-    : null;
-
-  if (!hasGroundRemaining) {
-    if (migratedRemaining) {
-      entry.remainingActionsGround = migratedRemaining.ground;
-    } else {
-      entry.remainingActionsGround = entry.initialActionsGround;
-    }
-  }
-  if (!hasElevatedRemaining) {
-    if (migratedRemaining) {
-      entry.remainingActionsElevated = migratedRemaining.elevated;
-    } else {
-      entry.remainingActionsElevated = entry.initialActionsElevated;
-    }
-  }
-  if (!hasCanopyRemaining) {
-    if (migratedRemaining) {
-      entry.remainingActionsCanopy = migratedRemaining.canopy;
-    } else {
-      entry.remainingActionsCanopy = entry.initialActionsCanopy;
-    }
-  }
-
-  entry.remainingActionsGround = Math.max(0, Math.floor(Number(entry.remainingActionsGround) || 0));
-  entry.remainingActionsElevated = Math.max(0, Math.floor(Number(entry.remainingActionsElevated) || 0));
-  entry.remainingActionsCanopy = Math.max(0, Math.floor(Number(entry.remainingActionsCanopy) || 0));
-  entry.remainingActions = entry.remainingActionsGround + entry.remainingActionsElevated + entry.remainingActionsCanopy;
-
-  if (!Number.isInteger(entry.remainingActions) || entry.remainingActions < 0) {
-    entry.remainingActions = entry.initialActionsRoll;
-  }
-  if (!Number.isInteger(entry.harvestsThisSeason) || entry.harvestsThisSeason < 0) {
-    entry.harvestsThisSeason = 0;
-  }
-  if (!Number.isFinite(entry.vitalityDamageAppliedThisSeason) || entry.vitalityDamageAppliedThisSeason < 0) {
-    entry.vitalityDamageAppliedThisSeason = 0;
-  }
-  if (entry.regrowthCountdown === undefined) {
-    entry.regrowthCountdown = null;
-  }
-}
-
 function perActionVitalityDamage(subStage, entry) {
   const harvestDamage = Number(subStage?.harvest_damage);
   if (!Number.isFinite(harvestDamage) || harvestDamage <= 0) {
@@ -2808,7 +2644,7 @@ function advanceActiveSubStageRegrowth(plantInstance, species, dayOfYear) {
       continue;
     }
 
-    ensureHarvestEntryState(entry, subStage);
+    ensureHarvestEntryState(entry, subStage, plantInstance, species);
     entry.regrowthCountdown -= 1;
     if (entry.regrowthCountdown <= 0) {
       entry.regrowthCountdown = null;
@@ -2818,6 +2654,29 @@ function advanceActiveSubStageRegrowth(plantInstance, species, dayOfYear) {
       entry.remainingActions = entry.remainingActionsGround + entry.remainingActionsElevated + entry.remainingActionsCanopy;
     }
   }
+}
+
+function subStageMatchesLifecycleYear(species, stageName, subStageId) {
+  if (!species || species.longevity !== 'biennial') {
+    return true;
+  }
+  const stageYear = lifecycleYearOrdinal(stageName);
+  if (!Number.isInteger(stageYear)) {
+    return true;
+  }
+  if (typeof subStageId !== 'string' || !subStageId) {
+    return true;
+  }
+  if (subStageId.startsWith('first_year_') || subStageId === 'first_year') {
+    return stageYear === 1;
+  }
+  if (subStageId.startsWith('second_year_') || subStageId === 'second_year') {
+    return stageYear === 2;
+  }
+  if (subStageId.startsWith('third_year_') || subStageId === 'third_year') {
+    return stageYear === 3;
+  }
+  return true;
 }
 
 function buildActiveSubStages(species, stageName, dayOfYear, existing = []) {
@@ -2837,6 +2696,9 @@ function buildActiveSubStages(species, stageName, dayOfYear, existing = []) {
 
     for (const subStage of part.subStages || []) {
       if (!isDayInWindow(dayOfYear, subStage.seasonalWindow)) {
+        continue;
+      }
+      if (!subStageMatchesLifecycleYear(species, stageName, subStage.id)) {
         continue;
       }
 
@@ -3809,17 +3671,21 @@ function estimateTilePlantCalories(state, tile) {
     for (const active of Array.isArray(plant.activeSubStages) ? plant.activeSubStages : []) {
       const part = (species.parts || []).find((entry) => entry?.name === active?.partName) || null;
       const subStage = (part?.subStages || []).find((entry) => entry?.id === active?.subStageId) || null;
+      if (!subStage) {
+        continue;
+      }
       const calories = Number(subStage?.nutrition?.calories);
       if (!Number.isFinite(calories) || calories <= 0) {
         continue;
       }
-      const unitsRange = subStage?.harvest_yield?.units_per_action;
-      const unitsPerAction = Array.isArray(unitsRange) && unitsRange.length >= 2
-        ? Math.max(1, ((Number(unitsRange[0]) || 1) + (Number(unitsRange[1]) || 1)) / 2)
-        : 1;
+      ensureHarvestEntryState(active, subStage, plant, species);
+      const unitsPerAction = scaledUnitsPerHarvestActionMidpoint(subStage, species, plant);
       const remainingActions = Number.isFinite(Number(active?.remainingActions))
-        ? Math.max(1, Math.min(3, Number(active.remainingActions)))
-        : 1;
+        ? Math.max(0, Math.floor(Number(active.remainingActions)))
+        : 0;
+      if (remainingActions <= 0) {
+        continue;
+      }
       total += calories * unitsPerAction * remainingActions;
     }
   }

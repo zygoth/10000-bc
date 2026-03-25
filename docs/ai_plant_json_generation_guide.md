@@ -702,13 +702,14 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - **Note:** `"gloves"` is a valid key in `on_harvest_injury.tool_probability_modifiers` (injury modifier), but must NOT appear in this `harvest_tool_modifiers` object
 
 **`harvest_yield`** (object or null, required)
-- **IMPORTANT: All yield values represent MATURE PLANT yields.** The actual yields for immature plants are automatically scaled based on the plant's age relative to `age_of_maturity`. When setting these values, think about what a fully mature specimen produces.
-- Defines how much is harvested per action and how many actions before depletion
+- Defines the **full-strength** harvest economics for this sub-stage at the reference age (see `harvest_yield_full_age_days`). The engine scales both the per-action unit midpoint and the `actions_until_depleted` midpoint by plant age relative to that reference (floor scale 0.1). Pools resync on harvest validation/apply using current `plant.age`; no global daily scan.
+- **Authoring convention:** Set `harvest_yield` for the mature / intended full-yield case. Young plants automatically get fewer actions and fewer units per action via scaling; use per-sub-stage `harvest_yield_full_age_days` only when the reference age should differ from species `age_of_maturity`.
+- At runtime, inventory units per harvest action use the **scaled** midpoint of `units_per_action` (rounded, minimum 1), multiplied by the number of harvest actions applied in that tick.
 - Required on all directly-harvested sub-stages (those with non-empty `available_life_stages`)
 - Set to `null` on output-only parts (those with `available_life_stages: []`)
 - Object format:
-  - `units_per_action` (array of 2 ints `[min, max]`): How many inventory units one harvest action yields
-  - `actions_until_depleted` (array of 2 ints `[min, max]`): Rolled once on first harvest; sets cap on total harvest actions before sub-stage is exhausted for the season
+  - `units_per_action` (array of 2 ints `[min, max]`): Per-action inventory unit yield range; engine uses the midpoint per applied harvest action
+  - `actions_until_depleted` (array of 2 ints `[min, max]`): Seasonal harvest-action budget range for one depletion cycle; engine uses the midpoint (deterministic, same as other midpoint “rolls” in sim tests)
 - **Realistic yield guidance** (based on actual plant productivity):
   - **Berry bushes** (blackberry, raspberry, elderberry, blueberry): Mature bushes produce 10-20 lbs (900-4,500 berries). Use `units_per_action: [20, 50]`, `actions_until_depleted: [20, 40]` for total yields of 400-2,000 berries per bush
   - **Small berry bushes** (strawberry, low-growing): Much lower yields (~1 lb = 90-225 berries). Use `units_per_action: [5, 15]`, `actions_until_depleted: [6, 12]`
@@ -719,10 +720,13 @@ All other fields are automatically copied from the first sub-stage. This makes i
   - **Leaves/greens (herbaceous plants)**: Use `units_per_action: [10, 25]`, `actions_until_depleted: [3, 8]` with regrowth
   - **Tree leaves**: Trees have MUCH more foliage than small plants. Use `units_per_action: [40, 100]`, `actions_until_depleted: [15, 30]` for mature trees. A single mature tree can yield thousands of leaves.
 - Example: `{"units_per_action": [20, 50], "actions_until_depleted": [20, 40]}`
-- **For tree species only:** Add `ground_action_fraction` to the `harvest_yield` object when `reach_tier` is `"elevated"` or `"canopy"`
+- **For tree species only:** Add `ground_action_fraction` to `harvest_yield` when **effective** reach tier (after `reach_tier_by_life_stage`, see below) is `"elevated"` or `"canopy"`
   - `ground_action_fraction` (float 0.0-1.0): Fraction of total harvest actions accessible without tools (fallen material, drooping branches, low-hanging fruit)
   - Example: `{"units_per_action": [3, 8], "actions_until_depleted": [4, 10], "ground_action_fraction": 0.15}`
   - See `reach_tier` field below for when this is required
+
+**`harvest_yield_full_age_days`** (int or omit)
+- Optional on a sub-stage. Age in days when this sub-stage’s catalog `harvest_yield` is at **full** strength (scale 1). JSON: `harvest_yield_full_age_days`. `0` = always full strength. Omit = use species `age_of_maturity`.
 
 **`reach_tier`** (string enum, conditionally required)
 - **Required on all directly-harvested sub-stages of tree species** (typically species whose mature life stage is in canopy size bands, usually `size >= 7`)
@@ -731,8 +735,8 @@ All other fields are automatically copied from the first sub-stage. This makes i
   - `"ground"` — accessible without any tool (ground-level parts, fallen material)
   - `"elevated"` — requires stool for full access (small understory trees, shrubs at face height)
   - `"canopy"` — requires ladder for full access (tall canopy trees)
-- When `reach_tier` is `"elevated"` or `"canopy"`, you must also add `ground_action_fraction` to the `harvest_yield` object
-- When `reach_tier` is `"ground"`, do NOT include `ground_action_fraction` (validation error)
+- When **effective** reach tier is `"elevated"` or `"canopy"`, `harvest_yield` must include `ground_action_fraction`
+- When **effective** reach tier is `"ground"`, do NOT include `ground_action_fraction` (validation error if included)
 - **Guidance for tree species:**
   - **Pawpaw** (ripe fruit): `"elevated"`, `ground_action_fraction: 0.7-0.8` — small understory tree; fruit hangs at face height
   - **Black walnut** (ripe nut): `"canopy"`, `ground_action_fraction: 0.4-0.5` — tall canopy tree but heavy dropper in fall
@@ -740,6 +744,11 @@ All other fields are automatically copied from the first sub-stage. This makes i
   - **Honey locust** (green pod): `"elevated"`, `ground_action_fraction: 0.1-0.2` — green pods cling to branches, rarely drop
   - **Honey locust** (dry pod): `"elevated"`, `ground_action_fraction: 0.35-0.45` — dry pods detach more readily; some ground accumulation
   - **Black cherry** (ripe fruit): `"canopy"`, `ground_action_fraction: 0.1-0.2` — fruit clustered near branch tips high up; minimal drop
+
+**`reach_tier_by_life_stage`** (object or omit)
+- Optional. Keys are life stage names from `life_stages`; values are `ground` | `elevated` | `canopy`.
+- When the plant is in a listed stage, that value **overrides** `reach_tier` for harvest tool gating and for how harvest action pools are initialized.
+- Use for trees where young stages share the same leaf part/sprites as adults but foliage is reachable from the ground, while mature growth is canopy-tier (e.g. black walnut `leaf` on `seedling`/`sapling` → `ground`, mature stages → `canopy` from base `reach_tier`).
 
 **`harvest_damage`** (float 0.0-1.0 or null, required)
 - Total vitality budget this sub-stage can remove when one depletion cycle (one full round of `actions_until_depleted`) is fully exploited
@@ -1038,8 +1047,8 @@ The game generates cordage and bark cloth directly from parts tagged with `corda
 Plus anything else that makes sense for the plant.
 
 15. **Single part nutrition:** Reasonable defaults for various things: 1 leaf = .01 calories, 1 serviceberry = .6 calories, inner bark = 0.8 calories per gram, most inedible roots = 0.1 calorie per gram (but edibility almost 0), flowers .2 calories per gram.
-18. **Tree harvest tiers:** `reach_tier` must be present on all directly-harvested sub-stages of tree species (typically species whose mature life stage is in canopy size bands, usually `size >= 7`) and must be omitted on all non-tree, underground, and output-only parts. When `reach_tier` is `"elevated"` or `"canopy"`, the `harvest_yield` object must include `ground_action_fraction` (float 0.0-1.0, cannot be 1.0). When `reach_tier` is `"ground"`, `ground_action_fraction` must NOT be present (validation error if included).
-19. **Life stage name consistency:** All stage names used in `available_life_stages` arrays must exactly match stage names defined in the plant's `life_stages` array. Do not use modified or prefixed versions of stage names.
+18. **Tree harvest tiers:** `reach_tier` must be present on all directly-harvested sub-stages of tree species (typically species whose mature life stage is in canopy size bands, usually `size >= 7`) and must be omitted on all non-tree, underground, and output-only parts. **Effective** reach tier is `reach_tier_by_life_stage[stage]` when defined, otherwise `reach_tier`. When effective tier is `"elevated"` or `"canopy"`, `harvest_yield` must include `ground_action_fraction` (float 0.0-1.0, cannot be 1.0). When effective tier is `"ground"`, `ground_action_fraction` must NOT be present (validation error if included).
+19. **Life stage name consistency:** All stage names used in `available_life_stages` arrays must exactly match stage names defined in the plant's `life_stages` array. Do not use modified or prefixed versions of stage names. The same applies to every key in `reach_tier_by_life_stage`.
 20. **Seasonal sub-stage completeness:** If a part's `game_description` mentions seasonal changes in properties (edibility, texture, toxicity, etc.), the part must have multiple sub-stages with different `seasonal_window` ranges to model those changes. Don't describe variation without modeling it. Remember: later sub-stages inherit from the first, so you only need to specify changed fields.
 21. **Sub-stage inheritance:** The first sub-stage in a part's `sub_stages` array must be fully specified. Subsequent sub-stages inherit all fields from the first sub-stage except those explicitly overridden. Always override: `id`, `seasonal_window`, `field_description`, `game_description`. Override other fields only when they actually differ from the first sub-stage.
 22. **Annual life stage gaps:** Annuals must have at least one day (typically days 39-40) with no valid life stage to trigger death.

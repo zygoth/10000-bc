@@ -42,7 +42,7 @@ This game creates several tensions that the UI must manage simultaneously:
 
 The game uses a simple two-button click model on the isometric world:
 
-- **Left-click** any tile: move there (pathfinding). Left-click always means move, regardless of what's on the tile. Plants, items, and stations are not a barrier to movement.
+- **Left-click** any tile: move there (pathfinding). Left-click always means move, regardless of what's on the tile. Plants and items are not movement blockers, but impassable terrain/features (for now: rock tiles) block movement.
 - **Right-click** any adjacent tile: open the action menu / inspect panel for that tile. All non-movement interactions — harvest, inspect, dig, trap, collect, etc. — are initiated via right-click.
 - **Keyboard hotkeys** for frequent actions (see §3.6)
 
@@ -97,6 +97,8 @@ There are no interstitial loading screens during normal play. The transition fro
 ## 3. The Foraging HUD
 
 The HUD must be readable at a glance during active movement. Every element shown at rest must be justifiable — if it doesn't change the player's immediate decision, it should only appear on demand.
+
+Play-mode UI avoids exposing raw tile coordinates in player-facing panels/tooltips; coordinate-heavy data remains debug/observer-only.
 
 ### 3.1 HUD Layout
 
@@ -210,7 +212,7 @@ The context menu is a vertically stacked list of available actions. Each item sh
 
 ### 4.3 Inspect (Right-Click)
 
-Right-clicking any tile you are adjacent to opens the inspect panel at no tick cost. This is always free — there is no paid Inspect action. The player must be on an adjacent tile; right-clicking a distant tile has no effect (or could show a "move closer to inspect" hint). The inspect panel slides in from the right edge.
+Right-clicking an adjacent tile opens the inspect panel at no tick cost only when that tile has a real plant with at least one above-ground part currently present. Inspect is always free — there is no paid Inspect action. The panel is plant-focused and does not show generic tile debug metadata.
 
 ### 4.4 Multi-Part Plants: Part Selection
 
@@ -276,7 +278,7 @@ The panel occupies the right side of the screen and covers the world view. The f
 
 **Hovering a slot:** Shows item tooltip (see §5.3) — no tick cost.
 
-**Clicking a slot:** Opens item context menu:
+**Right-clicking a slot:** Opens item context menu:
 - Eat (if edible; costs 2 ticks)
 - Apply as Poultice (if applicable; costs ticks + cordage)
 - Drop (no tick cost; drops to current tile)
@@ -284,6 +286,8 @@ The panel occupies the right side of the screen and covers the world view. The f
 - Add to Stockpile (if at camp)
 - Process (if processable; shows sub-menu with options)
 - Submit for Research (right-click in inventory, only when at camp with 3+ samples of this plant)
+
+In play mode, these item actions are not shown as always-visible buttons; they appear only in the per-item context menu.
 
 **Weight display:** The total weight bar at the top of the panel turns yellow at 80% and red at 95%. A 2-kg per-slot visual indicator (a thin bar under each slot) shows if any individual slot is near its per-slot cap — relevant for bulk materials.
 

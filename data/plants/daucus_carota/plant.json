@@ -180,7 +180,7 @@
           "harvest_damage": 1.0,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "dig_ticks_to_discover": 25,
+          "dig_ticks_to_discover": 5,
           "decay_days": 14.0,
           "can_dry": false,
           "stew_nutrition_factor": 1.4,
@@ -326,8 +326,8 @@
               2
             ],
             "actions_until_depleted": [
-              1,
-              2
+              4,
+              4
             ]
           },
           "harvest_damage": 0.8,

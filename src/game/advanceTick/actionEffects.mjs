@@ -5,6 +5,9 @@ import {
   runDebriefMedicinePass,
   runDebriefVisionRequest,
 } from '../medicineDebrief.mjs';
+import { PLANT_BY_ID } from '../plantCatalog.mjs';
+import { parsePlantPartItemId } from '../plantPartDescriptors.mjs';
+import { scaledUnitsPerHarvestActionMidpoint } from '../harvestYieldResolve.mjs';
 
 export function applyActionEffectImpl(state, action, deps) {
   const {
@@ -187,6 +190,15 @@ export function applyActionEffectImpl(state, action, deps) {
     const wasAtCamp = isActorAtCampAnchor(actor);
     const dx = Number(action.payload?.dx) || 0;
     const dy = Number(action.payload?.dy) || 0;
+    const nextX = Number(actor.x) + dx;
+    const nextY = Number(actor.y) + dy;
+    if (!inBounds(nextX, nextY, state.width, state.height)) {
+      return;
+    }
+    const destinationTile = state.tiles[tileIndex(nextX, nextY, state.width)];
+    if (!destinationTile || isRockTile(destinationTile)) {
+      return;
+    }
     actor.x += dx;
     actor.y += dy;
     if ((actor.id === 'player' || action.actorId === 'player') && !wasAtCamp && isActorAtCampAnchor(actor)) {
@@ -325,6 +337,9 @@ export function applyActionEffectImpl(state, action, deps) {
       tile.squirrelCache.discovered = true;
     }
 
+    const digUnearthedDelta = Math.max(0, Math.floor(Number(actor?.pendingDigUnearthedDelta) || 0));
+    delete actor.pendingDigUnearthedDelta;
+
     tile.disturbed = true;
     const earthwormDrop = trySpawnEarthwormFromDig(state, actor, tile, targetX, targetY);
     actor.lastDig = {
@@ -333,6 +348,7 @@ export function applyActionEffectImpl(state, action, deps) {
       day: Number(state.totalDaysSimulated) || 0,
       dayTick: Number(state.dayTick) || 0,
       interruptedBySquirrelCache: discoveredSquirrelCache,
+      discoveredUndergroundTargetsCount: digUnearthedDelta,
       earthwormDrop: earthwormDrop ? {
         droppedQuantity: earthwormDrop.droppedQuantity,
         chance: Number(earthwormDrop.chance.toFixed(4)),
@@ -357,6 +373,23 @@ export function applyActionEffectImpl(state, action, deps) {
 
     tile.disturbed = true;
     tile.dormantSeeds = {};
+
+    const plantsToRemove = (tile.plantIds || []).filter((plantId) => {
+      const plant = state.plants[plantId];
+      if (!plant?.alive) return false;
+      const species = PLANT_BY_ID[plant.speciesId];
+      const stage = species?.lifeStages?.find((s) => s.stage === plant.stageName);
+      return Number.isFinite(stage?.size) && stage.size <= 4;
+    });
+    for (const plantId of plantsToRemove) {
+      if (state.plants[plantId]) {
+        state.plants[plantId].alive = false;
+        delete state.plants[plantId];
+      }
+    }
+    if (plantsToRemove.length > 0) {
+      tile.plantIds = (tile.plantIds || []).filter((id) => !plantsToRemove.includes(id));
+    }
     return;
   }
 
@@ -1599,6 +1632,36 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
 
+    if (targetType === 'log_fungus') {
+      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+      if (!inBounds(targetX, targetY, state.width, state.height)) {
+        return;
+      }
+      const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+      const speciesId = typeof action.payload?.speciesId === 'string' ? action.payload.speciesId : '';
+      const outputItemId = typeof action.payload?.outputItemId === 'string'
+        ? action.payload.outputItemId
+        : `log_fungus:${speciesId}:fruiting_body`;
+      if (!tile?.deadLog || !speciesId || !outputItemId) {
+        return;
+      }
+      const fungi = Array.isArray(tile.deadLog.fungi) ? tile.deadLog.fungi : [];
+      const fungusEntry = fungi.find((entry) => entry?.species_id === speciesId) || null;
+      const availableGrams = Math.max(0, Math.floor(Number(fungusEntry?.yield_current_grams) || 0));
+      const requestedGrams = Math.max(1, Math.floor(Number(action.payload?.harvestGrams) || 0));
+      const harvestedGrams = Math.min(availableGrams, requestedGrams);
+      if (!fungusEntry || harvestedGrams <= 0) {
+        return;
+      }
+
+      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, harvestedGrams, {
+        unitWeightKg: Number(action.payload?.outputUnitWeightKg),
+      });
+      fungusEntry.yield_current_grams = Math.max(0, availableGrams - harvestedGrams);
+      return;
+    }
+
     if (targetType === 'squirrel_cache') {
       const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
       const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
@@ -1613,21 +1676,39 @@ export function applyActionEffectImpl(state, action, deps) {
       }
 
       const availableGrams = Math.max(0, Math.floor(Number(cache.nutContentGrams) || 0));
-      const harvestedGrams = Math.max(1, availableGrams);
-      if (harvestedGrams <= 0) {
+      if (availableGrams <= 0) {
         return;
       }
 
-      const cacheItemId = `squirrel_cache:${cache.cachedSpeciesId}:${cache.cachedPartName}:${cache.cachedSubStageId}`;
-      addActorInventoryItemWithOverflowDrop(state, actor, cacheItemId, harvestedGrams, {
+      const plantPartItemId = typeof action.payload?.plantPartItemId === 'string' && action.payload.plantPartItemId
+        ? action.payload.plantPartItemId
+        : `${cache.cachedSpeciesId}:${cache.cachedPartName}:${cache.cachedSubStageId}`;
+      const descriptor = parsePlantPartItemId(plantPartItemId);
+      if (!descriptor) {
+        return;
+      }
+
+      const gramsPerUnit = Number(descriptor.subStage?.unit_weight_g);
+      if (!Number.isFinite(gramsPerUnit) || gramsPerUnit <= 0) {
+        return;
+      }
+
+      const unitsHarvested = Math.floor(availableGrams / gramsPerUnit);
+      if (unitsHarvested < 1) {
+        return;
+      }
+
+      const unitWeightKg = gramsPerUnit / 1000;
+      const decayDays = Number(descriptor.subStage?.decay_days);
+      addActorInventoryItemWithOverflowDrop(state, actor, plantPartItemId, unitsHarvested, {
         footprintW: normalizeStackFootprintValue(action.payload?.inventoryFootprintW),
         footprintH: normalizeStackFootprintValue(action.payload?.inventoryFootprintH),
-        unitWeightKg: Number(action.payload?.inventoryUnitWeightKg),
+        unitWeightKg,
+        ...(Number.isFinite(decayDays) && decayDays >= 0 ? { decayDaysRemaining: decayDays } : {}),
       });
-      cache.nutContentGrams = availableGrams - harvestedGrams;
-      if (cache.nutContentGrams <= 0) {
-        tile.squirrelCache = null;
-      }
+
+      // One harvest clears the cache; any gram remainder is discarded as loose scatter.
+      tile.squirrelCache = null;
       return;
     }
 
@@ -1647,13 +1728,36 @@ export function applyActionEffectImpl(state, action, deps) {
     if ((Number(outcome.appliedActions) || 0) > 0) {
       const plant = state.plants?.[plantId];
       const speciesId = typeof plant?.speciesId === 'string' ? plant.speciesId : 'unknown';
+      const speciesDef = PLANT_BY_ID[speciesId] || null;
+      const harvestPart = speciesDef
+        ? (speciesDef.parts || []).find((p) => p?.name === partName) || null
+        : null;
+      const harvestSubStage = harvestPart
+        ? (harvestPart.subStages || []).find((s) => s?.id === subStageId) || null
+        : null;
+      const perActionUnits = scaledUnitsPerHarvestActionMidpoint(harvestSubStage, speciesDef, plant);
+      const stackQty = Math.max(1, Math.floor(Number(outcome.appliedActions) || 0) * perActionUnits);
       const itemId = `${speciesId}:${partName}:${subStageId}`;
-      addActorInventoryItemWithOverflowDrop(state, actor, itemId, outcome.appliedActions, {
+      // Inventory weight depends on `stack.unitWeightKg`; plant-part harvest must compute it (payload doesn't).
+      let unitWeightKg = null;
+      const gramsPerUnit = Number(harvestSubStage?.unit_weight_g);
+      if (Number.isFinite(gramsPerUnit) && gramsPerUnit > 0) {
+        unitWeightKg = gramsPerUnit / 1000;
+      } else {
+        const descriptor = parsePlantPartItemId(itemId);
+        const gramsPerUnitFromDescriptor = Number(descriptor?.subStage?.unit_weight_g);
+        if (Number.isFinite(gramsPerUnitFromDescriptor) && gramsPerUnitFromDescriptor > 0) {
+          unitWeightKg = gramsPerUnitFromDescriptor / 1000;
+        } else if (Number.isFinite(Number(action.payload?.inventoryUnitWeightKg))) {
+          unitWeightKg = Number(action.payload.inventoryUnitWeightKg);
+        }
+      }
+      addActorInventoryItemWithOverflowDrop(state, actor, itemId, stackQty, {
         freshness: Number(action.payload?.inventoryFreshness),
         decayDaysRemaining: Number(action.payload?.inventoryDecayDaysRemaining),
         footprintW: normalizeStackFootprintValue(action.payload?.inventoryFootprintW),
         footprintH: normalizeStackFootprintValue(action.payload?.inventoryFootprintH),
-        unitWeightKg: Number(action.payload?.inventoryUnitWeightKg),
+        unitWeightKg,
       });
 
       applyHarvestInjuryFromSubStage(

@@ -873,6 +873,9 @@ For `contact_rash` harvest injuries (e.g., wild parsnip leaves), use `health_hit
   - Examples: willow green shoot, young dogwood stem, honeysuckle vine, grape vine
 - `"weaving_material"` — flat pliable leaf/stem for woven structures
   - Examples: cattail leaf, bulrush stem, sedge blade
+- `"reedy_material"` — reed-like fibers and pliable stems suitable for woven tools and hats
+  - Examples: dry nettle stalk, cattail leaf strips, bulrush stem fibers
+  - Prefer assigning this tag directly on the harvestable sub-stage used for reed weaving; legacy `weaving_material` and `sun_hat_reed_material` still resolve to this recipe path
 - `"bark_sheet"` — flat harvested bark for structure, waterproofing
   - Examples: birch outer bark sheet, tulip poplar bark
 - `"cordage_fiber"` — fibrous plant material suitable for twisting into cordage — inner bark strips, stems, or leaf fibers

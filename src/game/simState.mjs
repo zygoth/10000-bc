@@ -35,6 +35,12 @@ export function cloneTile(tile) {
     }
     : null;
 
+  const leachingBasket = tile?.leachingBasket
+    ? {
+      ...tile.leachingBasket,
+    }
+    : null;
+
   const simpleSnare = tile?.simpleSnare
     ? {
       ...tile.simpleSnare,
@@ -103,6 +109,7 @@ export function cloneTile(tile) {
     beehive,
     squirrelCache,
     sapTap,
+    leachingBasket,
     simpleSnare,
     deadfallTrap,
     fishTrap,

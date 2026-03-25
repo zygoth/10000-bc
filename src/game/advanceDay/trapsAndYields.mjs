@@ -4,6 +4,7 @@ export function runDailyTrapAndYieldStep(nextState, hooks) {
     applyFishPopulationRecovery,
     applyDailyItemDecay,
     applyDailySapTapFill,
+    applyDailyLeachingBasketProgress,
     applyDailySimpleSnareResolution,
     applyDailyDeadfallTrapResolution,
     applyDailyFishTrapResolution,
@@ -14,6 +15,7 @@ export function runDailyTrapAndYieldStep(nextState, hooks) {
   applyFishPopulationRecovery(nextState);
   applyDailyItemDecay(nextState);
   applyDailySapTapFill(nextState);
+  applyDailyLeachingBasketProgress(nextState);
   applyDailySimpleSnareResolution(nextState);
   applyDailyDeadfallTrapResolution(nextState);
   applyDailyFishTrapResolution(nextState);

@@ -1,6 +1,18 @@
 import { PLANT_BY_ID } from './plantCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
 import { ITEM_BY_ID } from './itemCatalog.mjs';
+import {
+  STEW_DAILY_CALORIES_ADULT,
+  STEW_DAILY_CALORIES_CHILD_DEFAULT,
+  STEW_FAT_BONUS_THRESHOLD_GRAMS,
+  STEW_NAUSEA_DECAY_ABSENT_PER_DAY,
+  STEW_NAUSEA_GAIN_MONOTONOUS,
+  STEW_NAUSEA_GAIN_REPETITIVE,
+  STEW_NEXT_DAY_TICK_BONUS,
+  STEW_PROTEIN_BONUS_THRESHOLD_GRAMS,
+  TICKS_PER_DAY,
+} from './simCore.constants.mjs';
+import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
 
 const ACTION_KINDS = [
   'move',
@@ -19,6 +31,10 @@ const ACTION_KINDS = [
   'tap_remove_spout',
   'tap_place_vessel',
   'tap_retrieve_vessel',
+  'waterskin_fill',
+  'waterskin_drink',
+  'leaching_basket_place',
+  'leaching_basket_retrieve',
   'item_pickup',
   'item_drop',
   'eat',
@@ -28,9 +44,20 @@ const ACTION_KINDS = [
   'camp_drying_rack_add',
   'camp_drying_rack_add_inventory',
   'camp_drying_rack_remove',
+  'meal_plan_set',
+  'meal_plan_commit',
   'camp_station_build',
   'tool_craft',
+  'equip_item',
+  'unequip_item',
   'partner_task_set',
+  'debrief_enter',
+  'debrief_exit',
+  'partner_medicine_administer',
+  'partner_vision_request',
+  'partner_vision_confirm',
+  'partner_vision_choose',
+  'nature_sight_overlay_set',
 ];
 
 const ACTION_TICK_COST = {
@@ -50,6 +77,10 @@ const ACTION_TICK_COST = {
   tap_remove_spout: 1,
   tap_place_vessel: 1,
   tap_retrieve_vessel: 1,
+  waterskin_fill: 2,
+  waterskin_drink: 1,
+  leaching_basket_place: 2,
+  leaching_basket_retrieve: 2,
   item_pickup: 1,
   item_drop: 1,
   eat: 2,
@@ -59,14 +90,46 @@ const ACTION_TICK_COST = {
   camp_drying_rack_add: 1,
   camp_drying_rack_add_inventory: 1,
   camp_drying_rack_remove: 1,
+  meal_plan_set: 1,
+  meal_plan_commit: 1,
   camp_station_build: 1,
   tool_craft: 1,
+  equip_item: 1,
+  unequip_item: 1,
   partner_task_set: 1,
+  debrief_enter: 1,
+  debrief_exit: 1,
+  partner_medicine_administer: 1,
+  partner_vision_request: 1,
+  partner_vision_confirm: 1,
+  partner_vision_choose: 1,
+  nature_sight_overlay_set: 1,
 };
+
+const EQUIPPABLE_ITEM_TO_SLOT = {
+  'tool:gloves': 'gloves',
+  'tool:coat': 'coat',
+  'tool:sun_hat': 'head',
+};
+
+const EQUIPMENT_SLOTS = new Set(['gloves', 'coat', 'head']);
 
 const MIN_FIELD_EDIBILITY_SCORE = 0.85;
 const MIN_FISH_ROD_CAST_TICKS = 5;
+const NIGHTLY_DEBRIEF_START_TICK = Math.floor(TICKS_PER_DAY / 2);
+const NATURE_SIGHT_OVERLAYS = new Set([
+  'calorie_heatmap',
+  'animal_density',
+  'mushroom_zones',
+  'plant_compatibility',
+  'fishing_hotspots',
+]);
 const EARTHWORM_ITEM_ID = 'earthworm';
+const CRAFT_TAG_ALIASES = {
+  bone_tool_material: 'bone_material',
+  weaving_material: 'reedy_material',
+  sun_hat_reed_material: 'reedy_material',
+};
 
 const CAMP_STATION_RECIPES = {
   raised_sleeping_platform: {
@@ -221,7 +284,13 @@ const TOOL_RECIPES = {
     outputFootprintH: 2,
     materialRequirements: [
       { type: 'item', itemId: 'cordage', quantity: 6 },
-      { type: 'tag', tag: 'flexible_shoot', quantity: 12 },
+      {
+        type: 'one_of',
+        options: [
+          { type: 'tag', tag: 'flexible_shoot', quantity: 12 },
+          { type: 'tag', tag: 'reedy_material', quantity: 12 },
+        ],
+      },
     ],
   },
   blickey: {
@@ -236,8 +305,28 @@ const TOOL_RECIPES = {
         type: 'one_of',
         options: [
           { type: 'tag', tag: 'flexible_shoot', quantity: 1 },
+          { type: 'tag', tag: 'reedy_material', quantity: 1 },
           { type: 'tag', tag: 'bark_sheet', quantity: 1 },
           { type: 'item', itemId: 'hide', quantity: 800 },
+        ],
+      },
+    ],
+  },
+  leaching_basket: {
+    recipeId: 'leaching_basket',
+    craftTicks: 30,
+    requiredUnlock: null,
+    outputItemId: 'tool:leaching_basket',
+    outputQuantity: 1,
+    outputFootprintW: 2,
+    outputFootprintH: 2,
+    materialRequirements: [
+      { type: 'item', itemId: 'cordage', quantity: 4 },
+      {
+        type: 'one_of',
+        options: [
+          { type: 'tag', tag: 'flexible_shoot', quantity: 3 },
+          { type: 'tag', tag: 'reedy_material', quantity: 3 },
         ],
       },
     ],
@@ -371,6 +460,8 @@ const TOOL_RECIPES = {
     requiredUnlock: null,
     outputItemId: 'tool:gloves',
     outputQuantity: 1,
+    outputFootprintW: 1,
+    outputFootprintH: 1,
     materialRequirements: [
       { type: 'item', itemId: 'hide', quantity: 400 },
       { type: 'item', itemId: 'cordage', quantity: 2 },
@@ -382,6 +473,8 @@ const TOOL_RECIPES = {
     requiredUnlock: 'unlock_tool_coat',
     outputItemId: 'tool:coat',
     outputQuantity: 1,
+    outputFootprintW: 2,
+    outputFootprintH: 2,
     materialRequirements: [
       { type: 'tag', tag: 'insulation_material', quantity: 6 },
       { type: 'item', itemId: 'cordage', quantity: 4 },
@@ -393,6 +486,25 @@ const TOOL_RECIPES = {
           { type: 'tag', tag: 'bark_sheet', quantity: 4 },
         ],
       },
+    ],
+  },
+  sun_hat: {
+    recipeId: 'sun_hat',
+    craftTicks: 35,
+    requiredUnlock: null,
+    outputItemId: 'tool:sun_hat',
+    outputQuantity: 1,
+    outputFootprintW: 1,
+    outputFootprintH: 1,
+    materialRequirements: [
+      {
+        type: 'one_of',
+        options: [
+          { type: 'tag', tag: 'reedy_material', quantity: 6 },
+          { type: 'item', itemId: 'dried_hide', quantity: 1 },
+        ],
+      },
+      { type: 'item', itemId: 'cordage', quantity: 2 },
     ],
   },
   hide_vessel: {
@@ -420,6 +532,259 @@ const TAPPABLE_TREE_SPECIES_IDS = new Set([
 ]);
 const SAP_FILLED_VESSEL_ITEM_ID = 'tool:hide_pitch_vessel_filled_sap';
 const SAP_EMPTY_VESSEL_ITEM_ID = 'tool:hide_pitch_vessel';
+const WATERSKIN_EMPTY_ITEM_ID = 'tool:waterskin';
+const LEACHING_BASKET_ITEM_ID = 'tool:leaching_basket';
+const WATERSKIN_FULL_DRINKS = 3;
+
+function waterskinItemIdFor(sourceType, drinks) {
+  if (!Number.isInteger(drinks) || drinks <= 0) {
+    return WATERSKIN_EMPTY_ITEM_ID;
+  }
+  if (sourceType !== 'safe' && sourceType !== 'river' && sourceType !== 'pond') {
+    return null;
+  }
+  if (drinks > WATERSKIN_FULL_DRINKS) {
+    return null;
+  }
+  return `tool:waterskin_${sourceType}_${drinks}`;
+}
+
+function parseWaterskinItemId(itemId) {
+  if (itemId === WATERSKIN_EMPTY_ITEM_ID) {
+    return { sourceType: null, drinks: 0 };
+  }
+  if (typeof itemId !== 'string') {
+    return null;
+  }
+
+  const match = /^tool:waterskin_(safe|river|pond)_([1-3])$/.exec(itemId);
+  if (!match) {
+    return null;
+  }
+  return {
+    sourceType: match[1],
+    drinks: Number(match[2]),
+  };
+}
+
+function collectActorWaterskinStacks(actor) {
+  const stacks = Array.isArray(actor?.inventory?.stacks) ? actor.inventory.stacks : [];
+  return stacks.filter((stack) => {
+    const itemId = typeof stack?.itemId === 'string' ? stack.itemId : '';
+    return parseWaterskinItemId(itemId) !== null && Math.floor(Number(stack?.quantity) || 0) > 0;
+  });
+}
+
+function resolveWaterskinFillableStack(actor, preferredItemId = null) {
+  const waterskinStacks = collectActorWaterskinStacks(actor);
+  if (waterskinStacks.length <= 0) {
+    return null;
+  }
+
+  if (typeof preferredItemId === 'string' && preferredItemId) {
+    const preferred = waterskinStacks.find((stack) => stack.itemId === preferredItemId);
+    const state = parseWaterskinItemId(preferred?.itemId);
+    if (preferred && state && state.drinks < WATERSKIN_FULL_DRINKS) {
+      return preferred;
+    }
+    return null;
+  }
+
+  const priority = [
+    WATERSKIN_EMPTY_ITEM_ID,
+    waterskinItemIdFor('safe', 1),
+    waterskinItemIdFor('river', 1),
+    waterskinItemIdFor('pond', 1),
+    waterskinItemIdFor('safe', 2),
+    waterskinItemIdFor('river', 2),
+    waterskinItemIdFor('pond', 2),
+  ];
+  for (const itemId of priority) {
+    const stack = waterskinStacks.find((entry) => entry.itemId === itemId);
+    if (stack) {
+      return stack;
+    }
+  }
+  return null;
+}
+
+function resolveWaterskinDrinkableStack(actor, preferredItemId = null) {
+  const waterskinStacks = collectActorWaterskinStacks(actor);
+  if (waterskinStacks.length <= 0) {
+    return null;
+  }
+
+  if (typeof preferredItemId === 'string' && preferredItemId) {
+    const preferred = waterskinStacks.find((stack) => stack.itemId === preferredItemId);
+    const state = parseWaterskinItemId(preferred?.itemId);
+    if (preferred && state && state.drinks > 0) {
+      return preferred;
+    }
+    return null;
+  }
+
+  const priority = [
+    waterskinItemIdFor('pond', 1),
+    waterskinItemIdFor('river', 1),
+    waterskinItemIdFor('safe', 1),
+    waterskinItemIdFor('pond', 2),
+    waterskinItemIdFor('river', 2),
+    waterskinItemIdFor('safe', 2),
+    waterskinItemIdFor('pond', 3),
+    waterskinItemIdFor('river', 3),
+    waterskinItemIdFor('safe', 3),
+  ];
+  for (const itemId of priority) {
+    const stack = waterskinStacks.find((entry) => entry.itemId === itemId);
+    if (stack) {
+      return stack;
+    }
+  }
+  return null;
+}
+
+function resolveWaterskinSourceTypeFromWaterTile(tile) {
+  if (!tile?.waterType) {
+    return null;
+  }
+  if (tile.waterType === 'pond') {
+    return 'pond';
+  }
+  if (tile.waterType === 'river') {
+    return 'river';
+  }
+  return null;
+}
+
+function collectAdjacentDrinkableWaterTargets(state, actor) {
+  const actorX = Number(actor?.x);
+  const actorY = Number(actor?.y);
+  if (!Number.isInteger(actorX) || !Number.isInteger(actorY)) {
+    return [];
+  }
+
+  const targets = [];
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      const x = actorX + dx;
+      const y = actorY + dy;
+      if (!inBounds(state, x, y)) {
+        continue;
+      }
+
+      const tile = getTile(state, x, y);
+      if (!tile || !tile.waterType || tile.waterFrozen === true) {
+        continue;
+      }
+
+      const sourceType = resolveWaterskinSourceTypeFromWaterTile(tile);
+      if (!sourceType) {
+        continue;
+      }
+
+      targets.push({ x, y, sourceType });
+    }
+  }
+  return targets;
+}
+
+function validateWaterskinFillAction(state, action, actor) {
+  const requestedItemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : null;
+  const fillableStack = resolveWaterskinFillableStack(actor, requestedItemId);
+  if (!fillableStack) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'waterskin_fill requires an empty or partially filled waterskin in inventory',
+      requiredItemId: WATERSKIN_EMPTY_ITEM_ID,
+    };
+  }
+
+  const targets = collectAdjacentDrinkableWaterTargets(state, actor);
+  if (targets.length <= 0) {
+    return {
+      ok: false,
+      code: 'waterskin_fill_invalid_target',
+      message: 'waterskin_fill requires at least one current or adjacent unfrozen water tile',
+    };
+  }
+
+  const sourceTarget = targets[0];
+  const toItemId = waterskinItemIdFor(sourceTarget.sourceType, WATERSKIN_FULL_DRINKS);
+  if (!toItemId) {
+    return {
+      ok: false,
+      code: 'waterskin_fill_invalid_target',
+      message: 'waterskin_fill could not resolve a valid water source type',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        fromItemId: fillableStack.itemId,
+        toItemId,
+        sourceType: sourceTarget.sourceType,
+        waterX: sourceTarget.x,
+        waterY: sourceTarget.y,
+      },
+    },
+  };
+}
+
+function validateWaterskinDrinkAction(state, action, actor) {
+  const requestedItemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : null;
+  const drinkableStack = resolveWaterskinDrinkableStack(actor, requestedItemId);
+  if (!drinkableStack) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'waterskin_drink requires a filled waterskin in inventory',
+      requiredItemId: waterskinItemIdFor('safe', 1),
+    };
+  }
+
+  const parsed = parseWaterskinItemId(drinkableStack.itemId);
+  if (!parsed || parsed.drinks <= 0 || !parsed.sourceType) {
+    return {
+      ok: false,
+      code: 'invalid_item_reference',
+      message: 'waterskin_drink requires a valid waterskin state item',
+    };
+  }
+
+  const remainingDrinks = parsed.drinks - 1;
+  const toItemId = waterskinItemIdFor(parsed.sourceType, remainingDrinks);
+  if (!toItemId) {
+    return {
+      ok: false,
+      code: 'invalid_item_reference',
+      message: 'waterskin_drink could not resolve next waterskin state',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        itemId: drinkableStack.itemId,
+        sourceType: parsed.sourceType,
+        drinksBefore: parsed.drinks,
+        drinksAfter: remainingDrinks,
+        toItemId,
+      },
+    },
+  };
+}
 
 function normalizeTickCost(kind, payload) {
   const requested = Number(payload?.tickCost);
@@ -1375,6 +1740,815 @@ function resolveFieldEdibilityScore(itemId) {
   return null;
 }
 
+function isActorAtCampAnchor(state, actor) {
+  const campX = Number(state?.camp?.anchorX);
+  const campY = Number(state?.camp?.anchorY);
+  if (!Number.isInteger(campX) || !Number.isInteger(campY) || !actor) {
+    return false;
+  }
+  return Number(actor.x) === campX && Number(actor.y) === campY;
+}
+
+function buildCampStockpileQuantityMap(state) {
+  const map = {};
+  const stacks = Array.isArray(state?.camp?.stockpile?.stacks) ? state.camp.stockpile.stacks : [];
+  for (const stack of stacks) {
+    const itemId = typeof stack?.itemId === 'string' ? stack.itemId : '';
+    const quantity = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+    if (!itemId || quantity <= 0) {
+      continue;
+    }
+    map[itemId] = (map[itemId] || 0) + quantity;
+  }
+  return map;
+}
+
+function normalizeMealIngredients(rawIngredients) {
+  if (!Array.isArray(rawIngredients)) {
+    return [];
+  }
+  const byItemId = new Map();
+  for (const entry of rawIngredients) {
+    const itemId = typeof entry?.itemId === 'string' ? entry.itemId : '';
+    const quantity = Number.isInteger(entry?.quantity)
+      ? entry.quantity
+      : Math.floor(Number(entry?.quantity || 0));
+    if (!itemId || quantity <= 0) {
+      continue;
+    }
+    byItemId.set(itemId, (byItemId.get(itemId) || 0) + quantity);
+  }
+  return Array.from(byItemId.entries()).map(([itemId, quantity]) => ({ itemId, quantity }));
+}
+
+function resolveStewIngredientDescriptor(itemId) {
+  if (typeof itemId !== 'string' || !itemId) {
+    return null;
+  }
+
+  const item = ITEM_BY_ID[itemId];
+  if (item?.nutrition) {
+    return {
+      itemId,
+      nutrition: {
+        calories: Number(item.nutrition.calories) || 0,
+        protein: Number(item.nutrition.protein) || 0,
+        carbs: Number(item.nutrition.carbs) || 0,
+        fat: Number(item.nutrition.fat) || 0,
+      },
+      extraction: 1,
+      edibilityScore: 1,
+      harshness: 0,
+      familyKey: `item:${item.category || 'misc'}`,
+      flavorKey: `item:${item.category || 'misc'}`,
+    };
+  }
+
+  const parts = itemId.split(':');
+  if (parts.length === 3) {
+    const descriptor = parsePlantPartItemId(itemId);
+    const speciesId = descriptor?.speciesId || '';
+    const species = descriptor?.species || null;
+    const part = descriptor?.part || null;
+    const subStage = descriptor?.subStage || null;
+    const nutrition = subStage?.nutrition || null;
+    if (!nutrition) {
+      return null;
+    }
+    const extraction = Number.isFinite(Number(subStage?.stew_extraction_efficiency))
+      ? Number(subStage.stew_extraction_efficiency)
+      : 1;
+    const edibilityScoreRaw = Number.isFinite(Number(subStage?.cooked_edibility_score))
+      ? Number(subStage.cooked_edibility_score)
+      : Number(subStage?.edibility_score);
+    const harshnessRaw = Number.isFinite(Number(subStage?.cooked_harshness))
+      ? Number(subStage.cooked_harshness)
+      : Number(subStage?.edibility_harshness);
+    const familyRaw = subStage?.plant_family || part?.plant_family || species?.plant_family || speciesId;
+    const flavorRaw = subStage?.flavor_profile || part?.flavor_profile || species?.flavor_profile || familyRaw;
+    return {
+      itemId,
+      nutrition: {
+        calories: Number(nutrition.calories) || 0,
+        protein: Number(nutrition.protein) || 0,
+        carbs: Number(nutrition.carbs) || 0,
+        fat: Number(nutrition.fat) || 0,
+      },
+      extraction: Math.max(0, extraction),
+      edibilityScore: normalizeUnitInterval(edibilityScoreRaw),
+      harshness: normalizeUnitInterval(harshnessRaw),
+      familyKey: `plant:${String(familyRaw)}`,
+      flavorKey: `flavor:${String(flavorRaw)}`,
+    };
+  }
+
+  if (parts.length === 2) {
+    const [speciesId, partId] = parts;
+    const species = ANIMAL_BY_ID[speciesId] || null;
+    const part = (species?.parts || []).find((entry) => entry?.id === partId) || null;
+    const nutrition = part?.nutrition || null;
+    if (!nutrition) {
+      return null;
+    }
+    const extraction = Number.isFinite(Number(part?.stew_extraction_efficiency))
+      ? Number(part.stew_extraction_efficiency)
+      : 1;
+    const edibilityScoreRaw = Number.isFinite(Number(part?.cooked_edibility_score))
+      ? Number(part.cooked_edibility_score)
+      : Number(part?.edibility_score);
+    const harshnessRaw = Number.isFinite(Number(part?.cooked_harshness))
+      ? Number(part.cooked_harshness)
+      : Number(part?.edibility_harshness);
+    const familyRaw = part?.nausea_family || speciesId;
+    const flavorRaw = part?.flavor_profile || familyRaw;
+    return {
+      itemId,
+      nutrition: {
+        calories: Number(nutrition.calories) || 0,
+        protein: Number(nutrition.protein) || 0,
+        carbs: Number(nutrition.carbs) || 0,
+        fat: Number(nutrition.fat) || 0,
+      },
+      extraction: Math.max(0, extraction),
+      edibilityScore: normalizeUnitInterval(edibilityScoreRaw),
+      harshness: normalizeUnitInterval(harshnessRaw),
+      familyKey: `animal:${String(familyRaw)}`,
+      flavorKey: `flavor:${String(flavorRaw)}`,
+    };
+  }
+
+  return null;
+}
+
+function getActorDailyCalorieRequirement(actor) {
+  const explicit = Number(actor?.dailyCalorieRequirement);
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+
+  const ageYears = Number(actor?.ageYears);
+  if (Number.isFinite(ageYears) && ageYears >= 0) {
+    if (ageYears <= 5) {
+      return 800;
+    }
+    if (ageYears <= 10) {
+      return 1200;
+    }
+    if (ageYears <= 20) {
+      return 1600;
+    }
+  }
+
+  const role = String(actor?.role || '').toLowerCase();
+  if (role.includes('child')) {
+    return STEW_DAILY_CALORIES_CHILD_DEFAULT;
+  }
+  return STEW_DAILY_CALORIES_ADULT;
+}
+
+function extractActorNauseaCap(actor) {
+  const conditions = Array.isArray(actor?.conditions) ? actor.conditions : [];
+  let cap = 1;
+  for (const condition of conditions) {
+    const effects = Array.isArray(condition?.effects) ? condition.effects : [];
+    for (const effect of effects) {
+      if (effect?.type !== 'nausea_ceiling_cap') {
+        continue;
+      }
+      const value = normalizeUnitInterval(effect?.value);
+      if (Number.isFinite(value)) {
+        cap = Math.min(cap, value);
+      }
+    }
+  }
+  return cap;
+}
+
+function computeMealMonotonyScore(ingredientsWithDescriptor) {
+  if (ingredientsWithDescriptor.length <= 1) {
+    return 80;
+  }
+  const totalCalories = ingredientsWithDescriptor.reduce((sum, entry) => sum + entry.totalNutrition.calories, 0);
+  if (totalCalories <= 0) {
+    return 0;
+  }
+
+  const familyShares = {};
+  const flavorShares = {};
+  for (const entry of ingredientsWithDescriptor) {
+    const share = entry.totalNutrition.calories / totalCalories;
+    familyShares[entry.descriptor.familyKey] = (familyShares[entry.descriptor.familyKey] || 0) + share;
+    flavorShares[entry.descriptor.flavorKey] = (flavorShares[entry.descriptor.flavorKey] || 0) + share;
+  }
+
+  const familyConcentration = Object.values(familyShares)
+    .reduce((sum, share) => sum + (share * share), 0);
+  const flavorConcentration = Object.values(flavorShares)
+    .reduce((sum, share) => sum + (share * share), 0);
+  const score = ((familyConcentration * 0.7) + (flavorConcentration * 0.3)) * 100;
+  return Math.max(0, Math.min(100, score));
+}
+
+function getMealVarietyBand(monotonyScore) {
+  if (monotonyScore <= 25) {
+    return { label: 'varied', nauseaGain: 0 };
+  }
+  if (monotonyScore <= 55) {
+    return { label: 'repetitive', nauseaGain: STEW_NAUSEA_GAIN_REPETITIVE };
+  }
+  return { label: 'monotonous', nauseaGain: STEW_NAUSEA_GAIN_MONOTONOUS };
+}
+
+function buildMealPlanPreview(state, normalizedIngredients) {
+  const nauseaByIngredient = state?.camp?.nauseaByIngredient && typeof state.camp.nauseaByIngredient === 'object'
+    ? state.camp.nauseaByIngredient
+    : {};
+
+  const ingredientsWithDescriptor = normalizedIngredients
+    .map((ingredient) => {
+      const descriptor = resolveStewIngredientDescriptor(ingredient.itemId);
+      if (!descriptor) {
+        return null;
+      }
+      const q = Math.max(1, Math.floor(Number(ingredient.quantity) || 1));
+      const extraction = Math.max(0, Number(descriptor.extraction) || 0);
+      return {
+        itemId: ingredient.itemId,
+        quantity: q,
+        descriptor,
+        totalNutrition: {
+          calories: (Number(descriptor.nutrition.calories) || 0) * q * extraction,
+          protein: (Number(descriptor.nutrition.protein) || 0) * q * extraction,
+          carbs: (Number(descriptor.nutrition.carbs) || 0) * q * extraction,
+          fat: (Number(descriptor.nutrition.fat) || 0) * q * extraction,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  const totalNutrition = ingredientsWithDescriptor.reduce((sum, entry) => ({
+    calories: sum.calories + entry.totalNutrition.calories,
+    protein: sum.protein + entry.totalNutrition.protein,
+    carbs: sum.carbs + entry.totalNutrition.carbs,
+    fat: sum.fat + entry.totalNutrition.fat,
+  }), {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  });
+
+  const weighted = ingredientsWithDescriptor.reduce((acc, entry) => {
+    const calories = entry.totalNutrition.calories;
+    acc.totalCalories += calories;
+    acc.edibilityNumerator += (Number(entry.descriptor.edibilityScore) || 0.5) * calories;
+    acc.harshnessNumerator += (Number(entry.descriptor.harshness) || 0) * calories;
+    const nauseaValue = Math.max(0, Math.min(100, Number(nauseaByIngredient[entry.itemId]) || 0));
+    const nauseaCeiling = nauseaValue > 50 ? Math.max(0, 1 - ((nauseaValue - 50) / 50)) : 1;
+    acc.nauseaCeiling = Math.min(acc.nauseaCeiling, nauseaCeiling);
+    return acc;
+  }, {
+    totalCalories: 0,
+    edibilityNumerator: 0,
+    harshnessNumerator: 0,
+    nauseaCeiling: 1,
+  });
+
+  const weightedEdibility = weighted.totalCalories > 0
+    ? weighted.edibilityNumerator / weighted.totalCalories
+    : 1;
+  const weightedHarshness = weighted.totalCalories > 0
+    ? weighted.harshnessNumerator / weighted.totalCalories
+    : 0;
+  const edibilityCeiling = Math.max(0, Math.min(1, weightedEdibility - (weightedHarshness * 0.5)));
+  const monotonyScore = computeMealMonotonyScore(ingredientsWithDescriptor);
+  const varietyBand = getMealVarietyBand(monotonyScore);
+
+  const participants = Object.values(state?.actors || {})
+    .filter((actor) => (Number(actor?.health) || 0) > 0)
+    .filter((actor) => isActorAtCampAnchor(state, actor));
+
+  const participantRows = participants.map((actor) => {
+    const dailyCalories = getActorDailyCalorieRequirement(actor);
+    const hunger = normalizeUnitInterval(actor?.hunger);
+    const deficitCalories = Math.max(0, (1 - hunger) * dailyCalories);
+    return {
+      actorId: actor.id,
+      dailyCalories,
+      hunger,
+      deficitCalories,
+      nauseaCap: extractActorNauseaCap(actor),
+    };
+  });
+  const totalRequirement = participantRows.reduce((sum, row) => sum + row.dailyCalories, 0);
+
+  const perActor = participantRows.map((row) => {
+    const shareCalories = totalRequirement > 0
+      ? totalNutrition.calories * (row.dailyCalories / totalRequirement)
+      : 0;
+    const intakeFraction = Math.max(0, Math.min(1, edibilityCeiling, weighted.nauseaCeiling, row.nauseaCap));
+    const intakeCaloriesCap = row.dailyCalories * intakeFraction;
+    const effectiveCalories = Math.max(0, Math.min(shareCalories, intakeCaloriesCap, row.deficitCalories));
+    let limitReason = null;
+    if (effectiveCalories < shareCalories) {
+      if (intakeCaloriesCap <= row.deficitCalories) {
+        limitReason = intakeFraction === edibilityCeiling ? 'edibility_limited' : 'nausea_limited';
+      } else {
+        limitReason = 'hunger_full';
+      }
+    }
+
+    return {
+      actorId: row.actorId,
+      dailyCalories: row.dailyCalories,
+      shareCalories,
+      effectiveCalories,
+      deficitCalories: row.deficitCalories,
+      hungerBefore: row.hunger,
+      hungerGain: row.dailyCalories > 0 ? (effectiveCalories / row.dailyCalories) : 0,
+      intakeFraction,
+      limitReason,
+    };
+  });
+
+  const distributedCalories = perActor.reduce((sum, row) => sum + row.effectiveCalories, 0);
+  const bonusEligible = totalNutrition.protein >= STEW_PROTEIN_BONUS_THRESHOLD_GRAMS
+    && totalNutrition.fat >= STEW_FAT_BONUS_THRESHOLD_GRAMS;
+
+  return {
+    ingredients: ingredientsWithDescriptor.map((entry) => ({
+      itemId: entry.itemId,
+      quantity: entry.quantity,
+      nauseaBefore: Math.max(0, Math.min(100, Number(nauseaByIngredient[entry.itemId]) || 0)),
+      calories: entry.totalNutrition.calories,
+      protein: entry.totalNutrition.protein,
+      carbs: entry.totalNutrition.carbs,
+      fat: entry.totalNutrition.fat,
+    })),
+    totalNutrition,
+    perActor,
+    distributedCalories,
+    destroyedCalories: Math.max(0, totalNutrition.calories - distributedCalories),
+    edibilityCeiling,
+    nauseaCeiling: weighted.nauseaCeiling,
+    monotonyScore,
+    varietyLabel: varietyBand.label,
+    nauseaGainPerUsedIngredient: varietyBand.nauseaGain,
+    nauseaDecayPerAbsent: STEW_NAUSEA_DECAY_ABSENT_PER_DAY,
+    bonusEligible,
+    nextDayTickBonus: STEW_NEXT_DAY_TICK_BONUS,
+  };
+}
+
+function validateMealPlanIngredientsAgainstCamp(state, normalizedIngredients) {
+  const stockpileByItemId = buildCampStockpileQuantityMap(state);
+  for (const ingredient of normalizedIngredients) {
+    if (ingredient.itemId === 'rotting_organic') {
+      return {
+        ok: false,
+        code: 'invalid_meal_ingredient',
+        message: 'meal plan cannot include rotting_organic',
+      };
+    }
+    const descriptor = resolveStewIngredientDescriptor(ingredient.itemId);
+    if (!descriptor) {
+      return {
+        ok: false,
+        code: 'invalid_meal_ingredient',
+        message: `meal ingredient is not stew-eligible: ${ingredient.itemId}`,
+      };
+    }
+    const available = Math.max(0, Math.floor(Number(stockpileByItemId[ingredient.itemId]) || 0));
+    if (available < ingredient.quantity) {
+      return {
+        ok: false,
+        code: 'insufficient_item_quantity',
+        message: `camp stockpile has insufficient ${ingredient.itemId} for meal plan`,
+        requiredItemId: ingredient.itemId,
+      };
+    }
+    const nausea = Math.max(0, Math.min(100, Number(state?.camp?.nauseaByIngredient?.[ingredient.itemId]) || 0));
+    if (nausea > 80) {
+      return {
+        ok: false,
+        code: 'meal_ingredient_nausea_blocked',
+        message: `meal ingredient blocked by high nausea: ${ingredient.itemId}`,
+        blockedItemId: ingredient.itemId,
+      };
+    }
+  }
+  return { ok: true, code: null, message: 'ok' };
+}
+
+function validateMealPlanSetAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'meal_plan_set requires actor at camp anchor',
+    };
+  }
+
+  const normalizedIngredients = normalizeMealIngredients(action.payload?.ingredients);
+  const ingredientCheck = validateMealPlanIngredientsAgainstCamp(state, normalizedIngredients);
+  if (!ingredientCheck.ok) {
+    return ingredientCheck;
+  }
+
+  const preview = buildMealPlanPreview(state, normalizedIngredients);
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    mealPlanPreview: preview,
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        ingredients: normalizedIngredients,
+        mealPlanPreview: preview,
+      },
+    },
+  };
+}
+
+function validateMealPlanCommitAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'meal_plan_commit requires actor at camp anchor',
+    };
+  }
+
+  const sourceIngredients = Array.isArray(action.payload?.ingredients)
+    ? action.payload.ingredients
+    : state?.camp?.mealPlan?.ingredients;
+  const normalizedIngredients = normalizeMealIngredients(sourceIngredients);
+  const ingredientCheck = validateMealPlanIngredientsAgainstCamp(state, normalizedIngredients);
+  if (!ingredientCheck.ok) {
+    return ingredientCheck;
+  }
+
+  const preview = buildMealPlanPreview(state, normalizedIngredients);
+  if (!Array.isArray(preview.perActor) || preview.perActor.length <= 0) {
+    return {
+      ok: false,
+      code: 'no_meal_participants',
+      message: 'meal_plan_commit requires at least one living actor at camp',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    mealPlanPreview: preview,
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        ingredients: normalizedIngredients,
+        mealPlanPreview: preview,
+      },
+    },
+  };
+}
+
+function isDebriefActive(state) {
+  return state?.camp?.debrief?.active === true;
+}
+
+function validateDebriefEnterAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'debrief_enter requires actor at camp anchor',
+    };
+  }
+  if (isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'debrief_already_active',
+      message: 'debrief_enter rejected because debrief is already active',
+    };
+  }
+  if ((Number(state?.dayTick) || 0) < NIGHTLY_DEBRIEF_START_TICK) {
+    return {
+      ok: false,
+      code: 'debrief_not_available_yet',
+      message: `debrief_enter requires dayTick >= ${NIGHTLY_DEBRIEF_START_TICK}`,
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {},
+    },
+  };
+}
+
+function validateDebriefExitAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'debrief_exit requires actor at camp anchor',
+    };
+  }
+  if (!isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'debrief_not_active',
+      message: 'debrief_exit rejected because debrief is not active',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {},
+    },
+  };
+}
+
+function validatePartnerMedicineAdministerAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'partner_medicine_administer requires actor at camp anchor',
+    };
+  }
+  if (!isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'medicine_not_in_debrief',
+      message: 'partner_medicine_administer requires active nightly debrief',
+    };
+  }
+
+  const rawConditionInstanceId = typeof action?.payload?.conditionInstanceId === 'string'
+    ? action.payload.conditionInstanceId.trim()
+    : '';
+  const conditionInstanceId = rawConditionInstanceId || null;
+  if (conditionInstanceId) {
+    let targetCondition = null;
+    for (const candidateActor of Object.values(state?.actors || {})) {
+      const conditions = Array.isArray(candidateActor?.conditions) ? candidateActor.conditions : [];
+      const found = conditions.find((entry) => entry?.instance_id === conditionInstanceId);
+      if (found) {
+        targetCondition = found;
+        break;
+      }
+    }
+    if (!targetCondition) {
+      return {
+        ok: false,
+        code: 'unknown_condition_instance',
+        message: `partner_medicine_administer unknown condition instance: ${conditionInstanceId}`,
+      };
+    }
+    if (targetCondition.treated === true) {
+      return {
+        ok: false,
+        code: 'condition_already_treated',
+        message: `partner_medicine_administer condition already treated: ${conditionInstanceId}`,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        conditionInstanceId,
+      },
+    },
+  };
+}
+
+function validatePartnerVisionRequestAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'partner_vision_request requires actor at camp anchor',
+    };
+  }
+  if (!isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'vision_not_in_debrief',
+      message: 'partner_vision_request requires active nightly debrief',
+    };
+  }
+  const usesThisSeason = Number.isInteger(state?.camp?.debrief?.visionUsesThisSeason)
+    ? state.camp.debrief.visionUsesThisSeason
+    : 0;
+  if (usesThisSeason >= 2) {
+    return {
+      ok: false,
+      code: 'vision_cooldown_active',
+      message: 'partner_vision_request blocked by seasonal cooldown',
+    };
+  }
+  if (state?.camp?.debrief?.pendingVisionRevelation) {
+    return {
+      ok: false,
+      code: 'vision_revelation_pending',
+      message: 'partner_vision_request blocked until pending revelation is chosen',
+    };
+  }
+  if (state?.camp?.debrief?.requiresVisionConfirmation === true) {
+    return {
+      ok: false,
+      code: 'vision_confirmation_pending',
+      message: 'partner_vision_request blocked until pending vision confirmation is resolved',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {},
+    },
+  };
+}
+
+function validatePartnerVisionConfirmAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'partner_vision_confirm requires actor at camp anchor',
+    };
+  }
+  if (!isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'vision_not_in_debrief',
+      message: 'partner_vision_confirm requires active nightly debrief',
+    };
+  }
+  if (state?.camp?.debrief?.requiresVisionConfirmation !== true) {
+    return {
+      ok: false,
+      code: 'missing_vision_confirmation',
+      message: 'partner_vision_confirm requires pending vision confirmation options',
+    };
+  }
+  const selectedItemId = typeof action?.payload?.itemId === 'string'
+    ? action.payload.itemId.trim()
+    : '';
+  if (!selectedItemId) {
+    return {
+      ok: false,
+      code: 'missing_vision_item_id',
+      message: 'partner_vision_confirm requires payload.itemId',
+    };
+  }
+  const options = Array.isArray(state?.camp?.debrief?.visionSelectionOptions)
+    ? state.camp.debrief.visionSelectionOptions
+    : [];
+  const selected = options.find((entry) => entry?.itemId === selectedItemId) || null;
+  if (!selected) {
+    return {
+      ok: false,
+      code: 'invalid_vision_item_id',
+      message: `partner_vision_confirm itemId is not in confirmation options: ${selectedItemId}`,
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        itemId: selectedItemId,
+      },
+    },
+  };
+}
+
+function validatePartnerVisionChooseAction(state, action, actor) {
+  if (!isActorAtCampAnchor(state, actor)) {
+    return {
+      ok: false,
+      code: 'actor_not_at_camp',
+      message: 'partner_vision_choose requires actor at camp anchor',
+    };
+  }
+  if (!isDebriefActive(state)) {
+    return {
+      ok: false,
+      code: 'vision_not_in_debrief',
+      message: 'partner_vision_choose requires active nightly debrief',
+    };
+  }
+  const categoryRaw = typeof action?.payload?.category === 'string'
+    ? action.payload.category.trim().toLowerCase()
+    : '';
+  const category = categoryRaw || null;
+  if (!category) {
+    return {
+      ok: false,
+      code: 'missing_vision_category',
+      message: 'partner_vision_choose requires payload.category',
+    };
+  }
+  const pending = state?.camp?.debrief?.pendingVisionRevelation;
+  if (!pending || typeof pending !== 'object') {
+    return {
+      ok: false,
+      code: 'missing_pending_vision_revelation',
+      message: 'partner_vision_choose requires pending revelation choices',
+    };
+  }
+  const categories = Array.isArray(pending?.visionCategories)
+    ? pending.visionCategories.map((entry) => String(entry || '').toLowerCase())
+    : [];
+  if (!categories.includes(category)) {
+    return {
+      ok: false,
+      code: 'invalid_vision_category',
+      message: `partner_vision_choose category is not available: ${category}`,
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        category,
+      },
+    },
+  };
+}
+
+function validateNatureSightOverlaySetAction(state, action, actor) {
+  const overlayRaw = typeof action?.payload?.overlay === 'string'
+    ? action.payload.overlay.trim().toLowerCase()
+    : '';
+  const overlay = overlayRaw || null;
+  if (!overlay || !NATURE_SIGHT_OVERLAYS.has(overlay)) {
+    return {
+      ok: false,
+      code: 'invalid_nature_sight_overlay',
+      message: 'nature_sight_overlay_set requires valid payload.overlay',
+    };
+  }
+  const remaining = Number.isInteger(actor?.natureSightDaysRemaining)
+    ? actor.natureSightDaysRemaining
+    : Math.floor(Number(actor?.natureSightDaysRemaining || 0));
+  if (remaining <= 0) {
+    return {
+      ok: false,
+      code: 'nature_sight_not_active',
+      message: 'nature_sight_overlay_set requires active Nature Sight',
+    };
+  }
+  const selectedOnDay = Number.isInteger(actor?.natureSightOverlayChosenDay)
+    ? actor.natureSightOverlayChosenDay
+    : null;
+  const currentDay = Number.isInteger(state?.totalDaysSimulated) ? state.totalDaysSimulated : 0;
+  const currentOverlay = typeof actor?.natureSightOverlayChoice === 'string'
+    ? actor.natureSightOverlayChoice
+    : null;
+  if (selectedOnDay === currentDay && currentOverlay && currentOverlay !== overlay) {
+    return {
+      ok: false,
+      code: 'nature_sight_overlay_locked_for_day',
+      message: 'nature_sight_overlay_set allows one overlay selection per day',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        overlay,
+      },
+    },
+  };
+}
+
 function resolvePlantProcessingOption(itemId, processId) {
   if (typeof itemId !== 'string' || !itemId.includes(':')) {
     return null;
@@ -1574,6 +2748,9 @@ function computeProcessOutputs(descriptor, quantity) {
     if (Number.isFinite(Number(output.decayDaysRemaining))) {
       latest.decayDaysRemaining = Math.max(0, Math.floor(Number(output.decayDaysRemaining)));
     }
+    if (Number.isFinite(Number(output.tanninRemaining))) {
+      latest.tanninRemaining = Math.max(0, Math.min(1, Number(output.tanninRemaining)));
+    }
   }
 
   return normalized;
@@ -1766,6 +2943,37 @@ function hasInventoryItem(actor, itemId) {
   return Math.max(0, Math.floor(Number(stack?.quantity) || 0)) > 0;
 }
 
+function ensureInventoryEquipment(inventory) {
+  if (!inventory || typeof inventory !== 'object') {
+    return { gloves: null, coat: null, head: null };
+  }
+
+  if (!inventory.equipment || typeof inventory.equipment !== 'object') {
+    inventory.equipment = { gloves: null, coat: null, head: null };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
+    inventory.equipment.gloves = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'coat')) {
+    inventory.equipment.coat = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'head')) {
+    inventory.equipment.head = null;
+  }
+
+  return inventory.equipment;
+}
+
+function hasEquippedItem(actor, itemId) {
+  const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
+  if (!slot) {
+    return false;
+  }
+  const equipment = ensureInventoryEquipment(actor?.inventory || {});
+  return equipment?.[slot]?.itemId === itemId;
+}
+
 function resolvePlantSubStageFromItemId(itemId) {
   if (typeof itemId !== 'string') {
     return null;
@@ -1782,17 +2990,47 @@ function resolvePlantSubStageFromItemId(itemId) {
   return (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
 }
 
-function resolveCraftTagsForItem(itemId) {
-  const tags = [];
-  const item = ITEM_BY_ID[itemId] || null;
-  if (Array.isArray(item?.craft_tags)) {
-    tags.push(...item.craft_tags.filter((tag) => typeof tag === 'string' && tag));
+function resolveAnimalPartFromItemId(itemId) {
+  if (typeof itemId !== 'string') {
+    return null;
   }
 
-  const subStage = resolvePlantSubStageFromItemId(itemId);
-  if (Array.isArray(subStage?.craft_tags)) {
-    tags.push(...subStage.craft_tags.filter((tag) => typeof tag === 'string' && tag));
+  const parts = itemId.split(':');
+  if (parts.length !== 2) {
+    return null;
   }
+
+  const [speciesId, partId] = parts;
+  const species = ANIMAL_BY_ID[speciesId] || null;
+  return (species?.parts || []).find((entry) => entry?.id === partId) || null;
+}
+
+function resolveCraftTagsForItem(itemId) {
+  function collectTags(sourceTags, target) {
+    if (!Array.isArray(sourceTags)) {
+      return;
+    }
+    for (const rawTag of sourceTags) {
+      if (typeof rawTag !== 'string' || !rawTag) {
+        continue;
+      }
+      target.push(rawTag);
+      const alias = CRAFT_TAG_ALIASES[rawTag];
+      if (typeof alias === 'string' && alias) {
+        target.push(alias);
+      }
+    }
+  }
+
+  const tags = [];
+  const item = ITEM_BY_ID[itemId] || null;
+  collectTags(item?.craft_tags, tags);
+
+  const subStage = resolvePlantSubStageFromItemId(itemId);
+  collectTags(subStage?.craft_tags, tags);
+
+  const animalPart = resolveAnimalPartFromItemId(itemId);
+  collectTags(animalPart?.craft_tags, tags);
 
   return [...new Set(tags)];
 }
@@ -1951,7 +3189,98 @@ function hasHarvestToolForModifier(actor, toolKey) {
     ? HARVEST_TOOL_INVENTORY_ALIASES[toolKey]
     : [];
   const candidateItemIds = [`tool:${toolKey}`, ...aliases];
-  return candidateItemIds.some((itemId) => hasInventoryItem(actor, itemId));
+  return candidateItemIds.some((itemId) => {
+    const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
+    if (slot) {
+      return hasEquippedItem(actor, itemId);
+    }
+    return hasInventoryItem(actor, itemId);
+  });
+}
+
+function validateEquipItemAction(state, action, actor) {
+  const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+  const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
+  if (!itemId || !slot) {
+    return {
+      ok: false,
+      code: 'invalid_equipment_item',
+      message: 'equip_item requires payload.itemId for an equippable item',
+    };
+  }
+
+  const stack = findPreferredStackByItem(actor?.inventory?.stacks, itemId, 1);
+  const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+  if (available <= 0) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'equip_item requires the item in actor inventory stacks',
+      requiredItemId: itemId,
+    };
+  }
+
+  const equipment = ensureInventoryEquipment(actor?.inventory || {});
+  if (equipment?.[slot]) {
+    return {
+      ok: false,
+      code: 'equipment_slot_occupied',
+      message: `equip_item slot already occupied: ${slot}`,
+      equipmentSlot: slot,
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        itemId,
+        equipmentSlot: slot,
+      },
+    },
+  };
+}
+
+function validateUnequipItemAction(state, action, actor) {
+  const slot = typeof action.payload?.equipmentSlot === 'string'
+    ? action.payload.equipmentSlot
+    : typeof action.payload?.slot === 'string' ? action.payload.slot : '';
+  if (!EQUIPMENT_SLOTS.has(slot)) {
+    return {
+      ok: false,
+      code: 'invalid_equipment_slot',
+      message: 'unequip_item requires payload.equipmentSlot of gloves, coat, or head',
+    };
+  }
+
+  const equipment = ensureInventoryEquipment(actor?.inventory || {});
+  const equipped = equipment?.[slot] || null;
+  if (!equipped || typeof equipped.itemId !== 'string' || !equipped.itemId) {
+    return {
+      ok: false,
+      code: 'equipment_slot_empty',
+      message: `unequip_item requires occupied slot: ${slot}`,
+      equipmentSlot: slot,
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        equipmentSlot: slot,
+        itemId: equipped.itemId,
+      },
+    },
+  };
 }
 
 function getHarvestTickCostForPlantAction(action, actor, species, partName, subStageId) {
@@ -1994,15 +3323,92 @@ function getHarvestSubStageDefinition(species, partName, subStageId) {
   return (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
 }
 
-function canActorHarvestReachTier(actor, reachTierRaw) {
+function normalizeHarvestPoolCount(value) {
+  if (!Number.isFinite(Number(value))) {
+    return null;
+  }
+  return Math.max(0, Math.floor(Number(value)));
+}
+
+function getHarvestActionPoolState(entry, reachTierRaw) {
   const reachTier = typeof reachTierRaw === 'string' ? reachTierRaw : 'ground';
-  if (reachTier === 'canopy') {
-    return hasInventoryItem(actor, 'tool:ladder');
+  const remainingActions = normalizeHarvestPoolCount(entry?.remainingActions);
+  let remainingActionsGround = normalizeHarvestPoolCount(entry?.remainingActionsGround);
+  let remainingActionsElevated = normalizeHarvestPoolCount(entry?.remainingActionsElevated);
+  let remainingActionsCanopy = normalizeHarvestPoolCount(entry?.remainingActionsCanopy);
+
+  if (remainingActionsGround === null && remainingActionsElevated === null && remainingActionsCanopy === null && remainingActions !== null) {
+    if (reachTier === 'ground') {
+      remainingActionsGround = remainingActions;
+      remainingActionsElevated = 0;
+      remainingActionsCanopy = 0;
+    } else if (reachTier === 'canopy') {
+      remainingActionsGround = 0;
+      remainingActionsElevated = 0;
+      remainingActionsCanopy = remainingActions;
+    } else {
+      remainingActionsGround = 0;
+      remainingActionsElevated = remainingActions;
+      remainingActionsCanopy = 0;
+    }
   }
-  if (reachTier === 'elevated') {
-    return hasInventoryItem(actor, 'tool:ladder') || hasInventoryItem(actor, 'tool:stool');
+
+  if (remainingActionsGround === null && remainingActionsElevated === null && remainingActionsCanopy === null) {
+    const initialGround = normalizeHarvestPoolCount(entry?.initialActionsGround);
+    const initialElevated = normalizeHarvestPoolCount(entry?.initialActionsElevated);
+    const initialCanopy = normalizeHarvestPoolCount(entry?.initialActionsCanopy);
+    const hasInitialPools = initialGround !== null || initialElevated !== null || initialCanopy !== null;
+    if (hasInitialPools) {
+      remainingActionsGround = initialGround ?? 0;
+      remainingActionsElevated = initialElevated ?? 0;
+      remainingActionsCanopy = initialCanopy ?? 0;
+    } else {
+      const fallbackActions = normalizeHarvestPoolCount(entry?.initialActionsRoll) ?? 1;
+      if (reachTier === 'ground') {
+        remainingActionsGround = fallbackActions;
+        remainingActionsElevated = 0;
+        remainingActionsCanopy = 0;
+      } else if (reachTier === 'canopy') {
+        remainingActionsGround = 0;
+        remainingActionsElevated = 0;
+        remainingActionsCanopy = fallbackActions;
+      } else {
+        remainingActionsGround = 0;
+        remainingActionsElevated = fallbackActions;
+        remainingActionsCanopy = 0;
+      }
+    }
   }
-  return true;
+
+  if (remainingActionsGround === null) {
+    remainingActionsGround = 0;
+  }
+  if (remainingActionsElevated === null) {
+    remainingActionsElevated = 0;
+  }
+  if (remainingActionsCanopy === null) {
+    remainingActionsCanopy = 0;
+  }
+
+  return {
+    remainingActionsGround,
+    remainingActionsElevated,
+    remainingActionsCanopy,
+    remainingActionsTotal: remainingActionsGround + remainingActionsElevated + remainingActionsCanopy,
+    remainingActionsCanopyCascade: remainingActionsCanopy + remainingActionsElevated + remainingActionsGround,
+    remainingActionsElevatedCascade: remainingActionsElevated + remainingActionsGround,
+  };
+}
+
+function getHarvestReachToolState(actor) {
+  const hasLadder = hasInventoryItem(actor, 'tool:ladder');
+  const hasStool = hasInventoryItem(actor, 'tool:stool');
+  return {
+    hasLadder,
+    hasStool,
+    canAccessElevatedPool: hasLadder || hasStool,
+    canAccessCanopyPool: hasLadder,
+  };
 }
 
 function getDigToolModifier(actor) {
@@ -2341,6 +3747,49 @@ function normalizeTaskOutputs(outputs) {
   return normalized;
 }
 
+function normalizeTaskInputs(inputs) {
+  if (!Array.isArray(inputs)) {
+    return [];
+  }
+
+  const normalized = [];
+  for (const input of inputs) {
+    const itemId = typeof input?.itemId === 'string' ? input.itemId : '';
+    const quantity = Number.isInteger(input?.quantity)
+      ? input.quantity
+      : Math.floor(Number(input?.quantity || 0));
+    if (!itemId || quantity <= 0) {
+      continue;
+    }
+
+    const sourceRaw = typeof input?.source === 'string' ? input.source : 'camp_stockpile';
+    const source = sourceRaw === 'camp_stockpile' ? sourceRaw : '';
+    if (!source) {
+      continue;
+    }
+
+    normalized.push({
+      source,
+      itemId,
+      quantity,
+      required: input?.required !== false,
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeTaskRequirements(requirements, requiredStationId = null) {
+  const stationsRaw = Array.isArray(requirements?.stations) ? requirements.stations : [];
+  const unlocksRaw = Array.isArray(requirements?.unlocks) ? requirements.unlocks : [];
+  const stations = [...new Set(stationsRaw.filter((entry) => typeof entry === 'string' && entry))];
+  const unlocks = [...new Set(unlocksRaw.filter((entry) => typeof entry === 'string' && entry))];
+  if (requiredStationId && !stations.includes(requiredStationId)) {
+    stations.push(requiredStationId);
+  }
+  return { stations, unlocks };
+}
+
 function getTile(state, x, y) {
   if (!inBounds(state, x, y)) {
     return null;
@@ -2383,6 +3832,171 @@ function isInteractionTargetInRange(actor, target) {
   return Math.abs(target.x - actorX) <= 1 && Math.abs(target.y - actorY) <= 1;
 }
 
+function normalizeUnitInterval(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+  return Math.max(0, Math.min(1, n));
+}
+
+function resolvePlantSubStageByItemId(itemId) {
+  if (typeof itemId !== 'string') {
+    return null;
+  }
+  const parts = itemId.split(':');
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [speciesId, partName, subStageId] = parts;
+  const species = PLANT_BY_ID[speciesId] || null;
+  const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+  const subStage = (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+  if (!subStage) {
+    return null;
+  }
+  return { speciesId, partName, subStageId, subStage };
+}
+
+function resolveLeachingBasketTanninStart(stack) {
+  const explicit = normalizeUnitInterval(stack?.tanninRemaining);
+  if (explicit !== null) {
+    return explicit;
+  }
+
+  const source = resolvePlantSubStageByItemId(stack?.itemId);
+  if (!source) {
+    return null;
+  }
+  return normalizeUnitInterval(source.subStage?.tannin_level);
+}
+
+function validateLeachingBasketPlaceAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'leaching_basket_place_out_of_bounds', message: 'leaching_basket_place target is out of bounds' };
+  }
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'leaching_basket_place target must be on current or adjacent tile',
+    };
+  }
+
+  if (!hasInventoryItem(actor, LEACHING_BASKET_ITEM_ID)) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'leaching_basket_place requires tool:leaching_basket in inventory',
+      requiredItemId: LEACHING_BASKET_ITEM_ID,
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  if (!tile || !tile.waterType || tile.waterFrozen === true) {
+    return {
+      ok: false,
+      code: 'leaching_basket_place_invalid_target',
+      message: 'leaching_basket_place target must be an unfrozen water tile',
+    };
+  }
+  if (tile?.leachingBasket?.active === true) {
+    return {
+      ok: false,
+      code: 'leaching_basket_place_already_present',
+      message: 'leaching_basket_place target already contains an active leaching basket',
+    };
+  }
+
+  const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+  const quantity = Number.isInteger(action.payload?.quantity)
+    ? action.payload.quantity
+    : Math.floor(Number(action.payload?.quantity || 1));
+  if (!itemId || !Number.isInteger(quantity) || quantity <= 0) {
+    return {
+      ok: false,
+      code: 'invalid_leaching_basket_payload',
+      message: 'leaching_basket_place requires payload.itemId and positive payload.quantity',
+    };
+  }
+
+  const stack = findPreferredStackByItem(actor?.inventory?.stacks, itemId, quantity);
+  const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+  if (available < quantity) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'leaching_basket_place requires available item quantity in actor inventory',
+      requiredItemId: itemId,
+    };
+  }
+
+  const tanninRemaining = resolveLeachingBasketTanninStart(stack);
+  if (tanninRemaining === null) {
+    return {
+      ok: false,
+      code: 'missing_tannin_metadata',
+      message: 'leaching_basket_place requires source item with tanninRemaining or plant sub-stage tannin_level',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        x: target.x,
+        y: target.y,
+        itemId,
+        quantity: Math.min(quantity, available),
+        tanninRemaining,
+      },
+    },
+  };
+}
+
+function validateLeachingBasketRetrieveAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'leaching_basket_retrieve_out_of_bounds', message: 'leaching_basket_retrieve target is out of bounds' };
+  }
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'leaching_basket_retrieve target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  const basketState = tile?.leachingBasket;
+  if (!tile || !basketState || basketState.active !== true) {
+    return {
+      ok: false,
+      code: 'leaching_basket_retrieve_invalid_target',
+      message: 'leaching_basket_retrieve target must contain an active leaching basket',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        x: target.x,
+        y: target.y,
+      },
+    },
+  };
+}
+
 function validateHarvestAction(state, action, actor) {
   const plantId = typeof action.payload?.plantId === 'string' ? action.payload.plantId : '';
   if (plantId) {
@@ -2404,24 +4018,79 @@ function validateHarvestAction(state, action, actor) {
       return { ok: false, code: 'missing_harvest_plant', message: 'harvest target plant does not exist or is not alive' };
     }
 
-    const hasSubStage = Array.isArray(plant.activeSubStages)
-      && plant.activeSubStages.some((entry) => entry?.partName === partName && entry?.subStageId === subStageId);
-    if (!hasSubStage) {
+    const subStageEntry = Array.isArray(plant.activeSubStages)
+      ? plant.activeSubStages.find((entry) => entry?.partName === partName && entry?.subStageId === subStageId) || null
+      : null;
+    if (!subStageEntry) {
       return { ok: false, code: 'inactive_harvest_sub_stage', message: 'harvest target sub-stage is not active' };
     }
 
     const species = PLANT_BY_ID[plant.speciesId] || null;
     const subStageDef = getHarvestSubStageDefinition(species, partName, subStageId);
     const reachTier = typeof subStageDef?.reach_tier === 'string' ? subStageDef.reach_tier : 'ground';
-    if (!canActorHarvestReachTier(actor, reachTier)) {
-      const requiredToolId = reachTier === 'canopy' ? 'tool:ladder' : 'tool:stool';
+    const reachTools = getHarvestReachToolState(actor);
+    const poolState = getHarvestActionPoolState(subStageEntry, reachTier);
+    if (reachTier === 'canopy' && !reachTools.canAccessCanopyPool) {
       return {
         ok: false,
         code: 'missing_required_tool',
-        message: `harvest reach tier ${reachTier} requires ${requiredToolId} in inventory`,
-        requiredToolId,
+        message: 'harvest reach tier canopy requires tool:ladder in inventory',
+        requiredToolId: 'tool:ladder',
+        ...poolState,
       };
     }
+    if (reachTier === 'canopy' && poolState.remainingActionsCanopyCascade <= 0) {
+      return {
+        ok: false,
+        code: 'no_actions_remaining',
+        message: 'harvest canopy sub-stage has no remaining canopy/elevated/ground actions',
+        ...poolState,
+      };
+    }
+    if (reachTier === 'elevated') {
+      if (!reachTools.canAccessElevatedPool && poolState.remainingActionsGround <= 0) {
+        if (poolState.remainingActionsElevated > 0) {
+          return {
+            ok: false,
+            code: 'missing_required_tool',
+            message: 'harvest elevated pool requires tool:stool or tool:ladder after ground actions are exhausted',
+            requiredToolId: 'tool:stool',
+            ...poolState,
+          };
+        }
+        return {
+          ok: false,
+          code: 'no_actions_remaining',
+          message: 'harvest elevated sub-stage has no remaining actions',
+          ...poolState,
+        };
+      }
+      if (reachTools.canAccessElevatedPool && poolState.remainingActionsTotal <= 0) {
+        return {
+          ok: false,
+          code: 'no_actions_remaining',
+          message: 'harvest elevated sub-stage has no remaining actions',
+          ...poolState,
+        };
+      }
+      if (reachTools.canAccessElevatedPool && poolState.remainingActionsElevatedCascade <= 0) {
+        return {
+          ok: false,
+          code: 'no_actions_remaining',
+          message: 'harvest elevated sub-stage has no remaining elevated/ground actions',
+          ...poolState,
+        };
+      }
+    }
+    if (reachTier === 'ground' && poolState.remainingActionsGround <= 0) {
+      return {
+        ok: false,
+        code: 'no_actions_remaining',
+        message: 'harvest ground sub-stage has no remaining ground actions',
+        ...poolState,
+      };
+    }
+
     const harvestTickCost = getHarvestTickCostForPlantAction(action, actor, species, partName, subStageId);
 
     return {
@@ -2438,6 +4107,12 @@ function validateHarvestAction(state, action, actor) {
           subStageId,
           actions: requestedActions,
           reachTier,
+          canAccessElevatedPool: reachTools.canAccessElevatedPool,
+          canAccessCanopyPool: reachTools.canAccessCanopyPool,
+          remainingActionsGround: poolState.remainingActionsGround,
+          remainingActionsElevated: poolState.remainingActionsElevated,
+          remainingActionsCanopy: poolState.remainingActionsCanopy,
+          remainingActionsTotal: poolState.remainingActionsTotal,
         },
         tickCost: harvestTickCost,
       },
@@ -2493,12 +4168,7 @@ function validateHarvestAction(state, action, actor) {
     return { ok: false, code: 'empty_squirrel_cache', message: 'squirrel cache has no remaining content' };
   }
 
-  const requestedGrams = Number.isInteger(action.payload?.cacheGrams)
-    ? action.payload.cacheGrams
-    : Math.floor(Number(action.payload?.cacheGrams || 100));
-  if (!Number.isInteger(requestedGrams) || requestedGrams <= 0) {
-    return { ok: false, code: 'invalid_cache_harvest_grams', message: 'harvest payload.cacheGrams must be a positive integer' };
-  }
+  const requestedGrams = Math.max(1, Math.floor(availableGrams));
 
   return {
     ok: true,
@@ -2512,6 +4182,7 @@ function validateHarvestAction(state, action, actor) {
         x: target.x,
         y: target.y,
         cacheGrams: requestedGrams,
+        inventoryUnitWeightKg: 0.001,
       },
     },
   };
@@ -2638,7 +4309,10 @@ function validateDigAction(state, action, actor) {
   }
 
   const cacheInterruption = tile?.squirrelCache && tile.squirrelCache.discovered !== true;
-  const digBaseTickCost = cacheInterruption ? 3 : (Number(action.tickCost) || 1);
+  const requestedTickCost = Number.isFinite(Number(action.payload?.tickCost))
+    ? Number(action.payload.tickCost)
+    : Number(action.tickCost);
+  const digBaseTickCost = cacheInterruption ? 3 : (requestedTickCost || 1);
   const digToolModifier = getDigToolModifier(actor);
   const normalizedTickCost = Math.max(1, Math.ceil(digBaseTickCost * digToolModifier));
   if (!Number.isInteger(normalizedTickCost) || normalizedTickCost <= 0) {
@@ -2947,12 +4621,27 @@ function validatePartnerTaskSetAction(state, action) {
   }
 
   const requiredStationId = getRequiredStationForPartnerTask(taskKind);
-  if (requiredStationId && !hasCampStationUnlocked(state, requiredStationId)) {
+  const taskRequirements = normalizeTaskRequirements(rawTask?.requirements, requiredStationId);
+  for (const stationId of taskRequirements.stations) {
+    if (hasCampStationUnlocked(state, stationId)) {
+      continue;
+    }
     return {
       ok: false,
       code: 'missing_station',
-      message: `partner_task_set task kind ${taskKind} requires station: ${requiredStationId}`,
-      stationId: requiredStationId,
+      message: `partner_task_set task kind ${taskKind} requires station: ${stationId}`,
+      stationId,
+    };
+  }
+  for (const unlockKey of taskRequirements.unlocks) {
+    if (isUnlockEnabled(state, unlockKey)) {
+      continue;
+    }
+    return {
+      ok: false,
+      code: 'missing_unlock',
+      message: `partner_task_set task kind ${taskKind} requires unlock: ${unlockKey}`,
+      unlockKey,
     };
   }
 
@@ -2961,6 +4650,23 @@ function validatePartnerTaskSetAction(state, action) {
   }
 
   const ticksRequired = getPartnerTaskTicksRequired(state, taskKind, ticksRequiredRaw);
+  const taskInputs = normalizeTaskInputs(rawTask?.inputs);
+  const stockpileByItemId = buildCampStockpileQuantityMap(state);
+  for (const input of taskInputs) {
+    if (input.source !== 'camp_stockpile' || input.required === false) {
+      continue;
+    }
+    const available = Math.max(0, Math.floor(Number(stockpileByItemId[input.itemId]) || 0));
+    if (available >= input.quantity) {
+      continue;
+    }
+    return {
+      ok: false,
+      code: 'insufficient_stockpile_quantity',
+      message: `partner_task_set requires ${input.quantity}x ${input.itemId} in camp stockpile`,
+      requiredItemId: input.itemId,
+    };
+  }
 
   const rawQueuePolicy = typeof action.payload?.queuePolicy === 'string'
     ? action.payload.queuePolicy
@@ -2993,7 +4699,11 @@ function validatePartnerTaskSetAction(state, action) {
           taskId,
           kind: taskKind,
           ticksRequired,
+          inputs: taskInputs,
+          requirements: taskRequirements,
           outputs: normalizeTaskOutputs(rawTask?.outputs),
+          status: 'queued',
+          failureReason: null,
           meta: rawTask?.meta && typeof rawTask.meta === 'object' ? { ...rawTask.meta } : null,
         },
       },
@@ -3138,6 +4848,22 @@ export function validateAction(state, rawAction, options = {}) {
     return validateTapRetrieveVesselAction(state, action, actor);
   }
 
+  if (action.kind === 'waterskin_fill') {
+    return validateWaterskinFillAction(state, action, actor);
+  }
+
+  if (action.kind === 'waterskin_drink') {
+    return validateWaterskinDrinkAction(state, action, actor);
+  }
+
+  if (action.kind === 'leaching_basket_place') {
+    return validateLeachingBasketPlaceAction(state, action, actor);
+  }
+
+  if (action.kind === 'leaching_basket_retrieve') {
+    return validateLeachingBasketRetrieveAction(state, action, actor);
+  }
+
   if (action.kind === 'item_pickup') {
     return validateItemPickupAction(state, action, actor);
   }
@@ -3174,6 +4900,14 @@ export function validateAction(state, rawAction, options = {}) {
     return validateCampDryingRackRemoveAction(state, action, actor);
   }
 
+  if (action.kind === 'meal_plan_set') {
+    return validateMealPlanSetAction(state, action, actor);
+  }
+
+  if (action.kind === 'meal_plan_commit') {
+    return validateMealPlanCommitAction(state, action, actor);
+  }
+
   if (action.kind === 'camp_station_build') {
     return validateCampStationBuildAction(state, action, actor);
   }
@@ -3182,8 +4916,44 @@ export function validateAction(state, rawAction, options = {}) {
     return validateToolCraftAction(state, action, actor);
   }
 
+  if (action.kind === 'equip_item') {
+    return validateEquipItemAction(state, action, actor);
+  }
+
+  if (action.kind === 'unequip_item') {
+    return validateUnequipItemAction(state, action, actor);
+  }
+
   if (action.kind === 'partner_task_set') {
     return validatePartnerTaskSetAction(state, action);
+  }
+
+  if (action.kind === 'debrief_enter') {
+    return validateDebriefEnterAction(state, action, actor);
+  }
+
+  if (action.kind === 'debrief_exit') {
+    return validateDebriefExitAction(state, action, actor);
+  }
+
+  if (action.kind === 'partner_medicine_administer') {
+    return validatePartnerMedicineAdministerAction(state, action, actor);
+  }
+
+  if (action.kind === 'partner_vision_request') {
+    return validatePartnerVisionRequestAction(state, action, actor);
+  }
+
+  if (action.kind === 'partner_vision_confirm') {
+    return validatePartnerVisionConfirmAction(state, action, actor);
+  }
+
+  if (action.kind === 'partner_vision_choose') {
+    return validatePartnerVisionChooseAction(state, action, actor);
+  }
+
+  if (action.kind === 'nature_sight_overlay_set') {
+    return validateNatureSightOverlaySetAction(state, action, actor);
   }
 
   return {
@@ -3280,11 +5050,29 @@ export function defaultActors(width, height) {
       tickBudgetBase: 200,
       tickBudgetCurrent: 200,
       overdraftTicks: 0,
+      visionNextDayTickPenalty: 0,
+      natureSightDaysRemaining: 0,
+      natureSightPendingDays: 0,
+      natureSightOverlayChoice: null,
+      natureSightOverlayChosenDay: null,
+      natureSightPlantSpeciesId: null,
+      natureSightAnimalSpeciesId: null,
+      natureSightFishSpeciesId: null,
+      visionRewardCounts: {
+        plant: 0,
+        tech: 0,
+        sight: 0,
+      },
       inventory: {
         gridWidth: 6,
         gridHeight: 4,
         maxCarryWeightKg: 15,
         stacks: [],
+        equipment: {
+          gloves: null,
+          coat: null,
+          head: null,
+        },
       },
     },
     partner: {
@@ -3298,11 +5086,29 @@ export function defaultActors(width, height) {
       tickBudgetBase: 200,
       tickBudgetCurrent: 200,
       overdraftTicks: 0,
+      visionNextDayTickPenalty: 0,
+      natureSightDaysRemaining: 0,
+      natureSightPendingDays: 0,
+      natureSightOverlayChoice: null,
+      natureSightOverlayChosenDay: null,
+      natureSightPlantSpeciesId: null,
+      natureSightAnimalSpeciesId: null,
+      natureSightFishSpeciesId: null,
+      visionRewardCounts: {
+        plant: 0,
+        tech: 0,
+        sight: 0,
+      },
       inventory: {
         gridWidth: 6,
         gridHeight: 4,
         maxCarryWeightKg: 15,
         stacks: [],
+        equipment: {
+          gloves: null,
+          coat: null,
+          head: null,
+        },
       },
       taskQueue: {
         active: null,
@@ -3317,12 +5123,46 @@ export function cloneActors(actors) {
   for (const [actorId, actor] of Object.entries(actors || {})) {
     cloned[actorId] = {
       ...actor,
+      natureSightOverlayChosenDay: Number.isInteger(actor?.natureSightOverlayChosenDay)
+        ? actor.natureSightOverlayChosenDay
+        : null,
+      natureSightPlantSpeciesId: typeof actor?.natureSightPlantSpeciesId === 'string'
+        ? actor.natureSightPlantSpeciesId
+        : null,
+      natureSightAnimalSpeciesId: typeof actor?.natureSightAnimalSpeciesId === 'string'
+        ? actor.natureSightAnimalSpeciesId
+        : null,
+      natureSightFishSpeciesId: typeof actor?.natureSightFishSpeciesId === 'string'
+        ? actor.natureSightFishSpeciesId
+        : null,
+      visionRewardCounts: actor?.visionRewardCounts && typeof actor.visionRewardCounts === 'object'
+        ? {
+          plant: Math.max(0, Math.floor(Number(actor.visionRewardCounts.plant) || 0)),
+          tech: Math.max(0, Math.floor(Number(actor.visionRewardCounts.tech) || 0)),
+          sight: Math.max(0, Math.floor(Number(actor.visionRewardCounts.sight) || 0)),
+        }
+        : {
+          plant: 0,
+          tech: 0,
+          sight: 0,
+        },
       inventory: actor?.inventory
         ? {
           ...actor.inventory,
           stacks: Array.isArray(actor.inventory.stacks)
             ? actor.inventory.stacks.map((entry) => ({ ...entry }))
             : [],
+          equipment: {
+            gloves: actor.inventory?.equipment?.gloves
+              ? { ...actor.inventory.equipment.gloves }
+              : null,
+            coat: actor.inventory?.equipment?.coat
+              ? { ...actor.inventory.equipment.coat }
+              : null,
+            head: actor.inventory?.equipment?.head
+              ? { ...actor.inventory.equipment.head }
+              : null,
+          },
         }
         : null,
       taskQueue: actor?.taskQueue

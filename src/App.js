@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import {
+  advanceTick,
   advanceDay,
   canGenerateAnimalZones,
   canGenerateBeehives,
@@ -16,10 +17,12 @@ import {
   generateSquirrelCaches,
   getAnimalDensityAtTile,
   getFishDensityAtTile,
+  getActionTickCost,
   getGroundFungusById,
   getMetrics,
   getTileAt,
   serializeGameState,
+  validateAction,
 } from './game/simCore.mjs';
 import {
   getDeadLogSpriteFrame,
@@ -28,7 +31,13 @@ import {
   getTerrainSpriteFrame,
 } from './game/plantSpriteCatalog.mjs';
 import { ANIMAL_CATALOG } from './game/animalCatalog.mjs';
-import { PLANT_CATALOG, PLANT_BY_ID } from './game/plantCatalog.mjs';
+import { ITEM_BY_ID } from './game/itemCatalog.mjs';
+import { getSeason, PLANT_CATALOG, PLANT_BY_ID } from './game/plantCatalog.mjs';
+import GameModeChrome from './ui/GameModeChrome.jsx';
+import {
+  computeOccupantAnchorYFromTileTop,
+  computeTileTopCenterYFromGroundAnchor,
+} from './ui/isoProjection.js';
 
 const OBSERVER_VIEWPORT_WIDTH = 15;
 const OBSERVER_VIEWPORT_HEIGHT = 10;
@@ -49,10 +58,11 @@ const ISO_HALF_CUBE_FRAME_HEIGHT = 52;
 const ISO_FULL_CUBE_FRAME_HEIGHT = 64;
 const ISO_WATER_VERTICAL_OFFSET_PX = (ISO_FULL_CUBE_FRAME_HEIGHT - ISO_HALF_CUBE_FRAME_HEIGHT) * ISO_BASE_SCALE;
 const ISO_ROCK_STACK_OFFSET_PX = ISO_TILE_HALF_HEIGHT_PX;
-const ISO_OCCUPANT_ANCHOR_OFFSET_PX = ISO_TILE_HALF_HEIGHT_PX;
-const ISO_PLANT_CENTER_BUMP_PX = ISO_TILE_HALF_HEIGHT_PX;
+const ISO_OCCUPANT_VISUAL_NUDGE_PX = -4;
 const ISO_ELEVATION_LEVELS = 6;
 const ISO_MAX_ELEVATION_OFFSET_PX = ISO_ELEVATION_LEVELS * ISO_TILE_HALF_HEIGHT_PX;
+const TICKS_PER_DAY = 400;
+const NIGHT_TICK_THRESHOLD = Math.floor(TICKS_PER_DAY / 2);
 
 const FISH_SPECIES = ANIMAL_CATALOG.filter((animal) => animal.animalClass === 'fish');
 const LAND_ANIMAL_SPECIES = ANIMAL_CATALOG.filter((animal) => animal.animalClass !== 'fish');
@@ -91,6 +101,216 @@ const OVERLAY_OPTIONS = [
 ];
 
 const DRAINAGE_ORDER = ['poor', 'moderate', 'well', 'excellent'];
+const PARTNER_VITAL_KEYS = [
+  { key: 'hunger', label: 'Hunger' },
+  { key: 'thirst', label: 'Thirst' },
+  { key: 'health', label: 'Health' },
+];
+const NATURE_SIGHT_OVERLAY_OPTIONS = [
+  'calorie_heatmap',
+  'animal_density',
+  'mushroom_zones',
+  'plant_compatibility',
+  'fishing_hotspots',
+];
+const CAMP_STATION_OPTIONS = [
+  'raised_sleeping_platform',
+  'windbreak_reflector_wall',
+  'drying_rack',
+  'workbench',
+  'thread_spinner',
+];
+const EQUIPMENT_SLOTS = ['gloves', 'coat', 'head'];
+
+function tileKey(x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    return null;
+  }
+  return `${x},${y}`;
+}
+
+function inferTileContextActions(tile) {
+  if (!tile) {
+    return ['inspect', 'move'];
+  }
+
+  const actions = ['inspect', 'move', 'item_drop', 'item_pickup'];
+  if (tile.plantIds?.length > 0 || tile.rockType || tile.squirrelCache) {
+    actions.push('harvest');
+  }
+  if (tile.plantIds?.length > 0) {
+    actions.push('fell_tree');
+  }
+  if (tile.waterType) {
+    actions.push('waterskin_fill', 'fish_rod_cast', 'trap_place_fish_weir');
+  } else {
+    actions.push(
+      'dig',
+      'hoe',
+      'trap_place_snare',
+      'trap_place_deadfall',
+      'auto_rod_place',
+      'tap_insert_spout',
+      'tap_remove_spout',
+      'tap_place_vessel',
+      'tap_retrieve_vessel',
+      'leaching_basket_place',
+      'leaching_basket_retrieve',
+    );
+  }
+  return actions;
+}
+
+function buildDefaultPayload(kind, context) {
+  const selectedX = Number.isInteger(context?.selectedX) ? context.selectedX : null;
+  const selectedY = Number.isInteger(context?.selectedY) ? context.selectedY : null;
+  const tile = context?.tile || null;
+  const player = context?.player || {};
+  const px = Number.isInteger(player?.x) ? player.x : selectedX;
+  const py = Number.isInteger(player?.y) ? player.y : selectedY;
+  const dx = Number.isInteger(selectedX) && Number.isInteger(px)
+    ? Math.max(-1, Math.min(1, selectedX - px))
+    : 0;
+  const dy = Number.isInteger(selectedY) && Number.isInteger(py)
+    ? Math.max(-1, Math.min(1, selectedY - py))
+    : 0;
+  const selectedInventoryItemId = context?.selectedInventoryItemId || '';
+  const selectedStockpileItemId = context?.selectedStockpileItemId || '';
+  const selectedWorldItemId = context?.selectedWorldItemId || '';
+  const selectedConditionId = context?.selectedConditionInstanceId || '';
+  const selectedVisionItemId = context?.selectedVisionItemId || '';
+  const selectedVisionCategory = context?.selectedVisionCategory || '';
+  const selectedOverlay = context?.selectedNatureOverlay || NATURE_SIGHT_OVERLAY_OPTIONS[0];
+
+  const sharedTilePayload = Number.isInteger(selectedX) && Number.isInteger(selectedY)
+    ? { x: selectedX, y: selectedY }
+    : {};
+
+  switch (kind) {
+    case 'move':
+      return { dx, dy };
+    case 'inspect':
+    case 'dig':
+    case 'hoe':
+    case 'trap_place_snare':
+    case 'trap_place_deadfall':
+    case 'trap_place_fish_weir':
+    case 'auto_rod_place':
+    case 'trap_check':
+    case 'tap_insert_spout':
+    case 'tap_remove_spout':
+    case 'tap_place_vessel':
+    case 'tap_retrieve_vessel':
+    case 'leaching_basket_retrieve':
+      return sharedTilePayload;
+    case 'harvest':
+      if (tile?.plantIds?.length > 0) {
+        return {
+          plantId: tile.plantIds[0],
+          partName: 'fruit',
+          subStageId: 'ripe',
+          actions: 1,
+          ...sharedTilePayload,
+        };
+      }
+      return sharedTilePayload;
+    case 'fell_tree':
+      return tile?.plantIds?.length > 0
+        ? { plantId: tile.plantIds[0], ...sharedTilePayload }
+        : sharedTilePayload;
+    case 'fish_rod_cast':
+      return {};
+    case 'waterskin_fill':
+    case 'waterskin_drink':
+      return {};
+    case 'leaching_basket_place':
+      return {
+        ...sharedTilePayload,
+        itemId: selectedInventoryItemId,
+        quantity: 1,
+      };
+    case 'item_pickup':
+      return {
+        ...sharedTilePayload,
+        itemId: selectedWorldItemId,
+        quantity: 1,
+      };
+    case 'item_drop':
+    case 'eat':
+    case 'camp_stockpile_add':
+    case 'camp_drying_rack_add_inventory':
+      return {
+        itemId: selectedInventoryItemId,
+        quantity: 1,
+        ...sharedTilePayload,
+      };
+    case 'process_item':
+      return {
+        itemId: selectedInventoryItemId,
+        quantity: 1,
+        processId: '',
+      };
+    case 'camp_stockpile_remove':
+    case 'camp_drying_rack_add':
+      return {
+        itemId: selectedStockpileItemId,
+        quantity: 1,
+      };
+    case 'camp_drying_rack_remove':
+      return {
+        slotIndex: 0,
+        quantity: 1,
+      };
+    case 'meal_plan_set':
+      return {
+        ingredients: selectedStockpileItemId ? [{ itemId: selectedStockpileItemId, quantity: 1 }] : [],
+      };
+    case 'meal_plan_commit':
+      return {};
+    case 'camp_station_build':
+      return {
+        stationId: CAMP_STATION_OPTIONS[0],
+      };
+    case 'tool_craft':
+      return {
+        outputItemId: '',
+        outputQuantity: 1,
+        materialPlan: [],
+      };
+    case 'equip_item':
+      return {
+        itemId: selectedInventoryItemId,
+      };
+    case 'unequip_item':
+      return {
+        equipmentSlot: 'gloves',
+      };
+    case 'partner_task_set':
+      return {
+        task: {
+          taskId: `ui-task-${Date.now()}`,
+          kind: 'spin_cordage',
+          ticksRequired: 2,
+          outputs: [{ itemId: 'cordage', quantity: 1 }],
+        },
+        queuePolicy: 'append',
+      };
+    case 'debrief_enter':
+    case 'debrief_exit':
+    case 'partner_vision_request':
+      return {};
+    case 'partner_medicine_administer':
+      return selectedConditionId ? { conditionInstanceId: selectedConditionId } : {};
+    case 'partner_vision_confirm':
+      return selectedVisionItemId ? { itemId: selectedVisionItemId } : {};
+    case 'partner_vision_choose':
+      return selectedVisionCategory ? { category: selectedVisionCategory } : {};
+    case 'nature_sight_overlay_set':
+      return { overlay: selectedOverlay };
+    default:
+      return {};
+  }
+}
 
 function drainageToIndex(drainage) {
   const idx = DRAINAGE_ORDER.indexOf(drainage);
@@ -98,6 +318,81 @@ function drainageToIndex(drainage) {
     return 0.5;
   }
   return idx / (DRAINAGE_ORDER.length - 1);
+}
+
+function normalizeVitalValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function vitalSeverityClass(value) {
+  if (value <= 0.15) {
+    return 'critical';
+  }
+  if (value <= 0.35) {
+    return 'low';
+  }
+  if (value <= 0.6) {
+    return 'warning';
+  }
+  return 'good';
+}
+
+function buildTileEntityTokens(tile, context = {}) {
+  const tokens = [];
+  const {
+    isPlayerTile = false,
+    isCampTile = false,
+    worldItemCount = 0,
+    camp = null,
+  } = context;
+
+  if (isPlayerTile) {
+    tokens.push('[player]');
+  }
+  if (isCampTile) {
+    tokens.push('[camp]');
+    if (camp?.dryingRackUnlocked) {
+      tokens.push('[drying rack]');
+    }
+    if (Array.isArray(camp?.stationsUnlocked) && camp.stationsUnlocked.length > 0) {
+      tokens.push('[camp station]');
+    }
+  }
+
+  if (tile?.simpleSnare?.active) {
+    tokens.push('[snare]');
+  }
+  if (tile?.deadfallTrap?.active) {
+    tokens.push('[deadfall]');
+  }
+  if (tile?.fishTrap?.active) {
+    tokens.push('[fish trap]');
+  }
+  if (tile?.autoRod?.active) {
+    tokens.push('[auto rod]');
+  }
+  if (tile?.sapTap?.active) {
+    tokens.push('[sap tap]');
+  }
+  if (tile?.leachingBasket?.active) {
+    tokens.push('[leaching basket]');
+  }
+  if (worldItemCount > 0) {
+    tokens.push('[items]');
+  }
+
+  return tokens;
+}
+
+function titleCase(value) {
+  if (typeof value !== 'string' || !value) {
+    return '';
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function tileSupportsSpeciesStrict(tile, species) {
@@ -453,11 +748,12 @@ function spriteStyle(sprite, tilePx, scaleMode = 'fit') {
   };
 }
 
-function anchoredSpriteStyle(sprite, scale, anchorX, anchorY, extra = null) {
+function anchoredSpriteStyle(sprite, scale, anchorX, anchorY, extra = null, options = null) {
   const sourceWidth = (sprite.frame.sourceW ?? sprite.frame.w) * scale;
   const sourceHeight = (sprite.frame.sourceH ?? sprite.frame.h) * scale;
   const offsetX = (sprite.frame.offsetX ?? 0) * scale;
   const offsetY = (sprite.frame.offsetY ?? 0) * scale;
+  const anchorYOffsetPx = Number(options?.anchorYOffsetPx) || 0;
   const footAnchorX = (sprite.frame.anchorX ?? ((sprite.frame.sourceW ?? sprite.frame.w) / 2)) * scale;
   const footAnchorY = (sprite.frame.anchorY ?? (sprite.frame.sourceH ?? sprite.frame.h)) * scale;
   const x = sprite.frame.x * scale;
@@ -468,7 +764,7 @@ function anchoredSpriteStyle(sprite, scale, anchorX, anchorY, extra = null) {
   return {
     position: 'absolute',
     left: `${Math.round(anchorX - footAnchorX)}px`,
-    top: `${Math.round(anchorY - footAnchorY)}px`,
+    top: `${Math.round((anchorY - footAnchorY) + anchorYOffsetPx)}px`,
     width: `${Math.round(sourceWidth)}px`,
     height: `${Math.round(sourceHeight)}px`,
     backgroundImage: `url(${publicBase}${sprite.imagePath})`,
@@ -522,6 +818,7 @@ function App() {
   const [seedInput, setSeedInput] = useState('10000');
   const [mapWidthInput, setMapWidthInput] = useState('80');
   const [mapHeightInput, setMapHeightInput] = useState('80');
+  const [preSimDaysInput, setPreSimDaysInput] = useState('0');
   const [gameState, setGameState] = useState(() => applyAutoUnlockGenerations(createInitialGameState(10000, { width: 80, height: 80 })));
   const [cameraX, setCameraX] = useState(32);
   const [cameraY, setCameraY] = useState(35);
@@ -539,6 +836,25 @@ function App() {
   const fileInputRef = useRef(null);
   const dragStartRef = useRef(null);
   const dragCameraStartRef = useRef(null);
+  const actionLogSeenCountRef = useRef(0);
+  const [selectedGameTile, setSelectedGameTile] = useState(null);
+  const [tileContextMenu, setTileContextMenu] = useState(null);
+  const [tilePanelMode, setTilePanelMode] = useState('context');
+  const [showAnchorDebug, setShowAnchorDebug] = useState(false);
+  const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(true);
+  const [isPauseMenuOpen, setIsPauseMenuOpen] = useState(false);
+  const [debriefTab, setDebriefTab] = useState('summary');
+  const [hasVisitedMealTab, setHasVisitedMealTab] = useState(false);
+  const [dismissedWarningIds, setDismissedWarningIds] = useState([]);
+  const [actionComposerStatus, setActionComposerStatus] = useState('');
+  const [playActionFeed, setPlayActionFeed] = useState([]);
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
+  const [selectedStockpileItemId, setSelectedStockpileItemId] = useState('');
+  const [selectedWorldItemId, setSelectedWorldItemId] = useState('');
+  const [selectedConditionInstanceId, setSelectedConditionInstanceId] = useState('');
+  const [selectedVisionItemId, setSelectedVisionItemId] = useState('');
+  const [selectedVisionCategory, setSelectedVisionCategory] = useState('');
+  const [selectedNatureOverlay, setSelectedNatureOverlay] = useState(NATURE_SIGHT_OVERLAY_OPTIONS[0]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -577,6 +893,293 @@ function App() {
   }, [gameState.tiles, selectedSpecies]);
 
   const rendererLayout = RENDERER_LAYOUT[rendererMode] || RENDERER_LAYOUT.observer;
+  const familyVitalGroups = useMemo(() => {
+    const actorOrder = ['player', 'partner', 'child'];
+    return actorOrder
+      .map((actorId) => {
+        const actor = gameState?.actors?.[actorId];
+        if (!actor || typeof actor !== 'object') {
+          return null;
+        }
+        return {
+          actorId,
+          label: actorId === 'player' ? 'Player' : actorId === 'partner' ? 'Partner' : 'Child',
+          rows: PARTNER_VITAL_KEYS.map(({ key, label }) => {
+            const value = normalizeVitalValue(actor[key]);
+            const severity = vitalSeverityClass(value);
+            const percent = Math.round(value * 100);
+            return {
+              key,
+              label,
+              severity,
+              percent,
+            };
+          }),
+        };
+      })
+      .filter(Boolean);
+  }, [gameState?.actors]);
+  const debriefState = gameState?.camp?.debrief && typeof gameState.camp.debrief === 'object'
+    ? gameState.camp.debrief
+    : { active: false, medicineRequests: [], medicineNotifications: [] };
+  const medicineRequests = useMemo(
+    () => (Array.isArray(debriefState.medicineRequests) ? debriefState.medicineRequests : []),
+    [debriefState.medicineRequests],
+  );
+  const medicineNotifications = useMemo(
+    () => (Array.isArray(debriefState.medicineNotifications) ? debriefState.medicineNotifications : []),
+    [debriefState.medicineNotifications],
+  );
+  const visionRequest = debriefState?.visionRequest && typeof debriefState.visionRequest === 'object'
+    ? debriefState.visionRequest
+    : null;
+  const visionNotifications = useMemo(
+    () => (Array.isArray(debriefState?.visionNotifications) ? debriefState.visionNotifications : []),
+    [debriefState?.visionNotifications],
+  );
+  const visionUsesThisSeason = Number.isInteger(debriefState?.visionUsesThisSeason) ? debriefState.visionUsesThisSeason : 0;
+  const isDebriefActive = debriefState.active === true;
+  const playerActor = gameState?.actors?.player || null;
+  const playerAtCamp = playerActor
+    && Number(playerActor.x) === Number(gameState?.camp?.anchorX)
+    && Number(playerActor.y) === Number(gameState?.camp?.anchorY);
+  const playerNatureSightDays = Number.isInteger(playerActor?.natureSightDaysRemaining)
+    ? playerActor.natureSightDaysRemaining
+    : Math.max(0, Math.floor(Number(playerActor?.natureSightDaysRemaining) || 0));
+  const playerEquipment = playerActor?.inventory?.equipment && typeof playerActor.inventory.equipment === 'object'
+    ? playerActor.inventory.equipment
+    : { gloves: null, coat: null, head: null };
+  const playerInventoryStacks = useMemo(
+    () => (Array.isArray(playerActor?.inventory?.stacks) ? playerActor.inventory.stacks : []),
+    [playerActor?.inventory?.stacks],
+  );
+  const playerInventoryEntries = useMemo(
+    () => playerInventoryStacks.map((entry, idx) => {
+      const item = ITEM_BY_ID[entry.itemId] || null;
+      const quantity = Math.max(0, Number(entry.quantity) || 0);
+      const unitWeightKg = Number.isFinite(Number(entry?.unitWeightKg))
+        ? Number(entry.unitWeightKg)
+        : (Number(item?.unit_weight_g || 0) / 1000);
+      const totalWeightKg = unitWeightKg * quantity;
+      return {
+        key: `${entry.itemId}-${idx}`,
+        itemId: entry.itemId,
+        name: item?.name || entry.itemId,
+        quantity,
+        unitWeightKg,
+        totalWeightKg,
+        decayDays: Number.isFinite(Number(item?.decay_days)) ? Number(item.decay_days) : null,
+      };
+    }),
+    [playerInventoryStacks],
+  );
+  const playerCarryWeightKg = useMemo(
+    () => playerInventoryEntries.reduce((sum, entry) => sum + entry.totalWeightKg, 0),
+    [playerInventoryEntries],
+  );
+  const playerCarryCapacityKg = Number.isFinite(Number(playerActor?.inventory?.maxCarryWeightKg))
+    ? Number(playerActor.inventory.maxCarryWeightKg)
+    : 0;
+  const campStockpileStacks = useMemo(
+    () => (Array.isArray(gameState?.camp?.stockpile?.stacks) ? gameState.camp.stockpile.stacks : []),
+    [gameState?.camp?.stockpile?.stacks],
+  );
+  const campStockpileEntries = useMemo(
+    () => campStockpileStacks.map((entry, idx) => {
+      const item = ITEM_BY_ID[entry.itemId] || null;
+      return {
+        key: `${entry.itemId}-${idx}`,
+        itemId: entry.itemId,
+        name: item?.name || entry.itemId,
+        quantity: Math.max(0, Number(entry.quantity) || 0),
+        decayDaysRemaining: Number.isFinite(Number(entry?.decayDaysRemaining))
+          ? Number(entry.decayDaysRemaining)
+          : null,
+        freshness: Number.isFinite(Number(entry?.freshness))
+          ? Number(entry.freshness)
+          : null,
+      };
+    }),
+    [campStockpileStacks],
+  );
+  const debriefSpoilageEntries = useMemo(
+    () => campStockpileEntries
+      .filter((entry) => Number.isFinite(entry.decayDaysRemaining) && entry.decayDaysRemaining <= 1.5)
+      .sort((a, b) => (a.decayDaysRemaining || 0) - (b.decayDaysRemaining || 0)),
+    [campStockpileEntries],
+  );
+  const partnerTaskQueue = gameState?.camp?.partnerTaskQueue && typeof gameState.camp.partnerTaskQueue === 'object'
+    ? gameState.camp.partnerTaskQueue
+    : { active: null, queued: [] };
+  const queueActiveTask = partnerTaskQueue?.active && typeof partnerTaskQueue.active === 'object'
+    ? partnerTaskQueue.active
+    : null;
+  const queuePendingTasks = Array.isArray(partnerTaskQueue?.queued)
+    ? partnerTaskQueue.queued
+    : [];
+  const partnerTaskHistory = Array.isArray(gameState?.camp?.partnerTaskHistory)
+    ? gameState.camp.partnerTaskHistory
+    : [];
+  const mealPlan = gameState?.camp?.mealPlan && typeof gameState.camp.mealPlan === 'object'
+    ? gameState.camp.mealPlan
+    : { ingredients: [], preview: null };
+  const mealPlanIngredients = Array.isArray(mealPlan.ingredients) ? mealPlan.ingredients : [];
+  const mealPlanPreview = mealPlan.preview && typeof mealPlan.preview === 'object' ? mealPlan.preview : null;
+  const lastMealResult = gameState?.camp?.lastMealResult && typeof gameState.camp.lastMealResult === 'object'
+    ? gameState.camp.lastMealResult
+    : null;
+  const chosenVisionRewards = Array.isArray(debriefState?.chosenVisionRewards)
+    ? debriefState.chosenVisionRewards
+    : [];
+  const campDryingRackSlots = useMemo(
+    () => (Array.isArray(gameState?.camp?.dryingRack?.slots) ? gameState.camp.dryingRack.slots : []),
+    [gameState?.camp?.dryingRack?.slots],
+  );
+  const visionSelectionOptions = useMemo(
+    () => (Array.isArray(debriefState?.visionSelectionOptions) ? debriefState.visionSelectionOptions : []),
+    [debriefState?.visionSelectionOptions],
+  );
+  const pendingVisionChoices = useMemo(
+    () => (Array.isArray(debriefState?.pendingVisionChoices) ? debriefState.pendingVisionChoices : []),
+    [debriefState?.pendingVisionChoices],
+  );
+  const selectedDebriefTab = isDebriefActive ? debriefTab : null;
+  const selectedTileX = Number.isInteger(selectedGameTile?.x) ? selectedGameTile.x : null;
+  const selectedTileY = Number.isInteger(selectedGameTile?.y) ? selectedGameTile.y : null;
+  const selectedTileEntity = Number.isInteger(selectedTileX) && Number.isInteger(selectedTileY)
+    ? getTileAt(gameState, selectedTileX, selectedTileY)
+    : null;
+  const selectedTileWorldItems = useMemo(() => {
+    const key = tileKey(selectedTileX, selectedTileY);
+    return key && Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
+  }, [gameState, selectedTileX, selectedTileY]);
+  const selectedTileWorldItemEntries = useMemo(
+    () => selectedTileWorldItems.map((entry, idx) => {
+      const item = ITEM_BY_ID[entry.itemId] || null;
+      return {
+        key: `${entry.itemId}-${idx}`,
+        itemId: entry.itemId,
+        name: item?.name || entry.itemId,
+        quantity: Math.max(0, Number(entry.quantity) || 0),
+      };
+    }),
+    [selectedTileWorldItems],
+  );
+  const contextQuickActionKinds = useMemo(
+    () => inferTileContextActions(selectedTileEntity),
+    [selectedTileEntity],
+  );
+  const contextActionEntries = useMemo(() => contextQuickActionKinds.map((kind) => {
+    const payload = buildDefaultPayload(kind, {
+      selectedX: selectedTileX,
+      selectedY: selectedTileY,
+      tile: selectedTileEntity,
+      player: playerActor,
+      selectedInventoryItemId,
+      selectedStockpileItemId,
+      selectedWorldItemId,
+      selectedConditionInstanceId,
+      selectedVisionItemId,
+      selectedVisionCategory,
+      selectedNatureOverlay,
+    });
+    const validation = validateAction(gameState, {
+      actorId: 'player',
+      kind,
+      payload,
+    });
+    return {
+      kind,
+      tickCost: getActionTickCost(kind, payload),
+      enabled: validation.ok === true,
+      reason: validation.ok ? '' : (validation.message || validation.code || 'blocked'),
+    };
+  }), [
+    contextQuickActionKinds,
+    gameState,
+    playerActor,
+    selectedConditionInstanceId,
+    selectedInventoryItemId,
+    selectedNatureOverlay,
+    selectedStockpileItemId,
+    selectedTileEntity,
+    selectedTileX,
+    selectedTileY,
+    selectedVisionCategory,
+    selectedVisionItemId,
+    selectedWorldItemId,
+  ]);
+  const availableContextActionEntries = useMemo(
+    () => contextActionEntries.filter((entry) => entry.enabled && entry.kind !== 'move'),
+    [contextActionEntries],
+  );
+  const selectedInspectData = useMemo(() => {
+    if (!selectedTileEntity) {
+      return null;
+    }
+    const firstPlantId = selectedTileEntity.plantIds?.[0];
+    const firstPlant = firstPlantId ? gameState?.plants?.[firstPlantId] : null;
+    return {
+      terrain: selectedTileEntity.waterType ? `water (${selectedTileEntity.waterType})` : 'land',
+      plantLabel: firstPlant ? `${firstPlant.speciesId} (${firstPlant.stageName || 'unknown stage'})` : 'none',
+      worldItemCount: selectedTileWorldItems.length,
+      hasTrap: Boolean(
+        selectedTileEntity.simpleSnare?.active
+        || selectedTileEntity.deadfallTrap?.active
+        || selectedTileEntity.fishTrap?.active
+        || selectedTileEntity.autoRod?.active,
+      ),
+      hasCampFixture: Boolean(
+        selectedTileEntity.sapTap?.active
+        || selectedTileEntity.leachingBasket?.active
+        || selectedTileEntity.beehive
+        || selectedTileEntity.squirrelCache,
+      ),
+    };
+  }, [gameState?.plants, selectedTileEntity, selectedTileWorldItems]);
+  const dayTick = Number(gameState?.dayTick) || 0;
+  const dayProgressPercent = Math.max(0, Math.min(100, (dayTick / TICKS_PER_DAY) * 100));
+  const nightThresholdPercent = Math.max(0, Math.min(100, (NIGHT_TICK_THRESHOLD / TICKS_PER_DAY) * 100));
+  const seasonName = titleCase(getSeason(Number(gameState?.dayOfYear) || 1));
+  const epochNumber = 1;
+  const calendarLabel = `${seasonName} · Day ${Number(gameState?.dayOfYear) || 1} · Epoch ${epochNumber}`;
+  const playerTickBudgetCurrent = Number(playerActor?.tickBudgetCurrent) || 0;
+  const playerTickBudgetBase = Number(playerActor?.tickBudgetBase) || 0;
+  const playerOverdraftTicks = Number(playerActor?.overdraftTicks) || 0;
+  const hasTickOverdraft = playerTickBudgetCurrent < 0 || playerOverdraftTicks > 0;
+  const warningEntries = useMemo(() => {
+    const entries = [];
+    if (hasTickOverdraft) {
+      entries.push({
+        id: 'tick-overdraft',
+        severity: 'critical',
+        title: 'Tick Overdraft',
+        message: `You are over budget by ${Math.max(playerOverdraftTicks, Math.abs(Math.min(0, playerTickBudgetCurrent)))} ticks.`,
+      });
+    }
+    if (!isDebriefActive && dayTick >= NIGHT_TICK_THRESHOLD) {
+      entries.push({
+        id: 'nightfall',
+        severity: 'warning',
+        title: 'Night Is Falling',
+        message: 'End Day at camp to enter debrief before conditions worsen.',
+      });
+    }
+    if (!isDebriefActive && dayTick >= NIGHT_TICK_THRESHOLD && !playerAtCamp) {
+      entries.push({
+        id: 'return-camp',
+        severity: 'warning',
+        title: 'Return To Camp',
+        message: 'You are away from camp after night threshold.',
+      });
+    }
+    return entries;
+  }, [dayTick, hasTickOverdraft, isDebriefActive, playerAtCamp, playerOverdraftTicks, playerTickBudgetCurrent]);
+  const visibleWarningEntries = useMemo(
+    () => warningEntries.filter((entry) => !dismissedWarningIds.includes(entry.id)),
+    [dismissedWarningIds, warningEntries],
+  );
+  const canBeginDay = hasVisitedMealTab;
   const observerTileStepPx = RENDERER_LAYOUT.observer.tilePx + RENDERER_LAYOUT.observer.tileGapPx;
   const gameViewportWidth = Math.max(4, Math.floor((windowSize.width - 24) / ISO_TILE_WIDTH_PX) + 1);
   const gameViewportHeight = Math.max(4, Math.floor((windowSize.height - 24) / ISO_TILE_HEIGHT_PX) + 1);
@@ -586,6 +1189,111 @@ function App() {
   const viewportHeight = rendererMode === 'game'
     ? Math.min(gameState.height, gameViewportHeight)
     : OBSERVER_VIEWPORT_HEIGHT;
+  const cameraAnchorTile = useMemo(
+    () => getTileAt(gameState, cameraX, cameraY),
+    [cameraX, cameraY, gameState],
+  );
+  const cameraAnchorElevationPx = elevationToIsoOffsetPx(cameraAnchorTile?.elevation);
+
+  useEffect(() => {
+    if (!selectedInventoryItemId && playerInventoryStacks.length > 0) {
+      setSelectedInventoryItemId(playerInventoryStacks[0].itemId || '');
+    } else if (selectedInventoryItemId && !playerInventoryStacks.some((entry) => entry.itemId === selectedInventoryItemId)) {
+      setSelectedInventoryItemId(playerInventoryStacks[0]?.itemId || '');
+    }
+  }, [playerInventoryStacks, selectedInventoryItemId]);
+
+  useEffect(() => {
+    if (!selectedStockpileItemId && campStockpileStacks.length > 0) {
+      setSelectedStockpileItemId(campStockpileStacks[0].itemId || '');
+    } else if (selectedStockpileItemId && !campStockpileStacks.some((entry) => entry.itemId === selectedStockpileItemId)) {
+      setSelectedStockpileItemId(campStockpileStacks[0]?.itemId || '');
+    }
+  }, [campStockpileStacks, selectedStockpileItemId]);
+
+  useEffect(() => {
+    if (!selectedWorldItemId && selectedTileWorldItems.length > 0) {
+      setSelectedWorldItemId(selectedTileWorldItems[0].itemId || '');
+    } else if (selectedWorldItemId && !selectedTileWorldItems.some((entry) => entry.itemId === selectedWorldItemId)) {
+      setSelectedWorldItemId(selectedTileWorldItems[0]?.itemId || '');
+    }
+  }, [selectedTileWorldItems, selectedWorldItemId]);
+
+  useEffect(() => {
+    if (!selectedConditionInstanceId && medicineRequests.length > 0) {
+      setSelectedConditionInstanceId(medicineRequests[0].conditionInstanceId || '');
+    } else if (
+      selectedConditionInstanceId
+      && !medicineRequests.some((entry) => entry.conditionInstanceId === selectedConditionInstanceId)
+    ) {
+      setSelectedConditionInstanceId(medicineRequests[0]?.conditionInstanceId || '');
+    }
+  }, [medicineRequests, selectedConditionInstanceId]);
+
+  useEffect(() => {
+    if (!selectedVisionItemId && visionSelectionOptions.length > 0) {
+      setSelectedVisionItemId(visionSelectionOptions[0].itemId || '');
+    } else if (selectedVisionItemId && !visionSelectionOptions.some((entry) => entry.itemId === selectedVisionItemId)) {
+      setSelectedVisionItemId(visionSelectionOptions[0]?.itemId || '');
+    }
+  }, [selectedVisionItemId, visionSelectionOptions]);
+
+  useEffect(() => {
+    if (!selectedVisionCategory && pendingVisionChoices.length > 0) {
+      setSelectedVisionCategory(pendingVisionChoices[0].category || '');
+    } else if (selectedVisionCategory && !pendingVisionChoices.some((entry) => entry.category === selectedVisionCategory)) {
+      setSelectedVisionCategory(pendingVisionChoices[0]?.category || '');
+    }
+  }, [pendingVisionChoices, selectedVisionCategory]);
+
+  useEffect(() => {
+    if (!selectedGameTile && playerActor && Number.isInteger(playerActor.x) && Number.isInteger(playerActor.y)) {
+      setSelectedGameTile({ x: playerActor.x, y: playerActor.y });
+    }
+  }, [playerActor, selectedGameTile]);
+
+  useEffect(() => {
+    if (rendererMode !== 'game') {
+      return;
+    }
+    if (!playerActor || !Number.isInteger(playerActor.x) || !Number.isInteger(playerActor.y)) {
+      return;
+    }
+    setCameraX(playerActor.x);
+    setCameraY(playerActor.y);
+  }, [playerActor, rendererMode]);
+
+  useEffect(() => {
+    if (!isDebriefActive) {
+      setHasVisitedMealTab(false);
+      setDebriefTab('summary');
+      return;
+    }
+    if (debriefTab === 'meal') {
+      setHasVisitedMealTab(true);
+    }
+  }, [debriefTab, isDebriefActive]);
+
+  useEffect(() => {
+    const activeIds = new Set(warningEntries.map((entry) => entry.id));
+    setDismissedWarningIds((prev) => prev.filter((id) => activeIds.has(id)));
+  }, [warningEntries]);
+
+  useEffect(() => {
+    const logs = Array.isArray(gameState.currentDayActionLog) ? gameState.currentDayActionLog : [];
+    const previousCount = actionLogSeenCountRef.current;
+    if (logs.length > previousCount) {
+      const newEntries = logs.slice(previousCount).map((entry) => ({
+        stamp: Date.now() + Math.random(),
+        kind: entry.kind || 'unknown',
+        status: entry.status || 'applied',
+        message: entry.message || '',
+        code: entry.code || '',
+      }));
+      setPlayActionFeed((prev) => [...newEntries, ...prev].slice(0, 16));
+    }
+    actionLogSeenCountRef.current = logs.length;
+  }, [gameState.currentDayActionLog]);
 
   const rows = useMemo(() => {
     const nextRows = [];
@@ -614,7 +1322,7 @@ function App() {
     }
 
     const originX = Math.round(windowSize.width / 2);
-    const originY = ISO_TILE_HALF_HEIGHT_PX;
+    const originY = Math.round(windowSize.height / 2) - ISO_TILE_HALF_HEIGHT_PX + cameraAnchorElevationPx;
     const xMin = -ISO_TILE_WIDTH_PX;
     const xMax = windowSize.width + ISO_TILE_WIDTH_PX;
     const yMin = -ISO_TILE_HEIGHT_PX;
@@ -665,25 +1373,192 @@ function App() {
     }
 
     return visible;
-  }, [cameraX, cameraY, gameState, rendererMode, windowSize.height, windowSize.width]);
+  }, [cameraAnchorElevationPx, cameraX, cameraY, gameState, rendererMode, windowSize.height, windowSize.width]);
 
-  const initializeFromSeed = () => {
+  const buildNewGameState = useCallback(() => {
     const parsed = Number.parseInt(seedInput, 10);
     const safeSeed = Number.isFinite(parsed) ? parsed : 10000;
     const parsedWidth = Number.parseInt(mapWidthInput, 10);
     const parsedHeight = Number.parseInt(mapHeightInput, 10);
     const safeWidth = Number.isFinite(parsedWidth) ? parsedWidth : 80;
     const safeHeight = Number.isFinite(parsedHeight) ? parsedHeight : 80;
+    const parsedPreSimDays = Number.parseInt(preSimDaysInput, 10);
+    const preSimDays = Number.isFinite(parsedPreSimDays) ? Math.max(0, parsedPreSimDays) : 0;
+    const base = createInitialGameState(safeSeed, { width: safeWidth, height: safeHeight });
+    return applyAutoUnlockGenerations(preSimDays > 0 ? advanceDay(base, preSimDays) : base);
+  }, [mapHeightInput, mapWidthInput, preSimDaysInput, seedInput]);
 
-    const nextState = applyAutoUnlockGenerations(createInitialGameState(safeSeed, { width: safeWidth, height: safeHeight }));
+  const initializeFromSeed = useCallback((enterPlayMode = false) => {
+    const nextState = buildNewGameState();
     setGameState(nextState);
-    setCameraX(Math.max(0, Math.floor((nextState.width - viewportWidth) / 2)));
-    setCameraY(Math.max(0, Math.floor((nextState.height - viewportHeight) / 2)));
-  };
+    const centeredX = Math.max(0, Math.floor((nextState.width - viewportWidth) / 2));
+    const centeredY = Math.max(0, Math.floor((nextState.height - viewportHeight) / 2));
+    setCameraX(centeredX);
+    setCameraY(centeredY);
+    setSelectedGameTile({ x: nextState.camp.anchorX, y: nextState.camp.anchorY });
+    setSnapshotStatus(`new game ready (seed ${nextState.seed}, pre-sim ${Math.max(0, Number.parseInt(preSimDaysInput, 10) || 0)} day(s))`);
+    if (enterPlayMode) {
+      setRendererMode('game');
+    }
+  }, [buildNewGameState, preSimDaysInput, viewportHeight, viewportWidth]);
 
   const runSteps = (steps) => {
     setGameState((prev) => applyAutoUnlockGenerations(advanceDay(prev, steps)));
   };
+
+  const submitPlayerAction = useCallback((kind, payload = {}) => {
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+      actions: [
+        {
+          actionId: `ui-${kind}-${Date.now()}`,
+          actorId: 'player',
+          kind,
+          payload,
+        },
+      ],
+    })));
+  }, []);
+
+  const appendLocalFeed = useCallback((entry) => {
+    setPlayActionFeed((prev) => [
+      { stamp: Date.now() + Math.random(), ...entry },
+      ...prev,
+    ].slice(0, 16));
+  }, []);
+
+  const runQuickAction = useCallback((kind) => {
+    const payload = buildDefaultPayload(kind, {
+      selectedX: selectedTileX,
+      selectedY: selectedTileY,
+      tile: selectedTileEntity,
+      player: playerActor,
+      selectedInventoryItemId,
+      selectedStockpileItemId,
+      selectedWorldItemId,
+      selectedConditionInstanceId,
+      selectedVisionItemId,
+      selectedVisionCategory,
+      selectedNatureOverlay,
+    });
+    const validation = validateAction(gameState, {
+      actorId: 'player',
+      kind,
+      payload,
+    });
+    if (!validation.ok) {
+      setActionComposerStatus(`Blocked: ${validation.message}`);
+      appendLocalFeed({
+        kind,
+        status: 'blocked',
+        message: validation.message,
+        code: validation.code,
+      });
+      return;
+    }
+    submitPlayerAction(kind, payload);
+    setActionComposerStatus(`Submitted: ${kind}`);
+    appendLocalFeed({
+      kind,
+      status: 'submitted',
+      message: 'queued',
+      code: null,
+    });
+  }, [
+    appendLocalFeed,
+    gameState,
+    playerActor,
+    selectedConditionInstanceId,
+    selectedInventoryItemId,
+    selectedNatureOverlay,
+    selectedStockpileItemId,
+    selectedTileEntity,
+    selectedTileX,
+    selectedTileY,
+    selectedVisionCategory,
+    selectedVisionItemId,
+    selectedWorldItemId,
+    submitPlayerAction,
+  ]);
+
+  const runTileQuickAction = useCallback((kind, worldX, worldY, tileOverride = null, payloadOverrides = null) => {
+    const basePayload = buildDefaultPayload(kind, {
+      selectedX: worldX,
+      selectedY: worldY,
+      tile: tileOverride,
+      player: playerActor,
+      selectedInventoryItemId,
+      selectedStockpileItemId,
+      selectedWorldItemId,
+      selectedConditionInstanceId,
+      selectedVisionItemId,
+      selectedVisionCategory,
+      selectedNatureOverlay,
+    });
+    const payload = payloadOverrides && typeof payloadOverrides === 'object'
+      ? { ...basePayload, ...payloadOverrides }
+      : basePayload;
+    const validation = validateAction(gameState, {
+      actorId: 'player',
+      kind,
+      payload,
+    });
+    if (!validation.ok) {
+      setActionComposerStatus(`Blocked: ${validation.message}`);
+      appendLocalFeed({
+        kind,
+        status: 'blocked',
+        message: validation.message,
+        code: validation.code,
+      });
+      return;
+    }
+    submitPlayerAction(kind, payload);
+    setActionComposerStatus(`Submitted: ${kind}`);
+    appendLocalFeed({
+      kind,
+      status: 'submitted',
+      message: 'queued',
+      code: null,
+    });
+  }, [
+    appendLocalFeed,
+    gameState,
+    playerActor,
+    selectedConditionInstanceId,
+    selectedInventoryItemId,
+    selectedNatureOverlay,
+    selectedStockpileItemId,
+    selectedVisionCategory,
+    selectedVisionItemId,
+    selectedWorldItemId,
+    submitPlayerAction,
+  ]);
+
+  const runContextMenuAction = useCallback((kind) => {
+    if (!tileContextMenu || !Number.isInteger(tileContextMenu.worldX) || !Number.isInteger(tileContextMenu.worldY)) {
+      return;
+    }
+    const { worldX, worldY } = tileContextMenu;
+    if (kind === 'inspect') {
+      setTilePanelMode('inspect');
+      setActionComposerStatus(`Inspecting tile ${worldX},${worldY}`);
+      setTileContextMenu(null);
+      return;
+    }
+    if (kind === 'dig') {
+      const input = window.prompt('Dig duration ticks', '5');
+      if (input === null) {
+        setTileContextMenu(null);
+        return;
+      }
+      const requestedTicks = Math.max(1, Math.floor(Number(input) || 1));
+      runTileQuickAction(kind, worldX, worldY, getTileAt(gameState, worldX, worldY), { tickCost: requestedTicks });
+      setTileContextMenu(null);
+      return;
+    }
+    runTileQuickAction(kind, worldX, worldY, getTileAt(gameState, worldX, worldY));
+    setTileContextMenu(null);
+  }, [gameState, runTileQuickAction, tileContextMenu]);
 
   const generateMushroomZones = () => {
     if (!canGenerateMushroomZones(gameState)) {
@@ -809,6 +1684,35 @@ function App() {
       }
 
       switch (event.key) {
+        case 'Tab':
+          event.preventDefault();
+          setIsInventoryPanelOpen((prev) => !prev);
+          break;
+        case 'Escape':
+          event.preventDefault();
+          setIsPauseMenuOpen((prev) => !prev);
+          break;
+        case 'i':
+        case 'I':
+          event.preventDefault();
+          setTilePanelMode('inspect');
+          break;
+        case 's':
+        case 'S':
+          event.preventDefault();
+          setTilePanelMode('context');
+          break;
+        case 'n':
+        case 'N':
+          event.preventDefault();
+          setSelectedNatureOverlay((prev) => {
+            const idx = NATURE_SIGHT_OVERLAY_OPTIONS.indexOf(prev);
+            const nextIdx = idx >= 0
+              ? (idx + 1) % NATURE_SIGHT_OVERLAY_OPTIONS.length
+              : 0;
+            return NATURE_SIGHT_OVERLAY_OPTIONS[nextIdx];
+          });
+          break;
         case 'ArrowLeft':
           event.preventDefault();
           panCamera(-1, 0);
@@ -942,7 +1846,16 @@ function App() {
           : '';
         const featureOverlaySymbol = tile.beehive
           ? 'B'
-          : (tile.squirrelCache ? 'C' : '');
+          : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
+        const worldItemCount = Number(gameState.worldItemsByTile?.[`${worldX},${worldY}`]?.length) || 0;
+        const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
+        const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+        const tileEntityTokens = buildTileEntityTokens(tile, {
+          isPlayerTile,
+          isCampTile,
+          worldItemCount,
+          camp: gameState?.camp,
+        });
         const symbol = plant ? plant.speciesId[0].toUpperCase() : zoneSymbol;
         const recentTileEvent = gameState.recentDispersal?.byTile?.[`${worldX},${worldY}`] || null;
         const supportKey = `${worldX},${worldY}`;
@@ -1005,6 +1918,9 @@ function App() {
             {combinedOverlaySymbol ? (
               <span className="mushroom-overlay-symbol">{combinedOverlaySymbol}</span>
             ) : null}
+            {tileEntityTokens.length > 0 ? (
+              <span className="tile-entity-token">{tileEntityTokens.slice(0, 2).join(' ')}</span>
+            ) : null}
             {rendererLayout.showTileMeta ? (
               <span className="tile-meta">{hasOccupant ? '1' : '0'}</span>
             ) : null}
@@ -1028,7 +1944,7 @@ function App() {
     const canvasWidth = windowSize.width;
     const canvasHeight = windowSize.height;
     const originX = Math.round(canvasWidth / 2);
-    const originY = ISO_TILE_HALF_HEIGHT_PX;
+    const originY = Math.round(canvasHeight / 2) - ISO_TILE_HALF_HEIGHT_PX + cameraAnchorElevationPx;
 
     return (
       <div className="isometric-play-stage" style={{ '--iso-canvas-width': `${canvasWidth}px`, '--iso-canvas-height': `${canvasHeight}px` }}>
@@ -1047,9 +1963,6 @@ function App() {
               ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
               : deadLogSprite;
             const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
-            const occupantAnchorY = plant
-              ? (groundY - ISO_OCCUPANT_ANCHOR_OFFSET_PX - ISO_PLANT_CENTER_BUMP_PX)
-              : (groundY - ISO_OCCUPANT_ANCHOR_OFFSET_PX);
             const zone = tile.groundFungusZone;
             const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
               ? zone.speciesId[0].toUpperCase()
@@ -1062,13 +1975,36 @@ function App() {
             const mushroomOverlaySymbol = logMushroomSymbol || (!plant && zoneSymbol ? zoneSymbol : '');
             const featureOverlaySymbol = tile.beehive
               ? 'B'
-              : (tile.squirrelCache ? 'C' : '');
+              : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
             const combinedOverlaySymbol = [mushroomOverlaySymbol, featureOverlaySymbol].filter(Boolean).join('');
+            const worldItemCount = Number(gameState.worldItemsByTile?.[`${worldX},${worldY}`]?.length) || 0;
+            const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
+            const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+            const tileEntityTokens = buildTileEntityTokens(tile, {
+              isPlayerTile,
+              isCampTile,
+              worldItemCount,
+              camp: gameState?.camp,
+            });
+            const isSelectedTile = selectedTileX === worldX && selectedTileY === worldY;
             const rockSprite = tile.rockType ? getRockSpriteFrame(tile.rockType) : null;
             const grassSprite = !tile.waterType ? getTerrainSpriteFrame('grass') : null;
             const dirtSprite = !tile.waterType ? getTerrainSpriteFrame('dirt') : null;
             const waterSprite = tile.waterType ? getTerrainSpriteFrame('water') : null;
             const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
+            const topFaceReferenceSprite = grassSprite || dirtSprite || waterSprite || null;
+            const topFaceReferenceAnchorY = (
+              topFaceReferenceSprite?.frame?.anchorY
+              ?? topFaceReferenceSprite?.frame?.sourceH
+              ?? topFaceReferenceSprite?.frame?.h
+              ?? ISO_SOURCE_TILE_WIDTH
+            ) * ISO_BASE_SCALE;
+            const tileTopCenterY = computeTileTopCenterYFromGroundAnchor(
+              groundY,
+              topFaceReferenceAnchorY,
+              ISO_TILE_HALF_HEIGHT_PX,
+            );
+            const occupantAnchorY = computeOccupantAnchorYFromTileTop(tileTopCenterY, ISO_OCCUPANT_VISUAL_NUDGE_PX);
             const southTile = getTileAt(gameState, worldX, worldY + 1);
             const eastTile = getTileAt(gameState, worldX + 1, worldY);
             const southElevationOffsetPx = southTile ? elevationToIsoOffsetPx(southTile.elevation) : 0;
@@ -1160,7 +2096,15 @@ function App() {
                       plantOrLogScale,
                       screenX,
                       occupantAnchorY,
+                      null,
                     )}
+                  />
+                ) : null}
+                {showAnchorDebug ? (
+                  <span
+                    className="iso-anchor-debug"
+                    style={{ left: `${screenX}px`, top: `${occupantAnchorY}px` }}
+                    title={`anchor ${worldX},${worldY}`}
                   />
                 ) : null}
                 {combinedOverlaySymbol ? (
@@ -1168,9 +2112,70 @@ function App() {
                     {combinedOverlaySymbol}
                   </span>
                 ) : null}
+                {tileEntityTokens.map((token, idx) => (
+                  <span
+                    key={`entity-token-${worldX}-${worldY}-${token}`}
+                    className="iso-entity-token"
+                    style={{ left: `${screenX}px`, top: `${groundY - 38 - (idx * 14)}px` }}
+                  >
+                    {token}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  className={`iso-tile-hitbox ${isSelectedTile ? 'selected' : ''}`}
+                  style={{ left: `${screenX}px`, top: `${tileTopCenterY}px` }}
+                  onClick={() => {
+                    setSelectedGameTile({ x: worldX, y: worldY });
+                    setTilePanelMode('context');
+                    setTileContextMenu(null);
+                    const playerX = Number(playerActor?.x);
+                    const playerY = Number(playerActor?.y);
+                    if (Number.isFinite(playerX) && Number.isFinite(playerY) && (playerX !== worldX || playerY !== worldY)) {
+                      runTileQuickAction('move', worldX, worldY, tile);
+                    } else {
+                      setActionComposerStatus(`Selected tile ${worldX},${worldY}`);
+                    }
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setSelectedGameTile({ x: worldX, y: worldY });
+                    setTilePanelMode('context');
+                    setTileContextMenu({
+                      worldX,
+                      worldY,
+                      screenX,
+                      groundY: tileTopCenterY,
+                    });
+                    setActionComposerStatus(`Actions for tile ${worldX},${worldY}`);
+                  }}
+                  title={tileTooltip(worldX, worldY, tile, plant)}
+                />
               </div>
             );
           })}
+          {tileContextMenu && Number.isInteger(tileContextMenu.worldX) && Number.isInteger(tileContextMenu.worldY) ? (
+            <div
+              className="iso-context-menu"
+              style={{ left: `${tileContextMenu.screenX + 20}px`, top: `${tileContextMenu.groundY - 18}px` }}
+            >
+              {availableContextActionEntries.length === 0 ? (
+                <p className="iso-context-menu-empty">No available actions</p>
+              ) : (
+                availableContextActionEntries.map((entry) => (
+                  <button
+                    key={`ctx-${entry.kind}`}
+                    type="button"
+                    className="iso-context-menu-action"
+                    onClick={() => runContextMenuAction(entry.kind)}
+                    title={`${entry.kind} (${entry.tickCost}t)`}
+                  >
+                    {entry.kind} ({entry.tickCost}t)
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -1179,16 +2184,115 @@ function App() {
   if (rendererMode === 'game') {
     return (
       <main className="app app-game-mode">
-        <button
-          type="button"
-          className="game-mode-toggle"
-          onClick={() => setRendererMode('observer')}
-        >
-          Switch to Debug View
-        </button>
         <section className="game-stage">
           {renderIsometricPlayView()}
         </section>
+        <GameModeChrome
+          onSwitchToDebug={() => setRendererMode('observer')}
+          onNewGameFromSettings={() => initializeFromSeed(true)}
+          showAnchorDebug={showAnchorDebug}
+          onToggleAnchorDebug={() => setShowAnchorDebug((prev) => !prev)}
+          metrics={metrics}
+          gameState={gameState}
+          playerActor={playerActor}
+          playerAtCamp={playerAtCamp}
+          playerNatureSightDays={playerNatureSightDays}
+          dayProgressPercent={dayProgressPercent}
+          nightThresholdPercent={nightThresholdPercent}
+          dayTick={dayTick}
+          ticksPerDay={TICKS_PER_DAY}
+          calendarLabel={calendarLabel}
+          playerTickBudgetCurrent={playerTickBudgetCurrent}
+          playerTickBudgetBase={playerTickBudgetBase}
+          playerOverdraftTicks={playerOverdraftTicks}
+          hasTickOverdraft={hasTickOverdraft}
+          familyVitalGroups={familyVitalGroups}
+          warningEntries={visibleWarningEntries}
+          onAcknowledgeWarning={(warningId) => {
+            setDismissedWarningIds((prev) => (prev.includes(warningId) ? prev : [...prev, warningId]));
+          }}
+          selectedTileX={selectedTileX}
+          selectedTileY={selectedTileY}
+          selectedTileEntity={selectedTileEntity}
+          selectedTileWorldItems={selectedTileWorldItemEntries}
+          tilePanelMode={tilePanelMode}
+          selectedInspectData={selectedInspectData}
+          onRunQuickAction={runQuickAction}
+          isInventoryPanelOpen={isInventoryPanelOpen}
+          isPauseMenuOpen={isPauseMenuOpen}
+          onClosePauseMenu={() => setIsPauseMenuOpen(false)}
+          actionComposerStatus={actionComposerStatus}
+          playActionFeed={playActionFeed}
+          playerCarryWeightKg={playerCarryWeightKg}
+          playerCarryCapacityKg={playerCarryCapacityKg}
+          selectedInventoryItemId={selectedInventoryItemId}
+          setSelectedInventoryItemId={setSelectedInventoryItemId}
+          playerInventoryStacks={playerInventoryEntries}
+          selectedStockpileItemId={selectedStockpileItemId}
+          setSelectedStockpileItemId={setSelectedStockpileItemId}
+          campStockpileStacks={campStockpileEntries}
+          playerEquipment={playerEquipment}
+          equipmentSlots={EQUIPMENT_SLOTS}
+          onUnequipSlot={(slot) => {
+            submitPlayerAction('unequip_item', { equipmentSlot: slot });
+          }}
+          campDryingRackSlots={campDryingRackSlots}
+          onDryingRackRemove={(slotIndex) => submitPlayerAction('camp_drying_rack_remove', { slotIndex, quantity: 1 })}
+          selectedWorldItemId={selectedWorldItemId}
+          setSelectedWorldItemId={setSelectedWorldItemId}
+          isDebriefActive={isDebriefActive}
+          onEndDayEnterDebrief={() => {
+            if (!playerAtCamp) {
+              setActionComposerStatus('End Day requires being at camp.');
+              return;
+            }
+            const hasRemainingTicks = Number(playerActor?.tickBudgetCurrent) > 0;
+            if (hasRemainingTicks) {
+              const confirmed = window.confirm('You still have ticks remaining. End Day and enter debrief anyway?');
+              if (!confirmed) {
+                return;
+              }
+            }
+            runQuickAction('debrief_enter');
+          }}
+          selectedDebriefTab={selectedDebriefTab}
+          onSelectDebriefTab={setDebriefTab}
+          canBeginDay={canBeginDay}
+          hasVisitedMealTab={hasVisitedMealTab}
+          debriefSpoilageEntries={debriefSpoilageEntries}
+          queueActiveTask={queueActiveTask}
+          queuePendingTasks={queuePendingTasks}
+          partnerTaskHistory={partnerTaskHistory}
+          mealPlanIngredients={mealPlanIngredients}
+          mealPlanPreview={mealPlanPreview}
+          lastMealResult={lastMealResult}
+          chosenVisionRewards={chosenVisionRewards}
+          onBeginDay={() => {
+            runQuickAction('debrief_exit');
+          }}
+          visionUsesThisSeason={visionUsesThisSeason}
+          visionSelectionOptions={visionSelectionOptions}
+          selectedVisionItemId={selectedVisionItemId}
+          setSelectedVisionItemId={setSelectedVisionItemId}
+          pendingVisionChoices={pendingVisionChoices}
+          selectedVisionCategory={selectedVisionCategory}
+          setSelectedVisionCategory={setSelectedVisionCategory}
+          selectedNatureOverlay={selectedNatureOverlay}
+          setSelectedNatureOverlay={setSelectedNatureOverlay}
+          natureSightOverlayOptions={NATURE_SIGHT_OVERLAY_OPTIONS}
+          visionNotifications={visionNotifications}
+          visionRequest={visionRequest}
+          medicineNotifications={medicineNotifications}
+          medicineRequests={medicineRequests}
+          onFocusConditionInstance={setSelectedConditionInstanceId}
+          onAdministerCondition={(conditionInstanceId) => {
+            if (conditionInstanceId) {
+              submitPlayerAction('partner_medicine_administer', { conditionInstanceId });
+              return;
+            }
+            submitPlayerAction('partner_medicine_administer', {});
+          }}
+        />
       </main>
     );
   }
@@ -1221,7 +2325,14 @@ function App() {
             value={mapHeightInput}
             onChange={(event) => setMapHeightInput(event.target.value)}
           />
-          <button type="button" onClick={initializeFromSeed}>Generate Map</button>
+          <label htmlFor="pre-sim-days">Pre-sim days</label>
+          <input
+            id="pre-sim-days"
+            value={preSimDaysInput}
+            onChange={(event) => setPreSimDaysInput(event.target.value)}
+          />
+          <button type="button" onClick={() => initializeFromSeed(false)}>Start New Game</button>
+          <button type="button" onClick={() => initializeFromSeed(true)}>Start New Game + Play</button>
         </div>
 
         <div className="control-row">

@@ -72,6 +72,14 @@ function normalizeToleranceRange(rawRange) {
   return [0, 1];
 }
 
+function normalizeOptionalUnitInterval(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.max(0, Math.min(1, parsed));
+}
+
 function normalizeProcessingOutputs(outputs, contextLabel) {
   if (!Array.isArray(outputs)) {
     return [];
@@ -150,6 +158,7 @@ function normalizePlant(rawPlant) {
     subStages: (part.sub_stages || []).map((subStage) => ({
       ...subStage,
       seasonalWindow: normalizeSeasonalWindow(subStage.seasonal_window),
+      tannin_level: normalizeOptionalUnitInterval(subStage.tannin_level),
       processing_options: normalizeProcessingOptions(
         subStage.processing_options,
         `${rawPlant.id || 'unknown_plant'}:${part.name || 'unknown_part'}:${subStage.id || 'unknown_sub_stage'}`,
@@ -166,6 +175,9 @@ function normalizePlant(rawPlant) {
     seedingWindow: normalizeSeasonalWindow(rawPlant.seeding_window),
     dispersal: rawPlant.dispersal,
     parts: normalizedParts,
+    ingestion: rawPlant.ingestion && typeof rawPlant.ingestion === 'object'
+      ? { ...rawPlant.ingestion }
+      : null,
     lifeStages: rawPlant.life_stages.map((stage) => ({
       ...stage,
       seasonalWindow: normalizeSeasonalWindow(stage.seasonal_window),

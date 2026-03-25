@@ -1,11 +1,11 @@
-import { PLANT_BY_ID, getSeason } from './plantCatalog.mjs';
+import { PLANT_BY_ID, getSeason } from '../plantCatalog.mjs';
 import {
   calculateSoilSuitability,
   drainageToIndex,
   inBounds,
   isRockTile,
   tileIndex,
-} from './simWorld.mjs';
+} from '../simWorld.mjs';
 
 function toleranceDistance(value, min, max) {
   if (value < min) {

@@ -1,0 +1,101 @@
+export const DEFAULT_MAP_WIDTH = 80;
+export const DEFAULT_MAP_HEIGHT = 80;
+export const MAX_PLANTS_PER_TILE = 1;
+export const TICKS_PER_DAY = 400;
+export const WINTER_DAYS_PER_YEAR = 10;
+export const PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE = 0.05;
+export const PERENNIAL_WINTER_DAILY_DEATH_RATE = 1 - Math.pow(
+  1 - PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE,
+  1 / WINTER_DAYS_PER_YEAR,
+);
+export const DEAD_LOG_DECAY_FERTILITY_BONUS_CENTER = 0.06;
+export const DEAD_LOG_DECAY_FERTILITY_BONUS_ADJACENT = 0.03;
+export const MIN_DAYS_FOR_GROUND_FUNGUS_ZONE_GENERATION = 400;
+export const MIN_DAYS_FOR_BEEHIVE_GENERATION = 400;
+export const MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION = 400;
+export const MIN_DAYS_FOR_ANIMAL_ZONE_GENERATION = 400;
+export const MIN_DAYS_FOR_FISH_POPULATION_GENERATION = 0;
+export const FISH_DAILY_RECOVERY_RATIO = 0.07;
+export const FISH_DENSITY_VARIATION_MIN = 0.8;
+export const FISH_DENSITY_VARIATION_MAX = 1.2;
+export const FISH_LARGE_SCALE_CELL_SIZE = 8;
+export const FISH_LARGE_SCALE_WEIGHT = 0.65;
+export const MAX_LOG_FUNGI_PER_LOG = 3;
+export const ANIMAL_DENSITY_RADIUS_TILES = 5;
+export const ROTTING_ORGANIC_ITEM_ID = 'rotting_organic';
+export const ROTTING_ORGANIC_DECAY_DAYS = 2;
+export const ROTTING_ORGANIC_FERTILITY_BONUS = 0.02;
+export const RAISED_SLEEPING_PLATFORM_STATION_ID = 'raised_sleeping_platform';
+export const WINDBREAK_REFLECTOR_WALL_STATION_ID = 'windbreak_reflector_wall';
+export const CAMP_COMFORT_STATION_IDS = new Set([
+  RAISED_SLEEPING_PLATFORM_STATION_ID,
+  WINDBREAK_REFLECTOR_WALL_STATION_ID,
+]);
+export const BEEHIVE_SPECIES_ID = 'bombus_pennsylvanicus_colony';
+export const BEEHIVE_HONEY_RANGE_GRAMS = [50, 200];
+export const BEEHIVE_LARVAE_RANGE_GRAMS = [50, 150];
+export const BEEHIVE_BEESWAX_RANGE_GRAMS = [20, 60];
+export const SAP_TAP_DAILY_FILL_UNITS = 1;
+export const SAP_TAP_VESSEL_CAPACITY_UNITS = 10;
+export const SAP_FILLED_VESSEL_ITEM_ID = 'tool:hide_pitch_vessel_filled_sap';
+export const WATERSKIN_EMPTY_ITEM_ID = 'tool:waterskin';
+export const WATERSKIN_DRINK_THIRST_GAIN = 0.34;
+export const WATERSKIN_GUT_ILLNESS_CHANCE_RIVER = 0.03;
+export const WATERSKIN_GUT_ILLNESS_CHANCE_POND = 0.35;
+export const COLD_EXPOSURE_HEALTH_DRAIN_PER_DAY = 1 / 3;
+export const COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK = COLD_EXPOSURE_HEALTH_DRAIN_PER_DAY / TICKS_PER_DAY;
+export const THIRST_ACTIVITY_DRAIN_PER_TICK = 1 / 600;
+export const THIRST_TEMPERATURE_MODIFIER_BY_BAND = Object.freeze({
+  freezing: -0.2,
+  warm: 0.25,
+  hot: 0.5,
+});
+export const SUN_HAT_THIRST_MODIFIER_SCALE = 0.5;
+export const STEW_DAILY_CALORIES_ADULT = 2000;
+export const STEW_DAILY_CALORIES_CHILD_DEFAULT = 1200;
+export const STEW_PROTEIN_BONUS_THRESHOLD_GRAMS = 30;
+export const STEW_FAT_BONUS_THRESHOLD_GRAMS = 20;
+export const STEW_NEXT_DAY_TICK_BONUS = 20;
+export const STEW_NAUSEA_DECAY_ABSENT_PER_DAY = 10;
+export const STEW_NAUSEA_GAIN_REPETITIVE = 3;
+export const STEW_NAUSEA_GAIN_MONOTONOUS = 17;
+export const LEACHING_BASKET_TANNIN_REDUCTION_RIVER_PER_DAY = 0.25;
+export const LEACHING_BASKET_TANNIN_REDUCTION_POND_PER_DAY = 0.1;
+export const EARTHWORM_ITEM_ID = 'earthworm';
+export const EARTHWORM_DECAY_DAYS = 1;
+export const SIMPLE_SNARE_BASE_CATCH_CHANCE = 0.1;
+export const SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT = 0.55;
+export const SIMPLE_SNARE_DAILY_RELIABILITY_DECAY = 0.08;
+export const SIMPLE_SNARE_MIN_RELIABILITY = 0.35;
+export const SIMPLE_SNARE_POACH_DAY_1_CHANCE = 0;
+export const SIMPLE_SNARE_POACH_DAY_2_CHANCE = 0.2;
+export const SIMPLE_SNARE_POACH_DAY_3_CHANCE = 0.5;
+export const SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE = 1;
+export const DEADFALL_MAX_CATCH_WEIGHT_G = 4000;
+export const DEADFALL_TRAP_CATCH_MODIFIER = 1.4;
+export const DEADFALL_DAILY_RELIABILITY_DECAY = 0.04;
+export const DEADFALL_MIN_RELIABILITY = 0.5;
+export const FISH_TRAP_ATTEMPTS_PER_DAY = 2;
+export const FISH_TRAP_MAX_STORED_CATCH = 3;
+export const FISH_TRAP_DAILY_RELIABILITY_DECAY = 0.03;
+export const FISH_TRAP_MIN_RELIABILITY = 0.55;
+export const AUTO_ROD_ATTRACTION_MULTIPLIER = 0.5;
+export const AUTO_ROD_OVERNIGHT_ATTEMPTS = 200;
+export const LINE_SNAP_BASE_PROBABILITY = 0.1;
+export const LINE_SNAP_BASE_WEIGHT_G = 500;
+
+export const EQUIPPABLE_ITEM_TO_SLOT = {
+  'tool:gloves': 'gloves',
+  'tool:coat': 'coat',
+  'tool:sun_hat': 'head',
+};
+
+export const HARVEST_TOOL_INVENTORY_ALIASES = {
+  knife: ['tool:flint_knife'],
+};
+
+export const ITEM_FOOTPRINT_OVERRIDES = {
+  'tool:gloves': { w: 1, h: 1 },
+  'tool:coat': { w: 2, h: 2 },
+  'tool:sun_hat': { w: 1, h: 1 },
+};

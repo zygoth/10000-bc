@@ -108,6 +108,28 @@ function normalizeGroundFungus(rawFungus) {
       .map((window) => normalizeSeasonalWindow(window))
       .filter(Boolean),
     perTileYieldRange: rawFungus.per_tile_yield_range || [1, 1],
+    ingestion: normalizeFungusIngestion(rawFungus.ingestion),
+  };
+}
+
+function normalizeFungusIngestion(rawIngestion) {
+  if (!rawIngestion || typeof rawIngestion !== 'object') {
+    return null;
+  }
+  const doseResponse = Array.isArray(rawIngestion.dose_response)
+    ? rawIngestion.dose_response.map((band) => ({
+      ...(band || {}),
+      effects: Array.isArray(band?.effects)
+        ? band.effects.map((effect) => ({ ...(effect || {}) }))
+        : [],
+    }))
+    : [];
+  return {
+    ...rawIngestion,
+    vision_item: rawIngestion.vision_item && typeof rawIngestion.vision_item === 'object'
+      ? { ...rawIngestion.vision_item }
+      : null,
+    dose_response: doseResponse,
   };
 }
 

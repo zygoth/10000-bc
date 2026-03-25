@@ -53,6 +53,42 @@
   pointer-events: none;
 }
 
+.iso-layer-underlay,
+.iso-layer-dirt,
+.iso-layer-grass,
+.iso-layer-water,
+.iso-layer-ice,
+.iso-layer-rock {
+  z-index: 5;
+}
+
+.iso-layer-occupant {
+  z-index: 11;
+}
+
+.iso-tile-hitbox {
+  position: absolute;
+  z-index: 13;
+  width: 76px;
+  height: 38px;
+  transform: translate(-50%, -50%) rotate(0deg);
+  border: 1px solid rgba(255, 240, 180, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.02);
+  color: transparent;
+  cursor: pointer;
+}
+
+.iso-tile-hitbox:hover {
+  border-color: rgba(255, 232, 167, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.iso-tile-hitbox.selected {
+  border-color: rgba(135, 227, 160, 0.9);
+  box-shadow: 0 0 0 1px rgba(135, 227, 160, 0.5);
+}
+
 .iso-mushroom-overlay {
   position: absolute;
   z-index: 12;
@@ -64,11 +100,93 @@
   pointer-events: none;
 }
 
-.game-mode-toggle {
+.iso-entity-token {
+  position: absolute;
+  z-index: 14;
+  transform: translate(-50%, -100%);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #fff4d8;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.iso-context-menu {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+  max-width: 260px;
+  padding: 6px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 8px;
+  background: rgba(18, 14, 10, 0.94);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.iso-context-menu-action {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.iso-context-menu-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #e6d7b5;
+}
+
+.iso-anchor-debug {
+  position: absolute;
+  z-index: 15;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #ff6b6b;
+  border-radius: 50%;
+  background: rgba(255, 107, 107, 0.35);
+  pointer-events: none;
+}
+
+.game-mode-actions {
   position: fixed;
   top: 12px;
   left: 12px;
   z-index: 20;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.pause-card {
+  min-width: 260px;
+  max-width: min(90vw, 420px);
+  padding: 16px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 10px;
+  background: rgba(18, 14, 10, 0.94);
+  color: #fff4d8;
+}
+
+.pause-card h2 {
+  margin: 0 0 8px;
+}
+
+.game-mode-toggle {
   border: 1px solid rgba(255, 246, 210, 0.45);
   background: rgba(18, 14, 10, 0.82);
   color: #fff4d8;
@@ -77,6 +195,377 @@
 
 .game-mode-toggle:hover {
   background: rgba(44, 34, 25, 0.94);
+}
+
+.partner-status-hud {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  width: min(360px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 10px;
+  background: rgba(18, 14, 10, 0.84);
+  color: #fff4d8;
+  backdrop-filter: blur(4px);
+}
+
+.play-context-panel,
+.forage-interaction-panel {
+  position: fixed;
+  top: 58px;
+  left: 12px;
+  z-index: 20;
+  width: min(410px, calc(100vw - 24px));
+  max-height: calc(100vh - 72px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 10px;
+  background: rgba(18, 14, 10, 0.88);
+  color: #fff4d8;
+  backdrop-filter: blur(4px);
+}
+
+.play-utility-panel,
+.forage-inventory-panel {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 20;
+  width: min(410px, calc(100vw - 24px));
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 10px;
+  background: rgba(18, 14, 10, 0.88);
+  color: #fff4d8;
+  backdrop-filter: blur(4px);
+}
+
+.play-context-panel h2,
+.play-context-panel h3,
+.play-utility-panel h2,
+.play-utility-panel h3,
+.forage-interaction-panel h2,
+.forage-interaction-panel h3,
+.forage-inventory-panel h2,
+.forage-inventory-panel h3 {
+  margin: 0 0 8px;
+}
+
+.play-context-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #e6d7b5;
+}
+
+.play-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.play-composer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.play-payload-editor {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 6px;
+  background: rgba(34, 26, 19, 0.95);
+  color: #fff4d8;
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  font-size: 12px;
+  padding: 8px;
+}
+
+.play-action-feed {
+  max-height: 148px;
+  overflow: auto;
+  border: 1px solid rgba(255, 246, 210, 0.2);
+  border-radius: 8px;
+  background: rgba(26, 19, 14, 0.82);
+  padding: 8px;
+}
+
+.play-action-feed p {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.play-utility-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.play-context-panel select,
+.play-utility-panel select,
+.forage-interaction-panel select,
+.forage-inventory-panel select {
+  width: 180px;
+}
+
+.play-context-panel input,
+.play-utility-panel input,
+.forage-interaction-panel input,
+.forage-inventory-panel input {
+  width: 88px;
+}
+
+.partner-status-hud h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.partner-vital-row {
+  display: grid;
+  grid-template-columns: 58px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.partner-vital-label {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.partner-vital-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.partner-vital-fill {
+  display: block;
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+.partner-vital-fill-good {
+  background: #58c46b;
+}
+
+.partner-vital-fill-warning {
+  background: #d8bd4a;
+}
+
+.partner-vital-fill-low {
+  background: #d9863f;
+}
+
+.partner-vital-fill-critical {
+  background: #cc4e47;
+}
+
+.partner-vital-value {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.partner-vital-value-good {
+  color: #8ae49a;
+}
+
+.partner-vital-value-warning {
+  color: #ead77d;
+}
+
+.partner-vital-value-low {
+  color: #f0b173;
+}
+
+.partner-vital-value-critical {
+  color: #f19a95;
+}
+
+.partner-vital-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #e6d7b5;
+}
+
+.partner-vital-note.overdraft-note {
+  color: #ffb3a3;
+  font-weight: 700;
+}
+
+.family-vital-group {
+  margin-top: 8px;
+}
+
+.family-vital-group h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #fff4d8;
+}
+
+.status-warning-stack {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.status-warning {
+  border: 1px solid rgba(255, 246, 210, 0.25);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(32, 24, 18, 0.72);
+}
+
+.status-warning p {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.status-warning-warning {
+  border-color: rgba(230, 188, 108, 0.7);
+}
+
+.status-warning-critical {
+  border-color: rgba(220, 104, 92, 0.78);
+}
+
+.day-progress {
+  position: relative;
+  height: 10px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.day-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #9bd98c, #e3cc69);
+}
+
+.day-progress-threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ffde8a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.tile-panel-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.tile-panel-tabs button.active {
+  background: #ede3be;
+  border-color: #c6b078;
+}
+
+.inspect-panel-lite {
+  margin-bottom: 8px;
+}
+
+.context-action-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.context-action-button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  text-align: left;
+}
+
+.context-action-button em {
+  grid-column: 1 / -1;
+  font-style: normal;
+  font-size: 11px;
+  color: #876d56;
+}
+
+.context-action-button.blocked {
+  opacity: 0.62;
+}
+
+.debrief-medicine-panel {
+  position: fixed;
+  top: 220px;
+  right: 12px;
+  z-index: 20;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 232px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 246, 210, 0.45);
+  border-radius: 10px;
+  background: rgba(18, 14, 10, 0.84);
+  color: #fff4d8;
+  backdrop-filter: blur(4px);
+}
+
+.debrief-medicine-panel h2,
+.debrief-medicine-panel h3 {
+  margin-bottom: 8px;
+}
+
+.debrief-medicine-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.debrief-medicine-controls button {
+  background: rgba(255, 244, 216, 0.95);
+}
+
+.debrief-medicine-note,
+.debrief-medicine-empty {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  color: #e6d7b5;
+}
+
+.debrief-medicine-notifications {
+  margin-bottom: 12px;
+}
+
+.debrief-medicine-notifications p {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.debrief-medicine-request {
+  border: 1px solid rgba(255, 246, 210, 0.28);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(32, 24, 18, 0.72);
+}
+
+.debrief-medicine-request p {
+  margin: 0 0 4px;
+  font-size: 12px;
 }
 
 .panel {
@@ -251,6 +740,24 @@ code {
   pointer-events: none;
 }
 
+.tile-entity-token {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 4;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff4d8;
+  background: rgba(18, 14, 10, 0.8);
+  border: 1px solid rgba(255, 246, 210, 0.25);
+  border-radius: 3px;
+  padding: 0 2px;
+  max-width: calc(100% - 4px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tile-meta {
   position: absolute;
   right: 2px;
@@ -280,8 +787,38 @@ code {
     grid-row: auto;
   }
 
-  .game-mode-toggle {
+  .game-mode-actions {
     top: 10px;
     left: 10px;
+  }
+
+  .partner-status-hud {
+    top: auto;
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .play-context-panel,
+  .forage-interaction-panel {
+    top: 54px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 42vh;
+  }
+
+  .play-utility-panel,
+  .forage-inventory-panel {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-height: 30vh;
+  }
+
+  .debrief-medicine-panel {
+    top: 10px;
+    right: 10px;
+    max-height: 46vh;
   }
 }

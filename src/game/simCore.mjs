@@ -3,7 +3,7 @@ import { GROUND_FUNGUS_CATALOG, GROUND_FUNGUS_BY_ID, isDayInSeasonWindow } from 
 import { LOG_FUNGUS_CATALOG, LOG_FUNGUS_BY_ID, isDayInLogWindow } from './logFungusCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
 import { ITEM_BY_ID } from './itemCatalog.mjs';
-import { applyEnvironmentalVitality, recalculateDynamicShade } from './simEcology.mjs';
+import { applyEnvironmentalVitality, recalculateDynamicShade } from './advanceDay/ecology.mjs';
 import { clonePlant, cloneTile, createEmptyRecentDispersal } from './simState.mjs';
 import {
   cloneActors,
@@ -34,41 +34,37 @@ import {
   initializeDailyWeatherState,
   rollDailyWeatherForCurrentDay,
   windStrengthLabel,
-} from './simWeather.mjs';
+} from './advanceDay/weather.mjs';
 import {
   animalTileDensityKey,
   canGenerateAnimalZonesInternal,
   getAnimalDensityAtTile,
 } from './simAnimalZones.mjs';
 import {
-  computeAnimalPlantContribution,
-  distanceFalloffWeight,
   generateAnimalZonesInternal,
 } from './simAnimalZoneGeneration.mjs';
 import {
   buildSquirrelDensityByTile,
   computeSquirrelCacheTargetCount,
-} from './simSquirrelDensity.mjs';
+} from './advanceDay/squirrelDensity.mjs';
 import {
   canGenerateSquirrelCachesInternal,
   clearSquirrelCaches,
   resolveSquirrelCacheItemPool,
   selectSquirrelCacheCandidatesWithSpread,
-} from './simSquirrelCaches.mjs';
+} from './advanceDay/squirrelCaches.mjs';
 import {
   applyFishPopulationRecovery,
   canGenerateFishPopulationsInternal,
   generateFishPopulationsInternal,
   getFishDensityAtTile,
-} from './simFishPopulation.mjs';
-export { getAnimalDensityAtTile, getFishDensityAtTile };
+} from './advanceDay/fishPopulation.mjs';
 import {
   createInProgressActionEnvelope,
   isInProgressActionEnvelope,
   normalizeInProgressTicks,
-} from './simTickEnvelope.mjs';
+} from './advanceTick/tickEnvelope.mjs';
 import {
-  ANIMAL_DENSITY_RADIUS_TILES,
   AUTO_ROD_ATTRACTION_MULTIPLIER,
   AUTO_ROD_OVERNIGHT_ATTEMPTS,
   BEEHIVE_BEESWAX_RANGE_GRAMS,
@@ -88,11 +84,6 @@ import {
   EARTHWORM_DECAY_DAYS,
   EARTHWORM_ITEM_ID,
   EQUIPPABLE_ITEM_TO_SLOT,
-  FISH_DAILY_RECOVERY_RATIO,
-  FISH_DENSITY_VARIATION_MAX,
-  FISH_DENSITY_VARIATION_MIN,
-  FISH_LARGE_SCALE_CELL_SIZE,
-  FISH_LARGE_SCALE_WEIGHT,
   FISH_TRAP_ATTEMPTS_PER_DAY,
   FISH_TRAP_DAILY_RELIABILITY_DECAY,
   FISH_TRAP_MAX_STORED_CATCH,
@@ -101,13 +92,12 @@ import {
   ITEM_FOOTPRINT_OVERRIDES,
   LINE_SNAP_BASE_PROBABILITY,
   LINE_SNAP_BASE_WEIGHT_G,
+  LEACHING_BASKET_TANNIN_REDUCTION_POND_PER_DAY,
+  LEACHING_BASKET_TANNIN_REDUCTION_RIVER_PER_DAY,
   MAX_LOG_FUNGI_PER_LOG,
   MAX_PLANTS_PER_TILE,
   MIN_DAYS_FOR_BEEHIVE_GENERATION,
-  MIN_DAYS_FOR_FISH_POPULATION_GENERATION,
   MIN_DAYS_FOR_GROUND_FUNGUS_ZONE_GENERATION,
-  MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION,
-  PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE,
   PERENNIAL_WINTER_DAILY_DEATH_RATE,
   RAISED_SLEEPING_PLATFORM_STATION_ID,
   ROTTING_ORGANIC_DECAY_DAYS,
@@ -124,7 +114,10 @@ import {
   SIMPLE_SNARE_POACH_DAY_3_CHANCE,
   SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE,
   SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
+  SUN_HAT_THIRST_MODIFIER_SCALE,
   TICKS_PER_DAY,
+  THIRST_ACTIVITY_DRAIN_PER_TICK,
+  THIRST_TEMPERATURE_MODIFIER_BY_BAND,
   WATERSKIN_DRINK_THIRST_GAIN,
   WATERSKIN_EMPTY_ITEM_ID,
   WATERSKIN_GUT_ILLNESS_CHANCE_POND,
@@ -139,7 +132,59 @@ import {
   cloneWorldItemsByTile,
 } from './simCore.shared.mjs';
 import { advanceDayImpl } from './advanceDay/index.mjs';
-import { advanceTickImpl, buildAdvanceOneTick } from './advanceTick/index.mjs';
+import { advanceTickImpl } from './advanceTick/index.mjs';
+import { applyActionEffectImpl } from './advanceTick/actionEffects.mjs';
+import {
+  addActorInventoryItemImpl,
+  ensureActorInventoryImpl,
+  extractActorInventoryItemWithMetadataImpl,
+  normalizeStackFootprintValueImpl,
+  removeActorInventoryItemImpl,
+} from './advanceTick/inventory.mjs';
+import {
+  addActorInventoryItemWithOverflowDropImpl,
+  addWorldItemNearbyImpl,
+  removeWorldItemAtTileImpl,
+} from './advanceTick/worldItems.mjs';
+import {
+  addCampDryingRackItemImpl,
+  addCampStockpileItemImpl,
+  removeCampStockpileItemImpl,
+} from './advanceTick/campSystems.mjs';
+import {
+  cleanupDeadPlantsImpl,
+  processDormantSeedsImpl,
+  reconcilePlantOccupancyImpl,
+  updatePlantLifeImpl,
+} from './advanceDay/plantLifecycle.mjs';
+import { applyHarvestActionImpl } from './advanceDay/plantHarvest.mjs';
+import {
+  applyGroundFungusFruitingImpl,
+  assignGroundFungusZoneToTileImpl,
+  generateGroundFungusZonesInternalImpl,
+  rollGroundFungusYieldImpl,
+} from './advanceDay/groundFungus.mjs';
+import {
+  applyLogFungusFruitingImpl,
+  colonizeDeadLogFungiByYearImpl,
+  ensureDeadLogFungusShapeImpl,
+  logFungusHostCompatibleImpl,
+  rollLogFungusYieldImpl,
+} from './advanceDay/logFungus.mjs';
+import {
+  applyDailyDeadfallTrapResolutionImpl,
+  applyDailyFishTrapResolutionImpl,
+  applyDailySimpleSnareResolutionImpl,
+  rollDeadfallCatchImpl,
+  rollFishTrapCatchImpl,
+  rollSimpleSnareCatchImpl,
+} from './advanceDay/traps.mjs';
+import {
+  applyBeehiveSeasonalStateImpl,
+  generateBeehivesInternalImpl,
+  rollBeehiveYieldForDayImpl,
+} from './advanceDay/beehiveSystems.mjs';
+export { getAnimalDensityAtTile, getFishDensityAtTile };
 const DEADFALL_CANDIDATE_SPECIES_IDS = Object.values(ANIMAL_BY_ID || {})
   .filter((species) => {
     const waterRequired = species?.waterRequired === true || species?.water_required === true;
@@ -165,6 +210,18 @@ const FISH_TRAP_CANDIDATE_SPECIES_IDS = Object.values(ANIMAL_BY_ID || {})
   .map((species) => species.id)
   .filter((speciesId) => typeof speciesId === 'string' && speciesId)
   .sort();
+export const NATURE_SIGHT_OVERLAY_OPTIONS = Object.freeze([
+  'calorie_heatmap',
+  'animal_density',
+  'mushroom_zones',
+  'plant_compatibility',
+  'fishing_hotspots',
+]);
+const NATURE_SIGHT_OVERLAY_OPTION_SET = new Set(NATURE_SIGHT_OVERLAY_OPTIONS);
+const FUNGUS_CALORIES_PER_GRAM_ESTIMATE = 0.25;
+const HONEY_CALORIES_PER_GRAM_ESTIMATE = 3.0;
+const LARVAE_CALORIES_PER_GRAM_ESTIMATE = 2.0;
+const NUT_CALORIES_PER_GRAM_ESTIMATE = 6.0;
 function hasActorInventoryItem(actor, itemId, quantity = 1) {
   const normalizedQty = Math.max(1, Math.floor(Number(quantity) || 1));
   const stacks = Array.isArray(actor?.inventory?.stacks) ? actor.inventory.stacks : [];
@@ -176,11 +233,11 @@ function hasActorInventoryItem(actor, itemId, quantity = 1) {
 
 function ensureInventoryEquipment(inventory) {
   if (!inventory || typeof inventory !== 'object') {
-    return { gloves: null, coat: null };
+    return { gloves: null, coat: null, head: null };
   }
 
   if (!inventory.equipment || typeof inventory.equipment !== 'object') {
-    inventory.equipment = { gloves: null, coat: null };
+    inventory.equipment = { gloves: null, coat: null, head: null };
   }
 
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
@@ -188,6 +245,9 @@ function ensureInventoryEquipment(inventory) {
   }
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'coat')) {
     inventory.equipment.coat = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'head')) {
+    inventory.equipment.head = null;
   }
 
   return inventory.equipment;
@@ -237,6 +297,30 @@ function applyColdExposureTick(state) {
   }
 
   player.health = clamp01((Number(player.health) || 0) - COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK);
+}
+
+function applyTemperatureThirstTick(state) {
+  const player = state?.actors?.player;
+  if (!player || (Number(player.health) || 0) <= 0) {
+    return;
+  }
+
+  if (isActorAtCampAnchor(state, player)) {
+    return;
+  }
+
+  const band = typeof state?.dailyTemperatureBand === 'string'
+    ? state.dailyTemperatureBand.toLowerCase()
+    : 'mild';
+  const bandModifier = Number(THIRST_TEMPERATURE_MODIFIER_BY_BAND?.[band] || 0);
+  const hasSunHat = hasEquippedItem(player, 'tool:sun_hat');
+  const scaledModifier = (hasSunHat && (band === 'warm' || band === 'hot'))
+    ? bandModifier * SUN_HAT_THIRST_MODIFIER_SCALE
+    : bandModifier;
+  const effectiveMultiplier = Math.max(0, 1 + scaledModifier);
+  const drainPerTick = THIRST_ACTIVITY_DRAIN_PER_TICK * effectiveMultiplier;
+
+  player.thirst = clamp01((Number(player.thirst) || 0) - drainPerTick);
 }
 
 function hasHarvestInjuryTool(actor, toolKey) {
@@ -583,74 +667,12 @@ function resolveLineSnapOutcome(species, rng) {
 }
 
 function removeWorldItemAtTile(state, x, y, itemId, quantity) {
-  if (!state || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return {
-      consumed: 0,
-      freshness: null,
-      decayDaysRemaining: null,
-      dryness: null,
-      unitWeightKg: null,
-      footprintW: 1,
-      footprintH: 1,
-    };
-  }
-
-  const key = worldItemTileKey(x, y);
-  const stacks = Array.isArray(state?.worldItemsByTile?.[key]) ? state.worldItemsByTile[key] : [];
-  const stack = findPreferredStackByItem(stacks, itemId, quantity);
-  if (!stack) {
-    return {
-      consumed: 0,
-      freshness: null,
-      decayDaysRemaining: null,
-      dryness: null,
-      unitWeightKg: null,
-      footprintW: 1,
-      footprintH: 1,
-    };
-  }
-
-  const requested = Math.max(1, Math.floor(quantity));
-  const available = Math.max(0, Math.floor(Number(stack.quantity) || 0));
-  const consumed = Math.min(requested, available);
-  if (consumed <= 0) {
-    return {
-      consumed: 0,
-      freshness: null,
-      decayDaysRemaining: null,
-      dryness: null,
-      unitWeightKg: null,
-      footprintW: 1,
-      footprintH: 1,
-    };
-  }
-
-  const freshness = Number.isFinite(Number(stack.freshness)) ? Number(stack.freshness) : null;
-  const decayDaysRemaining = Number.isFinite(Number(stack.decayDaysRemaining))
-    ? Number(stack.decayDaysRemaining)
-    : null;
-  const dryness = Number.isFinite(Number(stack.dryness)) ? Number(stack.dryness) : null;
-  const unitWeightKg = Number.isFinite(Number(stack.unitWeightKg)) ? Number(stack.unitWeightKg) : null;
-  const footprintW = normalizeStackFootprintValue(stack.footprintW);
-  const footprintH = normalizeStackFootprintValue(stack.footprintH);
-
-  stack.quantity = available - consumed;
-  const nextStacks = stacks.filter((entry) => (Number(entry?.quantity) || 0) > 0);
-  if (nextStacks.length > 0) {
-    state.worldItemsByTile[key] = nextStacks;
-  } else if (state?.worldItemsByTile && typeof state.worldItemsByTile === 'object') {
-    delete state.worldItemsByTile[key];
-  }
-
-  return {
-    consumed,
-    freshness,
-    decayDaysRemaining,
-    dryness,
-    unitWeightKg,
-    footprintW,
-    footprintH,
-  };
+  return removeWorldItemAtTileImpl(state, x, y, itemId, quantity, {
+    inBounds,
+    findPreferredStackByItem,
+    clamp01,
+    normalizeStackFootprintValue,
+  });
 }
 
 function resolveFishRodTickOutcome(state, action, actor, tickOrdinal) {
@@ -928,10 +950,6 @@ function trySpawnEarthwormFromDig(state, actor, tile, targetX, targetY) {
 // - Nut-tree maturity constants ensure squirrel support is based on productive trees.
 const SQUIRREL_CACHE_CONTENT_RANGE_GRAMS = [300, 1200];
 const SQUIRREL_CACHE_GROUND_RATIO = 0.8;
-// Baseline fraction of eligible tiles that can become caches (before density bonus).
-const SQUIRREL_CACHE_BASE_COVERAGE = 0.0028;
-// Additional coverage scaled by squirrel-density signal.
-const SQUIRREL_CACHE_DENSITY_BONUS_COVERAGE = 0.009;
 // Tiles from a selected cache that receive strong local suppression.
 const SQUIRREL_CACHE_SPREAD_RADIUS_NEAR = 3.2;
 // Outer ring for lighter suppression to avoid hotspot saturation.
@@ -979,282 +997,66 @@ function beehiveSeasonModifier(dayOfYear) {
 }
 
 function rollDeadfallCatch(state, tile, trap) {
-  const seedBase = (
-    ((state.seed + 71) * 2053)
-    + (state.year * 307)
-    + (state.dayOfYear * 37)
-    + (tile.x * 131)
-    + (tile.y * 271)
-    + (Number(trap?.placedDay) || 0)
-  ) >>> 0;
-
-  const reliabilityRaw = Number(trap?.reliability);
-  const reliability = Number.isFinite(reliabilityRaw)
-    ? clamp01(reliabilityRaw)
-    : 1;
-
-  let bestCatch = null;
-  let maxDensity = 0;
-  for (let i = 0; i < DEADFALL_CANDIDATE_SPECIES_IDS.length; i += 1) {
-    const speciesId = DEADFALL_CANDIDATE_SPECIES_IDS[i];
-    const species = ANIMAL_BY_ID[speciesId];
-    const density = clamp01(getAnimalDensityAtTile(state, speciesId, tile.x, tile.y));
-    maxDensity = Math.max(maxDensity, density);
-    const baseCatchRate = clamp01(Number(species?.base_catch_rate) || 0);
-    const effectiveChance = clamp01(baseCatchRate * density * DEADFALL_TRAP_CATCH_MODIFIER * reliability);
-    const roll = mulberry32((seedBase + (i * 1291)) >>> 0)();
-
-    if (roll <= effectiveChance) {
-      if (!bestCatch || effectiveChance > bestCatch.effectiveChance) {
-        bestCatch = {
-          speciesId,
-          density,
-          effectiveChance,
-          roll,
-        };
-      }
-    }
-  }
-
-  const nextReliability = Math.max(DEADFALL_MIN_RELIABILITY, reliability - DEADFALL_DAILY_RELIABILITY_DECAY);
-  return {
-    hasCatch: Boolean(bestCatch),
-    caughtSpeciesId: bestCatch?.speciesId || null,
-    roll: Number.isFinite(Number(bestCatch?.roll)) ? Number(bestCatch.roll) : null,
-    lastDensity: bestCatch ? bestCatch.density : maxDensity,
-    nextReliability,
-  };
+  return rollDeadfallCatchImpl(state, tile, trap, {
+    clamp01,
+    DEADFALL_CANDIDATE_SPECIES_IDS,
+    ANIMAL_BY_ID,
+    getAnimalDensityAtTile,
+    DEADFALL_TRAP_CATCH_MODIFIER,
+    mulberry32,
+    DEADFALL_MIN_RELIABILITY,
+    DEADFALL_DAILY_RELIABILITY_DECAY,
+  });
 }
 
 function applyDailyDeadfallTrapResolution(state) {
-  for (const tile of state.tiles || []) {
-    const trap = tile?.deadfallTrap;
-    if (!trap || trap.active !== true) {
-      continue;
-    }
-
-    if (trap.poached === true) {
-      continue;
-    }
-
-    if (trap.hasCatch === true) {
-      const catchResolvedTotalDays = Number.isInteger(trap.catchResolvedTotalDays)
-        ? trap.catchResolvedTotalDays
-        : Number(state.totalDaysSimulated) || 0;
-      const daysSinceCatch = Math.max(0, (Number(state.totalDaysSimulated) || 0) - catchResolvedTotalDays);
-      let poachChance = SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE;
-      if (daysSinceCatch <= 0) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_1_CHANCE;
-      } else if (daysSinceCatch === 1) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_2_CHANCE;
-      } else if (daysSinceCatch === 2) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_3_CHANCE;
-      }
-
-      const poachSeed = (
-        ((state.seed + 101) * 7411)
-        + (state.year * 419)
-        + (state.dayOfYear * 79)
-        + (tile.x * 173)
-        + (tile.y * 263)
-        + (Number(trap?.placedDay) || 0)
-      ) >>> 0;
-      const poachRoll = mulberry32(poachSeed)();
-      const poached = poachRoll <= poachChance;
-
-      tile.deadfallTrap = {
-        ...trap,
-        hasCatch: poached ? false : true,
-        poached,
-        sprung: true,
-        caughtSpeciesId: poached ? null : trap.caughtSpeciesId,
-        lastPoachChance: poachChance,
-        lastPoachRoll: poachRoll,
-        daysSinceCatch,
-        lastResolvedYear: state.year,
-        lastResolvedDay: state.dayOfYear,
-      };
-      continue;
-    }
-
-    const outcome = rollDeadfallCatch(state, tile, trap);
-    tile.deadfallTrap = {
-      ...trap,
-      hasCatch: outcome.hasCatch,
-      poached: false,
-      sprung: outcome.hasCatch,
-      reliability: outcome.nextReliability,
-      caughtSpeciesId: outcome.caughtSpeciesId,
-      lastDensity: outcome.lastDensity,
-      lastRoll: outcome.roll,
-      catchResolvedTotalDays: outcome.hasCatch ? (Number(state.totalDaysSimulated) || 0) : null,
-      lastResolvedYear: state.year,
-      lastResolvedDay: state.dayOfYear,
-    };
-  }
+  return applyDailyDeadfallTrapResolutionImpl(state, {
+    SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_1_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_2_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_3_CHANCE,
+    mulberry32,
+    rollDeadfallCatch,
+  });
 }
 
 function rollFishTrapCatch(state, tile, trap, attemptOrdinal) {
-  const seedBase = (
-    ((state.seed + 131) * 2969)
-    + (state.year * 521)
-    + (state.dayOfYear * 97)
-    + (tile.x * 181)
-    + (tile.y * 313)
-    + (Number(trap?.placedDay) || 0)
-    + (attemptOrdinal * 733)
-  ) >>> 0;
-
-  const reliabilityRaw = Number(trap?.reliability);
-  const reliability = Number.isFinite(reliabilityRaw)
-    ? clamp01(reliabilityRaw)
-    : 1;
-
-  let bestCatch = null;
-  let maxDensity = 0;
-  for (let i = 0; i < FISH_TRAP_CANDIDATE_SPECIES_IDS.length; i += 1) {
-    const speciesId = FISH_TRAP_CANDIDATE_SPECIES_IDS[i];
-    const species = ANIMAL_BY_ID[speciesId];
-    const density = clamp01(getFishDensityAtTile(state, speciesId, tile.x, tile.y));
-    maxDensity = Math.max(maxDensity, density);
-    if (density <= 0) {
-      continue;
-    }
-
-    const baseCatchRate = clamp01(Number(species?.base_catch_rate) || 0);
-    const effectiveChance = clamp01(baseCatchRate * density * reliability);
-    const roll = mulberry32((seedBase + (i * 1453)) >>> 0)();
-    if (roll <= effectiveChance) {
-      if (!bestCatch || effectiveChance > bestCatch.effectiveChance) {
-        bestCatch = {
-          speciesId,
-          density,
-          effectiveChance,
-          roll,
-        };
-      }
-    }
-  }
-
-  return {
-    caughtSpeciesId: bestCatch?.speciesId || null,
-    roll: Number.isFinite(Number(bestCatch?.roll)) ? Number(bestCatch.roll) : null,
-    lastDensity: bestCatch ? bestCatch.density : maxDensity,
-  };
+  return rollFishTrapCatchImpl(state, tile, trap, attemptOrdinal, {
+    clamp01,
+    FISH_TRAP_CANDIDATE_SPECIES_IDS,
+    ANIMAL_BY_ID,
+    getFishDensityAtTile,
+    mulberry32,
+  });
 }
 
 function applyDailyFishTrapResolution(state) {
-  for (const tile of state.tiles || []) {
-    const trap = tile?.fishTrap;
-    if (!trap || trap.active !== true) {
-      continue;
-    }
-
-    if (tile.waterType !== 'river' || tile.waterFrozen === true) {
-      continue;
-    }
-
-    const maxStoredCatch = Number.isInteger(trap.maxStoredCatch)
-      ? Math.max(1, trap.maxStoredCatch)
-      : FISH_TRAP_MAX_STORED_CATCH;
-    const storedCatchSpeciesIds = Array.isArray(trap.storedCatchSpeciesIds)
-      ? trap.storedCatchSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
-      : [];
-
-    const availableSlots = Math.max(0, maxStoredCatch - storedCatchSpeciesIds.length);
-    const attempts = Math.min(FISH_TRAP_ATTEMPTS_PER_DAY, availableSlots);
-    const tileKey = `${tile.x},${tile.y}`;
-    let catchesAdded = 0;
-    let lastDensity = 0;
-    let lastRoll = null;
-
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const outcome = rollFishTrapCatch(state, tile, trap, attempt);
-      lastDensity = outcome.lastDensity;
-      lastRoll = outcome.roll;
-      if (!outcome.caughtSpeciesId) {
-        continue;
-      }
-
-      storedCatchSpeciesIds.push(outcome.caughtSpeciesId);
-      catchesAdded += 1;
-
-      if (!state.fishDensityByTile[outcome.caughtSpeciesId]) {
-        state.fishDensityByTile[outcome.caughtSpeciesId] = {};
-      }
-      const speciesDensityByTile = state.fishDensityByTile[outcome.caughtSpeciesId];
-      const currentDensity = clamp01(Number(speciesDensityByTile[tileKey]) || 0);
-      const densityPerCatch = Number(ANIMAL_BY_ID[outcome.caughtSpeciesId]?.population?.density_per_catch);
-      const nextDensity = Number.isFinite(densityPerCatch)
-        ? clamp01(currentDensity + densityPerCatch)
-        : currentDensity;
-      speciesDensityByTile[tileKey] = nextDensity;
-    }
-
-    const reliabilityRaw = Number(trap?.reliability);
-    const reliability = Number.isFinite(reliabilityRaw)
-      ? clamp01(reliabilityRaw)
-      : 1;
-
-    tile.fishTrap = {
-      ...trap,
-      active: true,
-      sprung: storedCatchSpeciesIds.length > 0,
-      reliability: Math.max(FISH_TRAP_MIN_RELIABILITY, reliability - FISH_TRAP_DAILY_RELIABILITY_DECAY),
-      storedCatchSpeciesIds,
-      maxStoredCatch,
-      lastCatchCount: catchesAdded,
-      lastDensity,
-      lastRoll,
-      lastResolvedYear: state.year,
-      lastResolvedDay: state.dayOfYear,
-    };
-  }
+  return applyDailyFishTrapResolutionImpl(state, {
+    FISH_TRAP_MAX_STORED_CATCH,
+    FISH_TRAP_ATTEMPTS_PER_DAY,
+    rollFishTrapCatch,
+    clamp01,
+    ANIMAL_BY_ID,
+    FISH_TRAP_MIN_RELIABILITY,
+    FISH_TRAP_DAILY_RELIABILITY_DECAY,
+  });
 }
 
 function rollBeehiveYieldForDay(state, tile, range, salt) {
-  const seed = (
-    ((state.seed + 1) * 1000003)
-    + (state.year * 9176)
-    + (state.dayOfYear * 131)
-    + (tile.x * 37)
-    + (tile.y * 73)
-    + salt
-  ) >>> 0;
-  const rng = mulberry32(seed);
-  return rangeRollIntRandom(range, rng, Math.round((range[0] + range[1]) / 2));
+  return rollBeehiveYieldForDayImpl(state, tile, range, salt, {
+    mulberry32,
+    rangeRollIntRandom,
+  });
 }
 
 function applyBeehiveSeasonalState(state) {
-  const seasonMultiplier = beehiveSeasonModifier(state.dayOfYear);
-
-  for (const tile of state.tiles || []) {
-    if (!tile?.beehive) {
-      continue;
-    }
-
-    if (seasonMultiplier <= 0) {
-      tile.beehive.active = false;
-      tile.beehive.yieldCurrentHoneyGrams = 0;
-      tile.beehive.yieldCurrentLarvaeGrams = 0;
-      tile.beehive.yieldCurrentBeeswaxGrams = 0;
-      continue;
-    }
-
-    tile.beehive.active = true;
-    tile.beehive.yieldCurrentHoneyGrams = Math.max(
-      1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_HONEY_RANGE_GRAMS, 11) * seasonMultiplier),
-    );
-    tile.beehive.yieldCurrentLarvaeGrams = Math.max(
-      1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_LARVAE_RANGE_GRAMS, 23) * seasonMultiplier),
-    );
-    tile.beehive.yieldCurrentBeeswaxGrams = Math.max(
-      1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_BEESWAX_RANGE_GRAMS, 41) * seasonMultiplier),
-    );
-  }
+  return applyBeehiveSeasonalStateImpl(state, {
+    beehiveSeasonModifier,
+    rollBeehiveYieldForDay,
+    BEEHIVE_HONEY_RANGE_GRAMS,
+    BEEHIVE_LARVAE_RANGE_GRAMS,
+    BEEHIVE_BEESWAX_RANGE_GRAMS,
+  });
 }
 
 function refillSquirrelCachesByYear(state) {
@@ -1356,9 +1158,32 @@ function defaultCampState(width, height) {
       active: null,
       queued: [],
     },
+    partnerTaskHistory: [],
     dryingRack: {
       capacity: 4,
       slots: [],
+    },
+    mealPlan: {
+      ingredients: [],
+      preview: null,
+    },
+    nauseaByIngredient: {},
+    lastMealResult: null,
+    nextDayStewTickBonus: 0,
+    debrief: {
+      active: false,
+      openedAtDay: null,
+      medicineRequests: [],
+      medicineNotifications: [],
+      visionRequest: null,
+      visionSelectionOptions: [],
+      requiresVisionConfirmation: false,
+      visionNotifications: [],
+      visionUsesThisSeason: 0,
+      visionSeasonKey: null,
+      pendingVisionRevelation: null,
+      pendingVisionChoices: [],
+      chosenVisionRewards: [],
     },
   };
 }
@@ -1443,13 +1268,36 @@ function normalizePartnerTask(task) {
   const outputs = Array.isArray(task.outputs)
     ? task.outputs.map((entry) => ({ ...(entry || {}) }))
     : [];
+  const inputs = Array.isArray(task.inputs)
+    ? task.inputs.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const requirements = task.requirements && typeof task.requirements === 'object'
+    ? {
+      stations: Array.isArray(task.requirements.stations)
+        ? task.requirements.stations.filter((entry) => typeof entry === 'string' && entry)
+        : [],
+      unlocks: Array.isArray(task.requirements.unlocks)
+        ? task.requirements.unlocks.filter((entry) => typeof entry === 'string' && entry)
+        : [],
+    }
+    : { stations: [], unlocks: [] };
+  const status = typeof task.status === 'string' && task.status
+    ? task.status
+    : 'queued';
+  const failureReason = typeof task.failureReason === 'string' && task.failureReason
+    ? task.failureReason
+    : null;
 
   return {
     taskId,
     kind,
     ticksRequired,
     ticksRemaining,
+    inputs,
+    requirements,
     outputs,
+    status,
+    failureReason,
     meta: task.meta && typeof task.meta === 'object' ? { ...task.meta } : null,
   };
 }
@@ -1468,117 +1316,19 @@ function mirrorPartnerTaskQueueToActor(state) {
 }
 
 function addCampStockpileItem(camp, itemId, quantity, options = null) {
-  if (!camp || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return;
-  }
-
-  if (!camp.stockpile || !Array.isArray(camp.stockpile.stacks)) {
-    camp.stockpile = { stacks: [] };
-  }
-
-  const qty = Math.max(1, Math.floor(quantity));
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingDryness = Number(options?.dryness);
-  const incomingUnitWeightKg = Number(options?.unitWeightKg);
-  const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
-  const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
-  const existing = findCompatibleStackForAutoMerge(camp.stockpile.stacks, itemId, incomingDryness);
-  if (existing) {
-    const priorQty = Math.max(0, Math.floor(Number(existing.quantity) || 0));
-    existing.quantity = priorQty + qty;
-
-    if (Number.isFinite(incomingFreshness)) {
-      const priorFreshness = Number(existing.freshness);
-      existing.freshness = Number.isFinite(priorFreshness)
-        ? ((priorFreshness * priorQty) + (incomingFreshness * qty)) / Math.max(1, priorQty + qty)
-        : incomingFreshness;
-    }
-    if (Number.isFinite(incomingDecayDaysRemaining) && incomingDecayDaysRemaining >= 0) {
-      const priorDecayDaysRemaining = Number(existing.decayDaysRemaining);
-      existing.decayDaysRemaining = Number.isFinite(priorDecayDaysRemaining) && priorDecayDaysRemaining >= 0
-        ? ((priorDecayDaysRemaining * priorQty) + (incomingDecayDaysRemaining * qty)) / Math.max(1, priorQty + qty)
-        : incomingDecayDaysRemaining;
-    }
-    if (Number.isFinite(incomingDryness)) {
-      const priorDryness = Number(existing.dryness);
-      existing.dryness = Number.isFinite(priorDryness)
-        ? clamp01(((priorDryness * priorQty) + (incomingDryness * qty)) / Math.max(1, priorQty + qty))
-        : clamp01(incomingDryness);
-    }
-    if (Number.isFinite(incomingUnitWeightKg) && incomingUnitWeightKg >= 0) {
-      const priorUnitWeightKg = Number(existing.unitWeightKg);
-      if (!Number.isFinite(priorUnitWeightKg) || priorUnitWeightKg < 0) {
-        existing.unitWeightKg = incomingUnitWeightKg;
-      }
-    }
-    existing.footprintW = normalizeStackFootprintValue(existing.footprintW || incomingFootprintW);
-    existing.footprintH = normalizeStackFootprintValue(existing.footprintH || incomingFootprintH);
-    return;
-  }
-
-  const nextStack = {
-    itemId,
-    quantity: qty,
-  };
-  if (Number.isFinite(incomingFreshness)) {
-    nextStack.freshness = incomingFreshness;
-  }
-  if (Number.isFinite(incomingDecayDaysRemaining) && incomingDecayDaysRemaining >= 0) {
-    nextStack.decayDaysRemaining = incomingDecayDaysRemaining;
-  }
-  if (Number.isFinite(incomingDryness)) {
-    nextStack.dryness = clamp01(incomingDryness);
-  }
-  if (Number.isFinite(incomingUnitWeightKg) && incomingUnitWeightKg >= 0) {
-    nextStack.unitWeightKg = incomingUnitWeightKg;
-  }
-  nextStack.footprintW = incomingFootprintW;
-  nextStack.footprintH = incomingFootprintH;
-
-  camp.stockpile.stacks.push(nextStack);
+  return addCampStockpileItemImpl(camp, itemId, quantity, options, {
+    normalizeStackFootprintValue,
+    findCompatibleStackForAutoMerge,
+    clamp01,
+  });
 }
 
 function removeCampStockpileItem(camp, itemId, quantity) {
-  if (!camp || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return { consumed: 0, freshness: null, decayDaysRemaining: null, dryness: null };
-  }
-
-  const stacks = Array.isArray(camp?.stockpile?.stacks) ? camp.stockpile.stacks : [];
-  const stack = findPreferredStackByItem(stacks, itemId, quantity);
-  if (!stack) {
-    return { consumed: 0, freshness: null, decayDaysRemaining: null, dryness: null };
-  }
-
-  const qty = Math.max(1, Math.floor(quantity));
-  const available = Math.max(0, Math.floor(Number(stack.quantity) || 0));
-  const consumed = Math.min(available, qty);
-  if (consumed <= 0) {
-    return { consumed: 0, freshness: null, decayDaysRemaining: null, dryness: null };
-  }
-
-  const freshness = Number.isFinite(Number(stack.freshness)) ? Number(stack.freshness) : null;
-  const decayDaysRemaining = Number.isFinite(Number(stack.decayDaysRemaining))
-    ? Number(stack.decayDaysRemaining)
-    : null;
-  const dryness = Number.isFinite(Number(stack.dryness))
-    ? clamp01(Number(stack.dryness))
-    : null;
-  const unitWeightKg = Number.isFinite(Number(stack.unitWeightKg)) ? Number(stack.unitWeightKg) : null;
-  const footprintW = normalizeStackFootprintValue(stack.footprintW);
-  const footprintH = normalizeStackFootprintValue(stack.footprintH);
-
-  stack.quantity = available - consumed;
-  camp.stockpile.stacks = stacks.filter((entry) => (Number(entry?.quantity) || 0) > 0);
-  return {
-    consumed,
-    freshness,
-    decayDaysRemaining,
-    dryness,
-    unitWeightKg,
-    footprintW,
-    footprintH,
-  };
+  return removeCampStockpileItemImpl(camp, itemId, quantity, {
+    findPreferredStackByItem,
+    clamp01,
+    normalizeStackFootprintValue,
+  });
 }
 
 function completePartnerTaskOutputs(state, task) {
@@ -1593,35 +1343,111 @@ function completePartnerTaskOutputs(state, task) {
   }
 }
 
-function ensureActorInventory(actor) {
-  if (!actor.inventory || typeof actor.inventory !== 'object') {
-    actor.inventory = {
-      gridWidth: 6,
-      gridHeight: 4,
-      maxCarryWeightKg: 15,
-      stacks: [],
-      equipment: {
-        gloves: null,
-        coat: null,
-      },
-    };
+function appendPartnerTaskHistory(state, entry) {
+  if (!state?.camp || typeof state.camp !== 'object') {
     return;
   }
+  if (!Array.isArray(state.camp.partnerTaskHistory)) {
+    state.camp.partnerTaskHistory = [];
+  }
+  state.camp.partnerTaskHistory.push({
+    ...(entry || {}),
+    day: Number(state.totalDaysSimulated) || 0,
+    dayTick: Number(state.dayTick) || 0,
+  });
+  if (state.camp.partnerTaskHistory.length > 100) {
+    state.camp.partnerTaskHistory = state.camp.partnerTaskHistory.slice(-100);
+  }
+}
 
-  if (!Array.isArray(actor.inventory.stacks)) {
-    actor.inventory.stacks = [];
+function getCampStockpileQuantity(camp, itemId) {
+  if (!camp || typeof itemId !== 'string' || !itemId) {
+    return 0;
+  }
+  const stacks = Array.isArray(camp?.stockpile?.stacks) ? camp.stockpile.stacks : [];
+  let total = 0;
+  for (const stack of stacks) {
+    if (stack?.itemId !== itemId) {
+      continue;
+    }
+    total += Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+  }
+  return total;
+}
+
+function getPartnerTaskInvalidationReason(state, task) {
+  const normalizedTask = task && typeof task === 'object' ? task : null;
+  if (!normalizedTask) {
+    return 'invalid_task';
   }
 
-  ensureInventoryEquipment(actor.inventory);
+  const requirements = normalizedTask.requirements && typeof normalizedTask.requirements === 'object'
+    ? normalizedTask.requirements
+    : { stations: [], unlocks: [] };
+  for (const stationId of Array.isArray(requirements.stations) ? requirements.stations : []) {
+    const built = Array.isArray(state?.camp?.stationsUnlocked)
+      && state.camp.stationsUnlocked.includes(stationId);
+    if (!built) {
+      return `missing_station:${stationId}`;
+    }
+  }
+  for (const unlockKey of Array.isArray(requirements.unlocks) ? requirements.unlocks : []) {
+    if (state?.techUnlocks?.[unlockKey] === false) {
+      return `missing_unlock:${unlockKey}`;
+    }
+  }
+
+  const inputs = Array.isArray(normalizedTask.inputs) ? normalizedTask.inputs : [];
+  for (const input of inputs) {
+    if (input?.required === false) {
+      continue;
+    }
+    const source = typeof input?.source === 'string' ? input.source : 'camp_stockpile';
+    if (source !== 'camp_stockpile') {
+      continue;
+    }
+    const itemId = typeof input?.itemId === 'string' ? input.itemId : '';
+    const quantity = Math.max(1, Math.floor(Number(input?.quantity) || 0));
+    if (!itemId || quantity <= 0) {
+      continue;
+    }
+    if (getCampStockpileQuantity(state?.camp, itemId) < quantity) {
+      return `missing_input:${itemId}`;
+    }
+  }
+
+  return null;
+}
+
+function consumePartnerTaskInputs(state, task) {
+  const inputs = Array.isArray(task?.inputs) ? task.inputs : [];
+  for (const input of inputs) {
+    if (input?.required === false) {
+      continue;
+    }
+    const source = typeof input?.source === 'string' ? input.source : 'camp_stockpile';
+    if (source !== 'camp_stockpile') {
+      continue;
+    }
+    const itemId = typeof input?.itemId === 'string' ? input.itemId : '';
+    const quantity = Math.max(1, Math.floor(Number(input?.quantity) || 0));
+    if (!itemId || quantity <= 0) {
+      continue;
+    }
+    const removed = removeCampStockpileItem(state.camp, itemId, quantity);
+    if ((Number(removed?.consumed) || 0) < quantity) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function ensureActorInventory(actor) {
+  return ensureActorInventoryImpl(actor, { ensureInventoryEquipment });
 }
 
 function normalizeStackFootprintValue(value) {
-  if (Number.isInteger(value) && value > 0) {
-    return value;
-  }
-
-  const parsed = Math.floor(Number(value || 1));
-  return Math.max(1, parsed);
+  return normalizeStackFootprintValueImpl(value);
 }
 
 function getStackFootprint(stack) {
@@ -1892,7 +1718,16 @@ function maxQuantityByCarryWeight(inventory, unitWeightKg) {
   return Math.max(0, Math.floor(available / unitWeightKg));
 }
 
-function mergeStackMetadata(existing, priorQty, addedQty, incomingFreshness, incomingDecayDaysRemaining, incomingUnitWeightKg, incomingDryness) {
+function mergeStackMetadata(
+  existing,
+  priorQty,
+  addedQty,
+  incomingFreshness,
+  incomingDecayDaysRemaining,
+  incomingUnitWeightKg,
+  incomingDryness,
+  incomingTanninRemaining,
+) {
   if (Number.isFinite(incomingFreshness)) {
     const priorFreshness = Number(existing.freshness);
     existing.freshness = Number.isFinite(priorFreshness)
@@ -1914,6 +1749,13 @@ function mergeStackMetadata(existing, priorQty, addedQty, incomingFreshness, inc
       : clamp01(incomingDryness);
   }
 
+  if (Number.isFinite(incomingTanninRemaining)) {
+    const priorTanninRemaining = Number(existing.tanninRemaining);
+    existing.tanninRemaining = Number.isFinite(priorTanninRemaining)
+      ? clamp01(((priorTanninRemaining * priorQty) + (incomingTanninRemaining * addedQty)) / Math.max(1, priorQty + addedQty))
+      : clamp01(incomingTanninRemaining);
+  }
+
   const priorUnitWeightKg = Number(existing.unitWeightKg);
   if (Number.isFinite(priorUnitWeightKg) && priorUnitWeightKg >= 0) {
     return;
@@ -1921,10 +1763,6 @@ function mergeStackMetadata(existing, priorQty, addedQty, incomingFreshness, inc
   if (Number.isFinite(incomingUnitWeightKg) && incomingUnitWeightKg >= 0) {
     existing.unitWeightKg = incomingUnitWeightKg;
   }
-}
-
-function worldItemTileKey(x, y) {
-  return `${x},${y}`;
 }
 
 function resolvePlantSubStageCanDry(itemId) {
@@ -2013,120 +1851,22 @@ function applyDryingToStackArray(stacks, dailyIncrement) {
   });
 }
 
-function nearbyDropPositions(originX, originY, maxRadius = 3) {
-  const positions = [];
-  for (let radius = 0; radius <= maxRadius; radius += 1) {
-    for (let y = originY - radius; y <= originY + radius; y += 1) {
-      for (let x = originX - radius; x <= originX + radius; x += 1) {
-        if (radius > 0 && Math.max(Math.abs(x - originX), Math.abs(y - originY)) !== radius) {
-          continue;
-        }
-        positions.push({ x, y });
-      }
-    }
-  }
-  return positions;
-}
-
 function addWorldItemNearby(state, originX, originY, itemId, quantity, options = null) {
-  if (!state || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return 0;
-  }
-
-  if (!state.worldItemsByTile || typeof state.worldItemsByTile !== 'object') {
-    state.worldItemsByTile = {};
-  }
-
-  const qty = Math.max(1, Math.floor(quantity));
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingUnitWeightKg = Number(options?.unitWeightKg);
-  const incomingDryness = Number(options?.dryness);
-  const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
-  const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
-  const positions = nearbyDropPositions(originX, originY, 3);
-
-  for (const { x, y } of positions) {
-    if (!inBounds(x, y, state.width, state.height)) {
-      continue;
-    }
-
-    const tile = state.tiles[tileIndex(x, y, state.width)];
-    if (!tile || tile.waterType || isRockTile(tile)) {
-      continue;
-    }
-
-    const key = worldItemTileKey(x, y);
-    const stacks = Array.isArray(state.worldItemsByTile[key]) ? state.worldItemsByTile[key] : [];
-
-    if (stacks.length === 0) {
-      const nextStack = { itemId, quantity: qty, footprintW: incomingFootprintW, footprintH: incomingFootprintH };
-      if (Number.isFinite(incomingFreshness)) {
-        nextStack.freshness = incomingFreshness;
-      }
-      if (Number.isFinite(incomingDecayDaysRemaining) && incomingDecayDaysRemaining >= 0) {
-        nextStack.decayDaysRemaining = incomingDecayDaysRemaining;
-      }
-      if (Number.isFinite(incomingUnitWeightKg) && incomingUnitWeightKg >= 0) {
-        nextStack.unitWeightKg = incomingUnitWeightKg;
-      }
-      if (Number.isFinite(incomingDryness)) {
-        nextStack.dryness = clamp01(incomingDryness);
-      }
-      state.worldItemsByTile[key] = [nextStack];
-      return qty;
-    }
-
-    if (stacks.length === 1 && stacks[0]?.itemId === itemId) {
-      const existing = stacks[0];
-      const existingDryness = Number.isFinite(Number(existing.dryness)) ? Number(existing.dryness) : null;
-      const incomingDrynessNormalized = Number.isFinite(incomingDryness) ? clamp01(incomingDryness) : null;
-      const drynessCompatible =
-        (existingDryness === null && incomingDrynessNormalized === null) ||
-        (existingDryness !== null && incomingDrynessNormalized !== null && Math.abs(existingDryness - incomingDrynessNormalized) < 1e-6);
-      if (!drynessCompatible) {
-        continue;
-      }
-      const priorQty = Math.max(0, Math.floor(Number(existing.quantity) || 0));
-      existing.quantity = priorQty + qty;
-      existing.footprintW = normalizeStackFootprintValue(existing.footprintW || incomingFootprintW);
-      existing.footprintH = normalizeStackFootprintValue(existing.footprintH || incomingFootprintH);
-      mergeStackMetadata(
-        existing,
-        priorQty,
-        qty,
-        incomingFreshness,
-        incomingDecayDaysRemaining,
-        incomingUnitWeightKg,
-        incomingDryness,
-      );
-      state.worldItemsByTile[key] = [existing];
-      return qty;
-    }
-  }
-
-  return 0;
+  return addWorldItemNearbyImpl(state, originX, originY, itemId, quantity, options, {
+    normalizeStackFootprintValue,
+    inBounds,
+    tileIndex,
+    isRockTile,
+    mergeStackMetadata,
+    clamp01,
+  });
 }
 
 function addActorInventoryItemWithOverflowDrop(state, actor, itemId, quantity, options = null) {
-  const result = addActorInventoryItem(actor, itemId, quantity, options);
-  const overflowQuantity = Math.max(0, Math.floor(Number(result?.overflowQuantity) || 0));
-  if (overflowQuantity <= 0) {
-    return {
-      addedQuantity: Math.max(0, Math.floor(Number(result?.addedQuantity) || 0)),
-      overflowQuantity: 0,
-      droppedQuantity: 0,
-    };
-  }
-
-  const originX = Number.isInteger(actor?.x) ? actor.x : 0;
-  const originY = Number.isInteger(actor?.y) ? actor.y : 0;
-  const droppedQuantity = addWorldItemNearby(state, originX, originY, itemId, overflowQuantity, options);
-  return {
-    addedQuantity: Math.max(0, Math.floor(Number(result?.addedQuantity) || 0)),
-    overflowQuantity: Math.max(0, overflowQuantity - droppedQuantity),
-    droppedQuantity,
-  };
+  return addActorInventoryItemWithOverflowDropImpl(state, actor, itemId, quantity, options, {
+    addActorInventoryItem,
+    addWorldItemNearby,
+  });
 }
 
 function applyDecayToStackArray(stacks, options = null) {
@@ -2288,299 +2028,91 @@ function applyDailySapTapFill(state) {
   }
 }
 
-function rollSimpleSnareCatch(state, tile, snare) {
-  const seed = (
-    ((state.seed + 11) * 4093)
-    + (state.year * 233)
-    + (state.dayOfYear * 29)
-    + (tile.x * 97)
-    + (tile.y * 193)
-    + (Number(snare?.placedDay) || 0)
-  ) >>> 0;
-  const rng = mulberry32(seed);
-
-  const rabbitDensity = getAnimalDensityAtTile(state, 'sylvilagus_floridanus', tile.x, tile.y);
-  const reliabilityRaw = Number(snare?.reliability);
-  const reliability = Number.isFinite(reliabilityRaw)
-    ? clamp01(reliabilityRaw)
-    : 1;
-
-  const baseChance = clamp01(SIMPLE_SNARE_BASE_CATCH_CHANCE + (rabbitDensity * SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT));
-  const effectiveChance = clamp01(baseChance * reliability);
-  const roll = rng();
-  const hasCatch = roll <= effectiveChance;
-  const nextReliability = Math.max(SIMPLE_SNARE_MIN_RELIABILITY, reliability - SIMPLE_SNARE_DAILY_RELIABILITY_DECAY);
-
-  return {
-    hasCatch,
-    roll,
-    rabbitDensity,
-    nextReliability,
-  };
-}
-
-function applyDailySimpleSnareResolution(state) {
+function applyDailyLeachingBasketProgress(state) {
   for (const tile of state.tiles || []) {
-    const snare = tile?.simpleSnare;
-    if (!snare || snare.active !== true) {
+    const basket = tile?.leachingBasket;
+    if (!basket || basket.active !== true) {
       continue;
     }
 
-    if (snare.poached === true) {
+    if (tile.waterFrozen === true) {
       continue;
     }
 
-    if (snare.hasCatch === true) {
-      const catchResolvedTotalDays = Number.isInteger(snare.catchResolvedTotalDays)
-        ? snare.catchResolvedTotalDays
-        : Number(state.totalDaysSimulated) || 0;
-      const daysSinceCatch = Math.max(0, (Number(state.totalDaysSimulated) || 0) - catchResolvedTotalDays);
-      let poachChance = SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE;
-      if (daysSinceCatch <= 0) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_1_CHANCE;
-      } else if (daysSinceCatch === 1) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_2_CHANCE;
-      } else if (daysSinceCatch === 2) {
-        poachChance = SIMPLE_SNARE_POACH_DAY_3_CHANCE;
-      }
-      const poachSeed = (
-        ((state.seed + 37) * 8191)
-        + (state.year * 347)
-        + (state.dayOfYear * 61)
-        + (tile.x * 149)
-        + (tile.y * 257)
-        + (Number(snare?.placedDay) || 0)
-      ) >>> 0;
-      const poachRoll = mulberry32(poachSeed)();
-      const poached = poachRoll <= poachChance;
-
-      tile.simpleSnare = {
-        ...snare,
-        hasCatch: poached ? false : true,
-        poached,
-        sprung: true,
-        lastPoachChance: poachChance,
-        lastPoachRoll: poachRoll,
-        daysSinceCatch,
-        lastResolvedYear: state.year,
-        lastResolvedDay: state.dayOfYear,
-      };
-      continue;
-    }
-
-    const outcome = rollSimpleSnareCatch(state, tile, snare);
-    tile.simpleSnare = {
-      ...snare,
-      hasCatch: outcome.hasCatch,
-      poached: false,
-      sprung: outcome.hasCatch,
-      rabbitDensity: outcome.rabbitDensity,
-      reliability: outcome.nextReliability,
-      lastRoll: outcome.roll,
-      catchResolvedTotalDays: outcome.hasCatch ? (Number(state.totalDaysSimulated) || 0) : null,
-      lastResolvedYear: state.year,
-      lastResolvedDay: state.dayOfYear,
+    const reduction = tile.waterType === 'river'
+      ? LEACHING_BASKET_TANNIN_REDUCTION_RIVER_PER_DAY
+      : LEACHING_BASKET_TANNIN_REDUCTION_POND_PER_DAY;
+    const tanninRemaining = Number.isFinite(Number(basket.tanninRemaining))
+      ? clamp01(Number(basket.tanninRemaining))
+      : 0;
+    tile.leachingBasket = {
+      ...basket,
+      tanninRemaining: clamp01(tanninRemaining - reduction),
+      lastResolvedYear: Number(state.year) || 1,
+      lastResolvedDay: Number(state.dayOfYear) || 1,
     };
   }
 }
 
+function rollSimpleSnareCatch(state, tile, snare) {
+  return rollSimpleSnareCatchImpl(state, tile, snare, {
+    mulberry32,
+    getAnimalDensityAtTile,
+    clamp01,
+    SIMPLE_SNARE_BASE_CATCH_CHANCE,
+    SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
+    SIMPLE_SNARE_MIN_RELIABILITY,
+    SIMPLE_SNARE_DAILY_RELIABILITY_DECAY,
+  });
+}
+
+function applyDailySimpleSnareResolution(state) {
+  return applyDailySimpleSnareResolutionImpl(state, {
+    SIMPLE_SNARE_POACH_DAY_4_PLUS_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_1_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_2_CHANCE,
+    SIMPLE_SNARE_POACH_DAY_3_CHANCE,
+    mulberry32,
+    rollSimpleSnareCatch,
+  });
+}
+
 function addActorInventoryItem(actor, itemId, quantity, options = null) {
-  if (!actor || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return { addedQuantity: 0, overflowQuantity: Math.max(0, Math.floor(Number(quantity) || 0)) };
-  }
-
-  ensureActorInventory(actor);
-  const qtyRequested = Math.max(1, Math.floor(quantity));
-  const unitWeightKg = getStackUnitWeightKg(options, 0);
-  const maxByWeight = maxQuantityByCarryWeight(actor.inventory, unitWeightKg);
-  const qty = Math.min(qtyRequested, Number.isFinite(maxByWeight) ? maxByWeight : qtyRequested);
-  if (qty <= 0) {
-    return { addedQuantity: 0, overflowQuantity: qtyRequested };
-  }
-
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingDryness = Number(options?.dryness);
-  const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
-  const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
-  const existing = findCompatibleStackForAutoMerge(actor.inventory.stacks, itemId, incomingDryness);
-  if (existing) {
-    const priorQty = Math.max(0, Math.floor(Number(existing.quantity) || 0));
-    existing.quantity = priorQty + qty;
-
-    existing.footprintW = normalizeStackFootprintValue(existing.footprintW || incomingFootprintW);
-    existing.footprintH = normalizeStackFootprintValue(existing.footprintH || incomingFootprintH);
-    mergeStackMetadata(
-      existing,
-      priorQty,
-      qty,
-      incomingFreshness,
-      incomingDecayDaysRemaining,
-      unitWeightKg,
-      incomingDryness,
-    );
-    return { addedQuantity: qty, overflowQuantity: qtyRequested - qty };
-  }
-
-  const { gridW, gridH } = inventoryGridDimensions(actor.inventory);
-  if (incomingFootprintW > gridW || incomingFootprintH > gridH) {
-    return { addedQuantity: 0, overflowQuantity: qtyRequested };
-  }
-
-  const currentLayout = normalizeCurrentInventoryLayout(actor.inventory.stacks, gridW, gridH);
-  if (!currentLayout) {
-    return { addedQuantity: 0, overflowQuantity: qtyRequested };
-  }
-
-  const placedRects = [];
-  for (const placement of currentLayout.values()) {
-    placedRects.push(placement);
-  }
-  const directPlacement = findFirstFreePlacement(placedRects, incomingFootprintW, incomingFootprintH, gridW, gridH);
-
-  let incomingPlacement = directPlacement;
-  if (!incomingPlacement) {
-    const repacked = repackInventoryWithIncoming(
-      actor.inventory.stacks,
-      { itemId, footprintW: incomingFootprintW, footprintH: incomingFootprintH },
-      gridW,
-      gridH,
-    );
-    if (!repacked) {
-      return { addedQuantity: 0, overflowQuantity: qtyRequested };
-    }
-
-    for (const [idx, placement] of repacked.placementsByExistingIndex.entries()) {
-      const stack = actor.inventory.stacks[idx];
-      if (!stack) {
-        continue;
-      }
-      stack.slotX = placement.x;
-      stack.slotY = placement.y;
-      const footprint = getStackFootprint(stack);
-      stack.footprintW = footprint.footprintW;
-      stack.footprintH = footprint.footprintH;
-    }
-    incomingPlacement = repacked.incomingPlacement;
-  } else {
-    for (const [idx, placement] of currentLayout.entries()) {
-      const stack = actor.inventory.stacks[idx];
-      if (!stack) {
-        continue;
-      }
-      const footprint = getStackFootprint(stack);
-      stack.slotX = placement.x;
-      stack.slotY = placement.y;
-      stack.footprintW = footprint.footprintW;
-      stack.footprintH = footprint.footprintH;
-    }
-  }
-
-  const nextStack = {
-    itemId,
-    quantity: qty,
-    footprintW: incomingFootprintW,
-    footprintH: incomingFootprintH,
-    slotX: incomingPlacement.x,
-    slotY: incomingPlacement.y,
-  };
-  if (Number.isFinite(incomingFreshness)) {
-    nextStack.freshness = incomingFreshness;
-  }
-  if (Number.isFinite(incomingDecayDaysRemaining) && incomingDecayDaysRemaining >= 0) {
-    nextStack.decayDaysRemaining = incomingDecayDaysRemaining;
-  }
-  if (Number.isFinite(unitWeightKg) && unitWeightKg >= 0) {
-    nextStack.unitWeightKg = unitWeightKg;
-  }
-  if (Number.isFinite(incomingDryness)) {
-    nextStack.dryness = clamp01(incomingDryness);
-  }
-
-  actor.inventory.stacks.push(nextStack);
-  return { addedQuantity: qty, overflowQuantity: qtyRequested - qty };
+  return addActorInventoryItemImpl(actor, itemId, quantity, options, {
+    ensureActorInventory,
+    getStackUnitWeightKg,
+    maxQuantityByCarryWeight,
+    normalizeStackFootprintValue,
+    findCompatibleStackForAutoMerge,
+    mergeStackMetadata,
+    inventoryGridDimensions,
+    normalizeCurrentInventoryLayout,
+    findFirstFreePlacement,
+    repackInventoryWithIncoming,
+    getStackFootprint,
+    clamp01,
+  });
 }
 
 function removeActorInventoryItem(actor, itemId, quantity) {
-  if (!actor || typeof itemId !== 'string' || !itemId || !Number.isFinite(quantity) || quantity <= 0) {
-    return 0;
-  }
-
-  ensureActorInventory(actor);
-  const qty = Math.max(1, Math.floor(quantity));
-  const stack = findPreferredStackByItem(actor.inventory.stacks, itemId, quantity);
-  if (!stack) {
-    return 0;
-  }
-
-  const available = Math.max(0, Math.floor(Number(stack.quantity) || 0));
-  const consumed = Math.min(available, qty);
-  stack.quantity = available - consumed;
-  actor.inventory.stacks = actor.inventory.stacks.filter((entry) => (Number(entry?.quantity) || 0) > 0);
-  return consumed;
-}
-
-function ensureCampDryingRackState(camp) {
-  if (!camp || typeof camp !== 'object') {
-    return;
-  }
-
-  if (!camp.dryingRack || typeof camp.dryingRack !== 'object') {
-    camp.dryingRack = { capacity: 4, slots: [] };
-  }
-  if (!Array.isArray(camp.dryingRack.slots)) {
-    camp.dryingRack.slots = [];
-  }
-  camp.dryingRack.capacity = 4;
+  return removeActorInventoryItemImpl(actor, itemId, quantity, {
+    ensureActorInventory,
+    findPreferredStackByItem,
+  });
 }
 
 function addCampDryingRackItem(camp, itemId, quantity, options = null) {
-  ensureCampDryingRackState(camp);
-  if (!camp || !camp.dryingRack) {
-    return { addedQuantity: 0, overflowQuantity: Math.max(0, Math.floor(Number(quantity) || 0)) };
-  }
-
-  const pseudoActor = {
-    inventory: {
-      gridWidth: 2,
-      gridHeight: 2,
-      maxCarryWeightKg: Number.POSITIVE_INFINITY,
-      stacks: camp.dryingRack.slots.map((entry) => ({ ...(entry || {}) })),
-    },
-  };
-
-  const result = addActorInventoryItem(pseudoActor, itemId, quantity, options);
-
-  camp.dryingRack.slots = pseudoActor.inventory.stacks.map((entry) => ({ ...(entry || {}) }));
-  return result;
+  return addCampDryingRackItemImpl(camp, itemId, quantity, options, {
+    addActorInventoryItem,
+  });
 }
 
 function extractActorInventoryItemWithMetadata(actor, itemId, quantity) {
-  const stack = Array.isArray(actor?.inventory?.stacks)
-    ? findPreferredStackByItem(actor.inventory.stacks, itemId, quantity)
-    : null;
-  const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
-  const requested = Math.max(1, Math.floor(Number(quantity) || 0));
-  const consumedTarget = Math.min(available, requested);
-  if (consumedTarget <= 0) {
-    return null;
-  }
-
-  const consumed = removeActorInventoryItem(actor, itemId, consumedTarget);
-  if (consumed <= 0) {
-    return null;
-  }
-
-  return {
-    itemId,
-    quantity: consumed,
-    freshness: Number.isFinite(Number(stack?.freshness)) ? Number(stack.freshness) : null,
-    decayDaysRemaining: Number.isFinite(Number(stack?.decayDaysRemaining)) ? Number(stack.decayDaysRemaining) : null,
-    dryness: Number.isFinite(Number(stack?.dryness)) ? Number(stack.dryness) : null,
-    unitWeightKg: Number.isFinite(Number(stack?.unitWeightKg)) ? Number(stack.unitWeightKg) : null,
-    footprintW: normalizeStackFootprintValue(stack?.footprintW),
-    footprintH: normalizeStackFootprintValue(stack?.footprintH),
-  };
+  return extractActorInventoryItemWithMetadataImpl(actor, itemId, quantity, {
+    findPreferredStackByItem,
+    removeActorInventoryItem,
+    normalizeStackFootprintValue,
+  });
 }
 
 function progressPartnerTaskQueueOneTick(state) {
@@ -2589,8 +2121,55 @@ function progressPartnerTaskQueueOneTick(state) {
     return;
   }
 
-  if (!queue.active && Array.isArray(queue.queued) && queue.queued.length > 0) {
-    queue.active = normalizePartnerTask(queue.queued.shift());
+  if (!Array.isArray(queue.queued)) {
+    queue.queued = [];
+  }
+
+  const promoteNextTask = () => {
+    if (queue.active) {
+      return;
+    }
+    while (!queue.active && queue.queued.length > 0) {
+      const nextTask = normalizePartnerTask(queue.queued.shift());
+      if (!nextTask) {
+        continue;
+      }
+      const invalidReason = getPartnerTaskInvalidationReason(state, nextTask);
+      if (invalidReason) {
+        appendPartnerTaskHistory(state, {
+          taskId: nextTask.taskId,
+          kind: nextTask.kind,
+          status: 'failed',
+          failureReason: invalidReason,
+        });
+        continue;
+      }
+      nextTask.status = 'active';
+      nextTask.failureReason = null;
+      queue.active = nextTask;
+    }
+  };
+
+  promoteNextTask();
+
+  if (!queue.active) {
+    mirrorPartnerTaskQueueToActor(state);
+    return;
+  }
+
+  while (queue.active) {
+    const invalidReason = getPartnerTaskInvalidationReason(state, queue.active);
+    if (!invalidReason) {
+      break;
+    }
+    appendPartnerTaskHistory(state, {
+      taskId: queue.active.taskId,
+      kind: queue.active.kind,
+      status: 'failed',
+      failureReason: invalidReason,
+    });
+    queue.active = null;
+    promoteNextTask();
   }
 
   if (!queue.active) {
@@ -2600,1707 +2179,140 @@ function progressPartnerTaskQueueOneTick(state) {
 
   queue.active.ticksRemaining = Math.max(0, Math.floor(Number(queue.active.ticksRemaining || 0)) - 1);
   if (queue.active.ticksRemaining === 0) {
-    completePartnerTaskOutputs(state, queue.active);
-    queue.active = null;
-    if (Array.isArray(queue.queued) && queue.queued.length > 0) {
-      queue.active = normalizePartnerTask(queue.queued.shift());
+    const didConsumeInputs = consumePartnerTaskInputs(state, queue.active);
+    if (didConsumeInputs) {
+      completePartnerTaskOutputs(state, queue.active);
+      appendPartnerTaskHistory(state, {
+        taskId: queue.active.taskId,
+        kind: queue.active.kind,
+        status: 'completed',
+        failureReason: null,
+      });
+    } else {
+      appendPartnerTaskHistory(state, {
+        taskId: queue.active.taskId,
+        kind: queue.active.kind,
+        status: 'failed',
+        failureReason: 'missing_input_at_completion',
+      });
     }
+    queue.active = null;
+    promoteNextTask();
   }
 
   mirrorPartnerTaskQueueToActor(state);
 }
 
 function applyActionEffect(state, action) {
-  const actor = state?.actors?.[action.actorId];
-  if (!actor) {
-    return;
-  }
-
-  if (action.kind === 'move') {
-    const dx = Number(action.payload?.dx) || 0;
-    const dy = Number(action.payload?.dy) || 0;
-    actor.x += dx;
-    actor.y += dy;
-    return;
-  }
-
-  if (action.kind === 'item_pickup') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!itemId || requestedQty <= 0) {
-      return;
-    }
-
-    const extracted = removeWorldItemAtTile(state, targetX, targetY, itemId, requestedQty);
-    if (extracted.consumed <= 0) {
-      return;
-    }
-
-    addActorInventoryItemWithOverflowDrop(state, actor, itemId, extracted.consumed, {
-      freshness: extracted.freshness,
-      decayDaysRemaining: extracted.decayDaysRemaining,
-      dryness: extracted.dryness,
-      unitWeightKg: extracted.unitWeightKg,
-      footprintW: extracted.footprintW,
-      footprintH: extracted.footprintH,
-    });
-
-    actor.lastPickup = {
-      x: targetX,
-      y: targetY,
-      itemId,
-      quantity: extracted.consumed,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'item_drop') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!itemId || requestedQty <= 0) {
-      return;
-    }
-
-    const extracted = extractActorInventoryItemWithMetadata(actor, itemId, requestedQty);
-    if (!extracted || extracted.quantity <= 0) {
-      return;
-    }
-
-    addWorldItemNearby(state, targetX, targetY, itemId, extracted.quantity, {
-      freshness: extracted.freshness,
-      decayDaysRemaining: extracted.decayDaysRemaining,
-      dryness: extracted.dryness,
-      unitWeightKg: extracted.unitWeightKg,
-      footprintW: extracted.footprintW,
-      footprintH: extracted.footprintH,
-    });
-
-    actor.lastDrop = {
-      x: targetX,
-      y: targetY,
-      itemId,
-      quantity: extracted.quantity,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'inspect') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    const tile = inBounds(targetX, targetY, state.width, state.height)
-      ? state.tiles[tileIndex(targetX, targetY, state.width)]
-      : null;
-
-    actor.lastInspection = {
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-      hasPlant: Array.isArray(tile?.plantIds) ? tile.plantIds.length > 0 : false,
-      waterType: tile?.waterType || null,
-      rockType: tile?.rockType || null,
-      disturbed: tile?.disturbed === true,
-      moisture: Number.isFinite(Number(tile?.moisture)) ? Number(tile.moisture) : null,
-      fertility: Number.isFinite(Number(tile?.fertility)) ? Number(tile.fertility) : null,
-    };
-    return;
-  }
-
-  if (action.kind === 'dig') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    const inDeepWater = tile?.waterType && tile.waterDepth !== 'shallow';
-    if (!tile || inDeepWater || isRockTile(tile)) {
-      return;
-    }
-
-    const discoveredSquirrelCache = tile?.squirrelCache && tile.squirrelCache.discovered !== true;
-    if (discoveredSquirrelCache) {
-      tile.squirrelCache.discovered = true;
-    }
-
-    tile.disturbed = true;
-    const earthwormDrop = trySpawnEarthwormFromDig(state, actor, tile, targetX, targetY);
-    actor.lastDig = {
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-      interruptedBySquirrelCache: discoveredSquirrelCache,
-      earthwormDrop: earthwormDrop ? {
-        droppedQuantity: earthwormDrop.droppedQuantity,
-        chance: Number(earthwormDrop.chance.toFixed(4)),
-        roll: Number(earthwormDrop.roll.toFixed(4)),
-      } : null,
-    };
-    return;
-  }
-
-  if (action.kind === 'hoe') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    const inDeepWater = tile?.waterType && tile.waterDepth !== 'shallow';
-    if (!tile || inDeepWater || isRockTile(tile)) {
-      return;
-    }
-
-    tile.disturbed = true;
-    tile.dormantSeeds = {};
-    return;
-  }
-
-  if (action.kind === 'eat') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    const consumedQty = removeActorInventoryItem(actor, itemId, requestedQty);
-    if (consumedQty <= 0) {
-      return;
-    }
-
-    const returnItems = Array.isArray(action.payload?.returnItems) ? action.payload.returnItems : [];
-    const requestedNormalized = Math.max(1, requestedQty);
-    for (const output of returnItems) {
-      const outputItemId = typeof output?.itemId === 'string' ? output.itemId : '';
-      if (!outputItemId) {
-        continue;
-      }
-
-      const outputQtyBase = Number.isInteger(output?.quantity)
-        ? output.quantity
-        : Math.floor(Number(output?.quantity || 0));
-      if (outputQtyBase <= 0) {
-        continue;
-      }
-
-      const scaledOutputQty = Math.max(1, Math.floor((outputQtyBase * consumedQty) / requestedNormalized));
-      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, scaledOutputQty, {
-        freshness: Number(output?.freshness),
-        decayDaysRemaining: Number(output?.decayDaysRemaining),
-      });
-    }
-
-    actor.hunger = clamp01((Number(actor.hunger) || 0) + (0.05 * consumedQty));
-    actor.thirst = clamp01((Number(actor.thirst) || 0) + (0.015 * consumedQty));
-    actor.health = clamp01((Number(actor.health) || 0) + (0.02 * consumedQty));
-    return;
-  }
-
-  if (action.kind === 'waterskin_fill') {
-    const fromItemId = typeof action.payload?.fromItemId === 'string' ? action.payload.fromItemId : '';
-    const toItemId = typeof action.payload?.toItemId === 'string' ? action.payload.toItemId : '';
-    const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
-    if (!fromItemId || !toItemId) {
-      return;
-    }
-
-    const fromState = parseWaterskinStateItemId(fromItemId);
-    const toState = parseWaterskinStateItemId(toItemId);
-    if (!fromState || !toState || toState.drinks <= fromState.drinks) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, fromItemId, 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    addActorInventoryItemWithOverflowDrop(state, actor, toItemId, 1);
-    actor.lastWaterskin = {
-      type: 'fill',
-      fromItemId,
-      toItemId,
-      sourceType,
-      waterX: Number.isInteger(action.payload?.waterX) ? action.payload.waterX : null,
-      waterY: Number.isInteger(action.payload?.waterY) ? action.payload.waterY : null,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'waterskin_drink') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const toItemId = typeof action.payload?.toItemId === 'string' ? action.payload.toItemId : '';
-    const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
-    if (!itemId || !toItemId) {
-      return;
-    }
-
-    const fromState = parseWaterskinStateItemId(itemId);
-    const toState = parseWaterskinStateItemId(toItemId);
-    if (!fromState || !toState || fromState.drinks <= toState.drinks) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, itemId, 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    addActorInventoryItemWithOverflowDrop(state, actor, toItemId, 1);
-    actor.thirst = clamp01((Number(actor.thirst) || 0) + WATERSKIN_DRINK_THIRST_GAIN);
-
-    const illness = maybeApplyGutIllnessFromWaterskin(state, actor, action, sourceType);
-    actor.lastWaterskin = {
-      type: 'drink',
-      fromItemId: itemId,
-      toItemId,
-      sourceType,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-      gutIllness: illness,
-    };
-    return;
-  }
-
-  if (action.kind === 'process_item') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!itemId || requestedQty <= 0) {
-      return;
-    }
-
-    const consumedQty = removeActorInventoryItem(actor, itemId, requestedQty);
-    if (consumedQty <= 0) {
-      return;
-    }
-
-    const outputs = Array.isArray(action.payload?.outputs) ? action.payload.outputs : [];
-    const returnItems = Array.isArray(action.payload?.returnItems) ? action.payload.returnItems : [];
-    const requestedNormalized = Math.max(1, requestedQty);
-    for (const output of outputs) {
-      const outputItemId = typeof output?.itemId === 'string' ? output.itemId : '';
-      if (!outputItemId) {
-        continue;
-      }
-
-      const outputQtyBase = Number.isInteger(output?.quantity)
-        ? output.quantity
-        : Math.floor(Number(output?.quantity || 0));
-      if (outputQtyBase <= 0) {
-        continue;
-      }
-
-      const scaledOutputQty = Math.max(1, Math.floor((outputQtyBase * consumedQty) / requestedNormalized));
-      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, scaledOutputQty, {
-        freshness: Number(output?.freshness),
-        decayDaysRemaining: Number(output?.decayDaysRemaining),
-      });
-    }
-
-    for (const output of returnItems) {
-      const outputItemId = typeof output?.itemId === 'string' ? output.itemId : '';
-      if (!outputItemId) {
-        continue;
-      }
-
-      const outputQtyBase = Number.isInteger(output?.quantity)
-        ? output.quantity
-        : Math.floor(Number(output?.quantity || 0));
-      if (outputQtyBase <= 0) {
-        continue;
-      }
-
-      const scaledOutputQty = Math.max(1, Math.floor((outputQtyBase * consumedQty) / requestedNormalized));
-      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, scaledOutputQty, {
-        freshness: Number(output?.freshness),
-        decayDaysRemaining: Number(output?.decayDaysRemaining),
-      });
-    }
-    return;
-  }
-
-  if (action.kind === 'camp_stockpile_add') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    const stack = Array.isArray(actor.inventory?.stacks)
-      ? findPreferredStackByItem(actor.inventory.stacks, itemId, requestedQty)
-      : null;
-    const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
-    const movedQty = Math.min(available, Math.max(1, requestedQty));
-    if (movedQty <= 0) {
-      return;
-    }
-
-    const freshness = Number.isFinite(Number(stack?.freshness)) ? Number(stack.freshness) : null;
-    const decayDaysRemaining = Number.isFinite(Number(stack?.decayDaysRemaining))
-      ? Number(stack.decayDaysRemaining)
-      : null;
-    const dryness = Number.isFinite(Number(stack?.dryness))
-      ? Number(stack.dryness)
-      : null;
-    const unitWeightKg = Number.isFinite(Number(stack?.unitWeightKg)) ? Number(stack.unitWeightKg) : null;
-    const footprintW = normalizeStackFootprintValue(stack?.footprintW);
-    const footprintH = normalizeStackFootprintValue(stack?.footprintH);
-    const consumedQty = removeActorInventoryItem(actor, itemId, movedQty);
-    if (consumedQty <= 0) {
-      return;
-    }
-
-    addCampStockpileItem(state.camp, itemId, consumedQty, {
-      freshness,
-      decayDaysRemaining,
-      dryness,
-      unitWeightKg,
-      footprintW,
-      footprintH,
-    });
-    return;
-  }
-
-  if (action.kind === 'camp_drying_rack_add') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const quantity = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!itemId || quantity <= 0 || !state?.camp) {
-      return;
-    }
-
-    const extracted = removeCampStockpileItem(state.camp, itemId, quantity);
-    if (extracted.consumed <= 0) {
-      return;
-    }
-
-    const added = addCampDryingRackItem(state.camp, itemId, extracted.consumed, {
-      freshness: extracted.freshness,
-      decayDaysRemaining: extracted.decayDaysRemaining,
-      dryness: extracted.dryness,
-      footprintW: extracted.footprintW,
-      footprintH: extracted.footprintH,
-      unitWeightKg: extracted.unitWeightKg,
-    });
-    const overflow = Math.max(0, Math.floor(Number(added?.overflowQuantity) || 0));
-    if (overflow > 0) {
-      addCampStockpileItem(state.camp, itemId, overflow, {
-        freshness: extracted.freshness,
-        decayDaysRemaining: extracted.decayDaysRemaining,
-        dryness: extracted.dryness,
-      });
-    }
-    return;
-  }
-
-  if (action.kind === 'camp_drying_rack_add_inventory') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const quantity = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!itemId || quantity <= 0 || !state?.camp) {
-      return;
-    }
-
-    const extracted = extractActorInventoryItemWithMetadata(actor, itemId, quantity);
-    if (!extracted || extracted.quantity <= 0) {
-      return;
-    }
-
-    const added = addCampDryingRackItem(state.camp, extracted.itemId, extracted.quantity, {
-      freshness: extracted.freshness,
-      decayDaysRemaining: extracted.decayDaysRemaining,
-      dryness: extracted.dryness,
-      footprintW: extracted.footprintW,
-      footprintH: extracted.footprintH,
-      unitWeightKg: extracted.unitWeightKg,
-    });
-    const overflow = Math.max(0, Math.floor(Number(added?.overflowQuantity) || 0));
-    if (overflow > 0) {
-      addActorInventoryItem(actor, extracted.itemId, overflow, {
-        freshness: extracted.freshness,
-        decayDaysRemaining: extracted.decayDaysRemaining,
-        dryness: extracted.dryness,
-        footprintW: extracted.footprintW,
-        footprintH: extracted.footprintH,
-        unitWeightKg: extracted.unitWeightKg,
-      });
-    }
-    return;
-  }
-
-  if (action.kind === 'camp_drying_rack_remove') {
-    const slotIndex = Number.isInteger(action.payload?.slotIndex)
-      ? action.payload.slotIndex
-      : Math.floor(Number(action.payload?.slotIndex));
-    const quantity = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    if (!state?.camp?.dryingRack || !Array.isArray(state.camp.dryingRack.slots)) {
-      return;
-    }
-    if (!Number.isInteger(slotIndex) || slotIndex < 0 || quantity <= 0) {
-      return;
-    }
-
-    const slot = state.camp.dryingRack.slots[slotIndex];
-    const available = Math.max(0, Math.floor(Number(slot?.quantity) || 0));
-    if (!slot || available <= 0) {
-      return;
-    }
-
-    const consumed = Math.min(available, quantity);
-    slot.quantity = available - consumed;
-    addCampStockpileItem(state.camp, slot.itemId, consumed, {
-      freshness: Number(slot.freshness),
-      decayDaysRemaining: Number(slot.decayDaysRemaining),
-      dryness: Number(slot.dryness),
-      unitWeightKg: Number(slot.unitWeightKg),
-      footprintW: Number(slot.footprintW),
-      footprintH: Number(slot.footprintH),
-    });
-
-    state.camp.dryingRack.slots = state.camp.dryingRack.slots.filter((entry) => (Number(entry?.quantity) || 0) > 0);
-    return;
-  }
-
-  if (action.kind === 'camp_stockpile_remove') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const requestedQty = Number.isInteger(action.payload?.quantity)
-      ? action.payload.quantity
-      : Math.floor(Number(action.payload?.quantity || 1));
-    const extracted = removeCampStockpileItem(state.camp, itemId, requestedQty);
-    if (extracted.consumed <= 0) {
-      return;
-    }
-
-    addActorInventoryItemWithOverflowDrop(state, actor, itemId, extracted.consumed, {
-      freshness: extracted.freshness,
-      decayDaysRemaining: extracted.decayDaysRemaining,
-      dryness: extracted.dryness,
-      unitWeightKg: extracted.unitWeightKg,
-      footprintW: extracted.footprintW,
-      footprintH: extracted.footprintH,
-    });
-    return;
-  }
-
-  if (action.kind === 'camp_station_build') {
-    const stationId = typeof action.payload?.stationId === 'string' ? action.payload.stationId : '';
-    if (!stationId) {
-      return;
-    }
-
-    if (!state.camp || typeof state.camp !== 'object') {
-      return;
-    }
-    if (!Array.isArray(state.camp.stationsUnlocked)) {
-      state.camp.stationsUnlocked = [];
-    }
-    if (!state.camp.stationsUnlocked.includes(stationId)) {
-      state.camp.stationsUnlocked.push(stationId);
-    }
-
-    if (CAMP_COMFORT_STATION_IDS.has(stationId)) {
-      if (!Array.isArray(state.camp.comforts)) {
-        state.camp.comforts = [];
-      }
-      if (!state.camp.comforts.includes(stationId)) {
-        state.camp.comforts.push(stationId);
-      }
-    }
-
-    if (stationId === 'drying_rack') {
-      if (!state.camp.dryingRack || typeof state.camp.dryingRack !== 'object') {
-        state.camp.dryingRack = { capacity: 4, slots: [] };
-      }
-      if (!Array.isArray(state.camp.dryingRack.slots)) {
-        state.camp.dryingRack.slots = [];
-      }
-      state.camp.dryingRack.capacity = 4;
-    }
-    return;
-  }
-
-  if (action.kind === 'tap_insert_spout') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile?.sapTap?.hasSpout === true) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:carved_wooden_spout', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.sapTap = {
-      hasSpout: true,
-      insertedDay: Number(state.totalDaysSimulated) || 0,
-      insertedDayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'trap_place_snare') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (
-      !tile
-      || tile.rockType
-      || tile.waterType
-      || (Array.isArray(tile.plantIds) && tile.plantIds.length > 0)
-      || tile?.simpleSnare?.active === true
-      || tile?.deadfallTrap?.active === true
-    ) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:simple_snare', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.simpleSnare = {
-      active: true,
-      hasCatch: false,
-      poached: false,
-      sprung: false,
-      reliability: 1,
-      rabbitDensity: getAnimalDensityAtTile(state, 'sylvilagus_floridanus', targetX, targetY),
-      placedYear: Number(state.year) || 1,
-      placedDay: Number(state.dayOfYear) || 1,
-      placedDayTick: Number(state.dayTick) || 0,
-      catchResolvedTotalDays: null,
-      daysSinceCatch: 0,
-      lastResolvedYear: null,
-      lastResolvedDay: null,
-      lastRoll: null,
-      lastPoachChance: null,
-      lastPoachRoll: null,
-    };
-
-    actor.lastTrapPlacement = {
-      kind: 'simple_snare',
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'trap_place_deadfall') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (
-      !tile
-      || tile.rockType
-      || tile.waterType
-      || (Array.isArray(tile.plantIds) && tile.plantIds.length > 0)
-      || tile?.simpleSnare?.active === true
-      || tile?.deadfallTrap?.active === true
-    ) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:dead_fall_trap', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.deadfallTrap = {
-      active: true,
-      hasCatch: false,
-      poached: false,
-      sprung: false,
-      reliability: 1,
-      lastDensity: 0,
-      caughtSpeciesId: null,
-      placedYear: Number(state.year) || 1,
-      placedDay: Number(state.dayOfYear) || 1,
-      placedDayTick: Number(state.dayTick) || 0,
-      catchResolvedTotalDays: null,
-      daysSinceCatch: 0,
-      lastResolvedYear: null,
-      lastResolvedDay: null,
-      lastRoll: null,
-      lastPoachChance: null,
-      lastPoachRoll: null,
-    };
-
-    actor.lastTrapPlacement = {
-      kind: 'dead_fall_trap',
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'trap_place_fish_weir') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile.waterType !== 'river' || tile.waterFrozen === true || tile?.fishTrap?.active === true) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:fish_trap_weir', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.fishTrap = {
-      active: true,
-      sprung: false,
-      reliability: 1,
-      storedCatchSpeciesIds: [],
-      maxStoredCatch: FISH_TRAP_MAX_STORED_CATCH,
-      placedYear: Number(state.year) || 1,
-      placedDay: Number(state.dayOfYear) || 1,
-      placedDayTick: Number(state.dayTick) || 0,
-      lastResolvedYear: null,
-      lastResolvedDay: null,
-      lastCatchCount: 0,
-      lastDensity: 0,
-      lastRoll: null,
-    };
-
-    actor.lastTrapPlacement = {
-      kind: 'fish_trap_weir',
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'auto_rod_place') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile.rockType || tile.waterType || tile?.autoRod?.active === true) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:auto_rod', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.autoRod = {
-      active: true,
-      state: 'live',
-      baitItemId: null,
-      pendingSpeciesIds: [],
-      placedYear: Number(state.year) || 1,
-      placedDay: Number(state.dayOfYear) || 1,
-      placedDayTick: Number(state.dayTick) || 0,
-      lastResolvedYear: null,
-      lastResolvedDay: null,
-      lastResolvedDayTick: null,
-      lastSpeciesId: null,
-      lastCatchSuccess: false,
-      lastLineSnapped: false,
-      lastBiteChance: null,
-      lastBiteRoll: null,
-      lastHookRate: null,
-      lastHookRoll: null,
-      lastSnapProbability: null,
-      lastSnapRoll: null,
-    };
-
-    actor.lastTrapPlacement = {
-      kind: 'auto_rod',
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'trap_check') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    const snare = tile?.simpleSnare;
-    const deadfallTrap = tile?.deadfallTrap;
-    const fishTrap = tile?.fishTrap;
-    const autoRod = tile?.autoRod;
-    const activeSnare = snare && snare.active === true ? snare : null;
-    const activeDeadfall = deadfallTrap && deadfallTrap.active === true ? deadfallTrap : null;
-    const activeFishTrap = fishTrap && fishTrap.active === true ? fishTrap : null;
-    const activeAutoRod = autoRod && autoRod.active === true ? autoRod : null;
-    if (!tile || (!activeSnare && !activeDeadfall && !activeFishTrap && !activeAutoRod)) {
-      return;
-    }
-
-    if (activeSnare && activeSnare.hasCatch === true) {
-      const speciesId = 'sylvilagus_floridanus';
-      addActorInventoryItemWithOverflowDrop(state, actor, `${speciesId}:carcass`, 1, {
-        freshness: 1,
-        decayDaysRemaining: 3,
-      });
-    }
-
-    if (activeDeadfall && activeDeadfall.hasCatch === true && typeof activeDeadfall.caughtSpeciesId === 'string' && activeDeadfall.caughtSpeciesId) {
-      addActorInventoryItemWithOverflowDrop(state, actor, `${activeDeadfall.caughtSpeciesId}:carcass`, 1, {
-        freshness: 1,
-        decayDaysRemaining: 3,
-      });
-    }
-
-    if (activeFishTrap && Array.isArray(activeFishTrap.storedCatchSpeciesIds)) {
-      for (const speciesId of activeFishTrap.storedCatchSpeciesIds) {
-        if (typeof speciesId !== 'string' || !speciesId) {
-          continue;
-        }
-        const fishMeatPart = (ANIMAL_BY_ID[speciesId]?.parts || []).find((entry) => entry?.id === 'meat') || null;
-        const decayDays = Number.isFinite(Number(fishMeatPart?.decay_days))
-          ? Math.max(0, Math.floor(Number(fishMeatPart.decay_days)))
-          : 2;
-        addActorInventoryItemWithOverflowDrop(state, actor, `${speciesId}:fish_carcass`, 1, {
-          freshness: 1,
-          decayDaysRemaining: decayDays,
-        });
-      }
-    }
-
-    const autoRodPendingBefore = Array.isArray(activeAutoRod?.pendingSpeciesIds)
-      ? activeAutoRod.pendingSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
-      : [];
-    if (activeAutoRod && autoRodPendingBefore.length > 0) {
-      for (const speciesId of autoRodPendingBefore) {
-        const fishMeatPart = (ANIMAL_BY_ID[speciesId]?.parts || []).find((entry) => entry?.id === 'meat') || null;
-        const decayDays = Number.isFinite(Number(fishMeatPart?.decay_days))
-          ? Math.max(0, Math.floor(Number(fishMeatPart.decay_days)))
-          : 2;
-        addActorInventoryItemWithOverflowDrop(state, actor, `${speciesId}:fish_carcass`, 1, {
-          freshness: 1,
-          decayDaysRemaining: decayDays,
-        });
-      }
-    }
-
-    if (activeSnare) {
-      tile.simpleSnare = {
-        ...activeSnare,
-        hasCatch: false,
-        poached: false,
-        sprung: false,
-        catchResolvedTotalDays: null,
-        daysSinceCatch: 0,
-        lastPoachChance: null,
-        lastPoachRoll: null,
-        lastResolvedYear: state.year,
-        lastResolvedDay: state.dayOfYear,
-      };
-    }
-
-    if (activeDeadfall) {
-      tile.deadfallTrap = {
-        ...activeDeadfall,
-        hasCatch: false,
-        poached: false,
-        sprung: false,
-        caughtSpeciesId: null,
-        catchResolvedTotalDays: null,
-        daysSinceCatch: 0,
-        lastPoachChance: null,
-        lastPoachRoll: null,
-        lastResolvedYear: state.year,
-        lastResolvedDay: state.dayOfYear,
-      };
-    }
-
-    if (activeFishTrap) {
-      tile.fishTrap = {
-        ...activeFishTrap,
-        sprung: false,
-        storedCatchSpeciesIds: [],
-        lastCatchCount: 0,
-        lastResolvedYear: state.year,
-        lastResolvedDay: state.dayOfYear,
-      };
-    }
-
-    if (activeAutoRod) {
-      let nextState = activeAutoRod.state;
-      const baitItemId = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : null;
-      const repair = action.payload?.repair === true;
-
-      if (repair && nextState === 'broken') {
-        const consumedHook = removeActorInventoryItem(actor, 'tool:bone_hook', 1);
-        const consumedCordage = removeActorInventoryItem(actor, 'cordage', 1);
-        if (consumedHook > 0 && consumedCordage > 0) {
-          nextState = 'triggered_escape';
-        }
-      }
-
-      let nextBaitItemId = activeAutoRod.baitItemId === EARTHWORM_ITEM_ID
-        ? EARTHWORM_ITEM_ID
-        : null;
-      if (baitItemId === EARTHWORM_ITEM_ID) {
-        const consumedBait = removeActorInventoryItem(actor, EARTHWORM_ITEM_ID, 1);
-        if (consumedBait > 0) {
-          nextBaitItemId = EARTHWORM_ITEM_ID;
-          if (nextState !== 'broken') {
-            nextState = 'live';
-          }
-        }
-      }
-
-      if ((nextState === 'triggered_catch' || nextState === 'triggered_escape') && nextBaitItemId === null) {
-        nextState = 'triggered_escape';
-      }
-
-      if (nextState === 'broken' && repair !== true) {
-        nextBaitItemId = null;
-      }
-
-      tile.autoRod = {
-        ...activeAutoRod,
-        state: nextState,
-        baitItemId: nextBaitItemId,
-        pendingSpeciesIds: [],
-      };
-    }
-
-    actor.lastTrapCheck = {
-      kind: activeSnare
-        ? 'simple_snare'
-        : activeDeadfall
-          ? 'dead_fall_trap'
-          : activeFishTrap
-            ? 'fish_trap_weir'
-            : 'auto_rod',
-      x: targetX,
-      y: targetY,
-      hadCatch: activeSnare
-        ? activeSnare.hasCatch === true
-        : activeDeadfall
-          ? activeDeadfall.hasCatch === true
-          : activeFishTrap
-            ? Array.isArray(activeFishTrap?.storedCatchSpeciesIds) && activeFishTrap.storedCatchSpeciesIds.length > 0
-            : autoRodPendingBefore.length > 0,
-      wasPoached: activeSnare ? activeSnare.poached === true : activeDeadfall ? activeDeadfall.poached === true : false,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'tap_remove_spout') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile?.sapTap?.hasSpout !== true) {
-      return;
-    }
-
-    tile.sapTap = null;
-    addActorInventoryItemWithOverflowDrop(state, actor, 'tool:carved_wooden_spout', 1);
-    return;
-  }
-
-  if (action.kind === 'tap_place_vessel') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile?.sapTap?.hasSpout !== true || tile?.sapTap?.hasVessel === true) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, 'tool:hide_pitch_vessel', 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    tile.sapTap = {
-      ...tile.sapTap,
-      hasVessel: true,
-      vesselPlacedDay: Number(state.totalDaysSimulated) || 0,
-      vesselPlacedDayTick: Number(state.dayTick) || 0,
-      vesselSapUnits: 0,
-      vesselCapacityUnits: SAP_TAP_VESSEL_CAPACITY_UNITS,
-    };
-    return;
-  }
-
-  if (action.kind === 'tap_retrieve_vessel') {
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    if (!tile || tile?.sapTap?.hasVessel !== true) {
-      return;
-    }
-
-    const sapUnits = Number.isInteger(tile.sapTap.vesselSapUnits)
-      ? Math.max(0, tile.sapTap.vesselSapUnits)
-      : 0;
-
-    const vesselItemId = sapUnits > 0 ? SAP_FILLED_VESSEL_ITEM_ID : 'tool:hide_pitch_vessel';
-    addActorInventoryItemWithOverflowDrop(state, actor, vesselItemId, 1);
-
-    tile.sapTap = {
-      ...tile.sapTap,
-      hasVessel: false,
-      vesselPlacedDay: null,
-      vesselPlacedDayTick: null,
-      vesselSapUnits: null,
-      vesselCapacityUnits: null,
-    };
-    actor.lastTapRetrieval = {
-      x: targetX,
-      y: targetY,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-      sapUnits,
-    };
-    return;
-  }
-
-  if (action.kind === 'tool_craft') {
-    const outputItemId = typeof action.payload?.outputItemId === 'string' ? action.payload.outputItemId : '';
-    const outputQuantity = Number.isInteger(action.payload?.outputQuantity)
-      ? action.payload.outputQuantity
-      : Math.floor(Number(action.payload?.outputQuantity || 1));
-    const materialPlan = Array.isArray(action.payload?.materialPlan) ? action.payload.materialPlan : [];
-    if (!outputItemId || outputQuantity <= 0) {
-      return;
-    }
-
-    for (const material of materialPlan) {
-      const materialItemId = typeof material?.itemId === 'string' ? material.itemId : '';
-      const materialQuantity = Number.isInteger(material?.quantity)
-        ? material.quantity
-        : Math.floor(Number(material?.quantity || 0));
-      if (!materialItemId || materialQuantity <= 0) {
-        return;
-      }
-
-      const consumed = removeActorInventoryItem(actor, materialItemId, materialQuantity);
-      if (consumed < materialQuantity) {
-        return;
-      }
-    }
-
-    addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, outputQuantity, {
-      footprintW: normalizeStackFootprintValue(action.payload?.outputFootprintW),
-      footprintH: normalizeStackFootprintValue(action.payload?.outputFootprintH),
-      unitWeightKg: Number(action.payload?.outputUnitWeightKg),
-    });
-    return;
-  }
-
-  if (action.kind === 'equip_item') {
-    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
-    const slot = EQUIPPABLE_ITEM_TO_SLOT[itemId] || null;
-    if (!slot) {
-      return;
-    }
-
-    ensureActorInventory(actor);
-    const equipment = ensureInventoryEquipment(actor.inventory);
-    if (equipment[slot]) {
-      return;
-    }
-
-    const consumed = removeActorInventoryItem(actor, itemId, 1);
-    if (consumed <= 0) {
-      return;
-    }
-
-    equipment[slot] = {
-      itemId,
-      equippedAtDay: Number(state.totalDaysSimulated) || 0,
-      equippedAtDayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'unequip_item') {
-    const slot = typeof action.payload?.equipmentSlot === 'string'
-      ? action.payload.equipmentSlot
-      : typeof action.payload?.slot === 'string' ? action.payload.slot : '';
-    if (slot !== 'gloves' && slot !== 'coat') {
-      return;
-    }
-
-    ensureActorInventory(actor);
-    const equipment = ensureInventoryEquipment(actor.inventory);
-    const equippedEntry = equipment[slot];
-    const itemId = typeof equippedEntry?.itemId === 'string' ? equippedEntry.itemId : '';
-    if (!itemId) {
-      return;
-    }
-
-    equipment[slot] = null;
-    const footprint = resolveItemFootprint(itemId);
-    addActorInventoryItemWithOverflowDrop(state, actor, itemId, 1, {
-      footprintW: footprint.footprintW,
-      footprintH: footprint.footprintH,
-    });
-    return;
-  }
-
-  if (action.kind === 'fell_tree') {
-    const plantId = typeof action.payload?.plantId === 'string' ? action.payload.plantId : '';
-    const plant = state?.plants?.[plantId];
-    if (!plant || plant.alive !== true) {
-      return;
-    }
-
-    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(plant.x);
-    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(plant.y);
-    if (!inBounds(targetX, targetY, state.width, state.height)) {
-      return;
-    }
-
-    const poleYield = Number.isInteger(action.payload?.poleYield)
-      ? action.payload.poleYield
-      : Math.floor(Number(action.payload?.poleYield || 0));
-    const normalizedPoleYield = Math.max(0, poleYield);
-
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-    const speciesId = typeof plant.speciesId === 'string' ? plant.speciesId : 'unknown';
-
-    if (normalizedPoleYield > 0) {
-      addActorInventoryItemWithOverflowDrop(state, actor, 'pole', normalizedPoleYield, {
-        unitWeightKg: 1,
-      });
-    }
-
-    plant.alive = false;
-    maybeCreateDeadLog(state, plant, {
-      decayStage: 1,
-      createdYear: state.year,
-      createdDayOfYear: state.dayOfYear,
-    });
-
-    if (tile) {
-      tile.plantIds = Array.isArray(tile.plantIds)
-        ? tile.plantIds.filter((id) => id !== plantId)
-        : [];
-      tile.disturbed = true;
-    }
-    delete state.plants[plantId];
-
-    actor.lastFellTree = {
-      plantId,
-      speciesId,
-      x: targetX,
-      y: targetY,
-      poleYield: normalizedPoleYield,
-      day: Number(state.totalDaysSimulated) || 0,
-      dayTick: Number(state.dayTick) || 0,
-    };
-    return;
-  }
-
-  if (action.kind === 'harvest') {
-    const targetType = typeof action.payload?.targetType === 'string' ? action.payload.targetType : 'plant';
-
-    if (targetType === 'rock') {
-      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-      if (!inBounds(targetX, targetY, state.width, state.height)) {
-        return;
-      }
-
-      const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-      const rockType = typeof action.payload?.rockType === 'string' ? action.payload.rockType : tile?.rockType;
-      const outputItemId = typeof action.payload?.outputItemId === 'string' ? action.payload.outputItemId : '';
-      if (!tile || !rockType || !outputItemId) {
-        return;
-      }
-
-      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, 1, {
-        footprintW: normalizeStackFootprintValue(action.payload?.outputFootprintW),
-        footprintH: normalizeStackFootprintValue(action.payload?.outputFootprintH),
-      });
-      return;
-    }
-
-    if (targetType === 'squirrel_cache') {
-      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
-      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
-      if (!inBounds(targetX, targetY, state.width, state.height)) {
-        return;
-      }
-
-      const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
-      const cache = tile?.squirrelCache;
-      if (!cache || cache.discovered !== true) {
-        return;
-      }
-
-      const availableGrams = Math.max(0, Math.floor(Number(cache.nutContentGrams) || 0));
-      const requestedGrams = Number.isInteger(action.payload?.cacheGrams)
-        ? action.payload.cacheGrams
-        : Math.floor(Number(action.payload?.cacheGrams || 100));
-      const harvestedGrams = Math.min(availableGrams, Math.max(1, requestedGrams));
-      if (harvestedGrams <= 0) {
-        return;
-      }
-
-      const cacheItemId = `squirrel_cache:${cache.cachedSpeciesId}:${cache.cachedPartName}:${cache.cachedSubStageId}`;
-      addActorInventoryItemWithOverflowDrop(state, actor, cacheItemId, harvestedGrams, {
-        footprintW: normalizeStackFootprintValue(action.payload?.inventoryFootprintW),
-        footprintH: normalizeStackFootprintValue(action.payload?.inventoryFootprintH),
-        unitWeightKg: Number(action.payload?.inventoryUnitWeightKg),
-      });
-      cache.nutContentGrams = availableGrams - harvestedGrams;
-      if (cache.nutContentGrams <= 0) {
-        tile.squirrelCache = null;
-      }
-      return;
-    }
-
-    const plantId = typeof action.payload?.plantId === 'string' ? action.payload.plantId : '';
-    const partName = typeof action.payload?.partName === 'string' ? action.payload.partName : '';
-    const subStageId = typeof action.payload?.subStageId === 'string' ? action.payload.subStageId : '';
-    const requestedActions = Number.isInteger(action.payload?.actions)
-      ? action.payload.actions
-      : Math.floor(Number(action.payload?.actions || 1));
-
-    const outcome = applyHarvestAction(state, plantId, partName, subStageId, { actions: requestedActions });
-    if ((Number(outcome.appliedActions) || 0) > 0) {
-      const plant = state.plants?.[plantId];
-      const speciesId = typeof plant?.speciesId === 'string' ? plant.speciesId : 'unknown';
-      const itemId = `${speciesId}:${partName}:${subStageId}`;
-      addActorInventoryItemWithOverflowDrop(state, actor, itemId, outcome.appliedActions, {
-        freshness: Number(action.payload?.inventoryFreshness),
-        decayDaysRemaining: Number(action.payload?.inventoryDecayDaysRemaining),
-        footprintW: normalizeStackFootprintValue(action.payload?.inventoryFootprintW),
-        footprintH: normalizeStackFootprintValue(action.payload?.inventoryFootprintH),
-        unitWeightKg: Number(action.payload?.inventoryUnitWeightKg),
-      });
-
-      applyHarvestInjuryFromSubStage(
-        state,
-        actor,
-        action,
-        speciesId,
-        partName,
-        subStageId,
-        outcome.appliedActions,
-      );
-    }
-    return;
-  }
-
-  if (action.kind === 'partner_task_set') {
-    const queue = state?.camp?.partnerTaskQueue;
-    if (!queue) {
-      return;
-    }
-
-    const task = normalizePartnerTask(action.payload?.task);
-    if (!task) {
-      return;
-    }
-
-    const queuePolicy = action.payload?.queuePolicy === 'replace' ? 'replace' : 'append';
-    if (queuePolicy === 'replace') {
-      queue.active = task;
-      queue.queued = [];
-      mirrorPartnerTaskQueueToActor(state);
-      return;
-    }
-
-    if (!queue.active) {
-      queue.active = task;
-    } else {
-      if (!Array.isArray(queue.queued)) {
-        queue.queued = [];
-      }
-      queue.queued.push(task);
-    }
-
-    mirrorPartnerTaskQueueToActor(state);
-  }
+  return applyActionEffectImpl(state, action, {
+    inBounds,
+    tileIndex,
+    removeWorldItemAtTile,
+    addActorInventoryItemWithOverflowDrop,
+    extractActorInventoryItemWithMetadata,
+    addWorldItemNearby,
+    trySpawnEarthwormFromDig,
+    isRockTile,
+    removeActorInventoryItem,
+    parseWaterskinStateItemId,
+    clamp01,
+    WATERSKIN_DRINK_THIRST_GAIN,
+    maybeApplyGutIllnessFromWaterskin,
+    findPreferredStackByItem,
+    normalizeStackFootprintValue,
+    addCampStockpileItem,
+    removeCampStockpileItem,
+    addCampDryingRackItem,
+    CAMP_COMFORT_STATION_IDS,
+    getAnimalDensityAtTile,
+    FISH_TRAP_MAX_STORED_CATCH,
+    EARTHWORM_ITEM_ID,
+    ANIMAL_BY_ID,
+    SAP_TAP_VESSEL_CAPACITY_UNITS,
+    SAP_FILLED_VESSEL_ITEM_ID,
+    EQUIPPABLE_ITEM_TO_SLOT,
+    ensureActorInventory,
+    ensureInventoryEquipment,
+    resolveItemFootprint,
+    maybeCreateDeadLog,
+    applyHarvestAction,
+    applyHarvestInjuryFromSubStage,
+    normalizePartnerTask,
+    mirrorPartnerTaskQueueToActor,
+    addActorInventoryItem,
+  });
 }
 
-const advanceOneTick = buildAdvanceOneTick({
-  progressPartnerTaskQueueOneTick,
-  processAutoRodTickResolution,
-  applyColdExposureTick,
-  TICKS_PER_DAY,
-  advanceDay: (state, steps) => advanceDay(state, steps),
-  ensureTickSystems,
-  getActorDayStartTickBudgetBase,
-});
-
 function rollGroundFungusYield(zone, targetTile, rng) {
-  const baseYield = rangeRollIntRandom(zone.perTileYieldRange, rng, 1);
-  const moisture = Number(targetTile?.moisture) || 0;
-
-  let multiplier = 1;
-  if (moisture > 0.9) {
-    multiplier = 0.6;
-  } else if (moisture >= 0.7) {
-    multiplier = 1.4;
-  } else if (moisture >= 0.4) {
-    multiplier = 1.2;
-  } else if (moisture >= 0.15) {
-    multiplier = 0.5;
-  } else {
-    multiplier = 0.1;
-  }
-
-  return Math.max(1, Math.round(baseYield * multiplier));
+  return rollGroundFungusYieldImpl(zone, targetTile, rng, { rangeRollIntRandom });
 }
 
 function applyGroundFungusFruiting(state, rng) {
-  const zoneTilesByZoneId = new Map();
-
-  for (const tile of state.tiles) {
-    const zone = tile.groundFungusZone;
-    if (!zone?.zoneId) {
-      continue;
-    }
-    if (!zoneTilesByZoneId.has(zone.zoneId)) {
-      zoneTilesByZoneId.set(zone.zoneId, []);
-    }
-    zoneTilesByZoneId.get(zone.zoneId).push(tile);
-  }
-
-  for (const zoneTiles of zoneTilesByZoneId.values()) {
-    if (zoneTiles.length === 0) {
-      continue;
-    }
-
-    const sampleZone = zoneTiles[0].groundFungusZone;
-    const windows = Array.isArray(sampleZone.fruitingWindows) ? sampleZone.fruitingWindows : [];
-    const activeWindowIndices = windows
-      .map((window, index) => (isDayInSeasonWindow(state.dayOfYear, window) ? index : -1))
-      .filter((index) => index >= 0);
-
-    if (activeWindowIndices.length === 0) {
-      for (const tile of zoneTiles) {
-        tile.groundFungusZone.yieldCurrentGrams = 0;
-      }
-      continue;
-    }
-
-    for (const windowIndex of activeWindowIndices) {
-      const window = windows[windowIndex];
-      if (!window || state.dayOfYear !== window.startDay) {
-        continue;
-      }
-
-      const rolledYear = Number(sampleZone.rolledYearByWindow?.[windowIndex]);
-      if (rolledYear === state.year) {
-        continue;
-      }
-
-      for (const tile of zoneTiles) {
-        tile.groundFungusZone.yieldCurrentGrams = 0;
-        if (!tile.groundFungusZone.rolledYearByWindow) {
-          tile.groundFungusZone.rolledYearByWindow = {};
-        }
-        tile.groundFungusZone.rolledYearByWindow[windowIndex] = state.year;
-      }
-
-      const availableTargetIndices = new Set(
-        zoneTiles
-          .map((tile, index) => (tile.plantIds.length === 0 ? index : -1))
-          .filter((index) => index >= 0),
-      );
-
-      let pendingBlockedSuccesses = 0;
-      for (let index = 0; index < zoneTiles.length; index += 1) {
-        const tile = zoneTiles[index];
-        const chance = Number(tile.groundFungusZone.annualFruitChance);
-        const safeChance = Number.isFinite(chance) ? Math.max(0, Math.min(1, chance)) : 0;
-
-        if (rng() > safeChance) {
-          continue;
-        }
-
-        if (availableTargetIndices.has(index)) {
-          tile.groundFungusZone.yieldCurrentGrams = rollGroundFungusYield(tile.groundFungusZone, tile, rng);
-          availableTargetIndices.delete(index);
-        } else {
-          pendingBlockedSuccesses += 1;
-        }
-      }
-
-      while (pendingBlockedSuccesses > 0 && availableTargetIndices.size > 0) {
-        const candidates = [...availableTargetIndices];
-        const targetIndex = candidates[Math.floor(rng() * candidates.length)];
-        const targetTile = zoneTiles[targetIndex];
-        targetTile.groundFungusZone.yieldCurrentGrams = rollGroundFungusYield(
-          targetTile.groundFungusZone,
-          targetTile,
-          rng,
-        );
-        availableTargetIndices.delete(targetIndex);
-        pendingBlockedSuccesses -= 1;
-      }
-    }
-  }
+  return applyGroundFungusFruitingImpl(state, rng, {
+    isDayInSeasonWindow,
+    rollGroundFungusYield,
+  });
 }
 
 function assignGroundFungusZoneToTile(tile, fungus, zoneId) {
-  tile.groundFungusZone = {
-    type: 'ground_fungus_zone',
-    speciesId: fungus.id,
-    zoneId,
-    annualFruitChance: fungus.annualFruitChance,
-    fruitingWindows: fungus.fruitingWindows.map((window) => ({ ...window })),
-    perTileYieldRange: [...fungus.perTileYieldRange],
-    yieldCurrentGrams: 0,
-    rolledYearByWindow: {},
-  };
+  return assignGroundFungusZoneToTileImpl(tile, fungus, zoneId);
 }
 
 function logFungusHostCompatible(logFungus, sourceSpeciesId) {
-  if (!logFungus || !Array.isArray(logFungus.hostTrees) || logFungus.hostTrees.length === 0) {
-    return false;
-  }
-
-  if (logFungus.hostTrees.includes(sourceSpeciesId)) {
-    return true;
-  }
-
-  if (logFungus.hostTrees.includes('any_hardwood')) {
-    return true;
-  }
-
-  return false;
+  return logFungusHostCompatibleImpl(logFungus, sourceSpeciesId);
 }
 
 function ensureDeadLogFungusShape(deadLog) {
-  if (!deadLog) {
-    return;
-  }
-  if (!Array.isArray(deadLog.fungi)) {
-    deadLog.fungi = [];
-  }
+  return ensureDeadLogFungusShapeImpl(deadLog);
 }
 
 function rollLogFungusYield(entry, tile, deadLog, rng) {
-  const baseYield = rangeRollIntRandom(entry.per_log_yield_range, rng, 1);
-  const moistureMultiplier = moistureYieldMultiplier(Number(tile.moisture) || 0);
-  const sizeMultiplier = Number.isFinite(entry.log_size_multiplier)
-    ? entry.log_size_multiplier
-    : Math.max(0.7, Math.min(1.8, (Number(deadLog.sizeAtDeath) || 8) / 8));
-  return Math.max(1, Math.round(baseYield * moistureMultiplier * sizeMultiplier));
+  return rollLogFungusYieldImpl(entry, tile, deadLog, rng, {
+    rangeRollIntRandom,
+    moistureYieldMultiplier,
+  });
 }
 
 function applyLogFungusFruiting(state, rng) {
-  for (const tile of state.tiles) {
-    if (!tile?.deadLog) {
-      continue;
-    }
-
-    ensureDeadLogFungusShape(tile.deadLog);
-    for (const fungusEntry of tile.deadLog.fungi) {
-      const windows = Array.isArray(fungusEntry.fruiting_windows) ? fungusEntry.fruiting_windows : [];
-      const activeWindowIndices = windows
-        .map((window, index) => (isDayInLogWindow(state.dayOfYear, window) ? index : -1))
-        .filter((index) => index >= 0);
-
-      if (activeWindowIndices.length === 0) {
-        fungusEntry.yield_current_grams = 0;
-        continue;
-      }
-
-      for (const windowIndex of activeWindowIndices) {
-        const window = windows[windowIndex];
-        if (!window || state.dayOfYear !== window.startDay) {
-          continue;
-        }
-
-        if (!fungusEntry.rolled_year_by_window) {
-          fungusEntry.rolled_year_by_window = {};
-        }
-        const rolledYear = Number(fungusEntry.rolled_year_by_window[windowIndex]);
-        if (rolledYear === state.year) {
-          continue;
-        }
-
-        fungusEntry.rolled_year_by_window[windowIndex] = state.year;
-        fungusEntry.yield_current_grams = rollLogFungusYield(fungusEntry, tile, tile.deadLog, rng);
-      }
-    }
-  }
+  return applyLogFungusFruitingImpl(state, rng, {
+    ensureDeadLogFungusShape,
+    isDayInLogWindow,
+    rollLogFungusYield,
+  });
 }
 
 function colonizeDeadLogFungiByYear(state, rng) {
-  for (const tile of state.tiles) {
-    if (!tile?.deadLog) {
-      continue;
-    }
-
-    ensureDeadLogFungusShape(tile.deadLog);
-    const currentDecayStage = Number.isFinite(tile.deadLog.decayStage)
-      ? Math.max(1, Math.min(4, Math.round(tile.deadLog.decayStage)))
-      : 1;
-    const existingSpecies = new Set(tile.deadLog.fungi.map((entry) => entry.species_id));
-
-    for (const speciesId of state.runFungusPool || []) {
-      if (tile.deadLog.fungi.length >= MAX_LOG_FUNGI_PER_LOG) {
-        break;
-      }
-      if (existingSpecies.has(speciesId)) {
-        continue;
-      }
-
-      const logFungus = LOG_FUNGUS_BY_ID[speciesId];
-      if (!logFungus) {
-        continue;
-      }
-      if (!logFungusHostCompatible(logFungus, tile.deadLog.sourceSpeciesId)) {
-        continue;
-      }
-      if (!logFungus.preferredDecayStages.includes(currentDecayStage)) {
-        continue;
-      }
-
-      const chance = clamp01((Number(logFungus.baseSpawnChance) || 0) * moistureYieldMultiplier(Number(tile.moisture) || 0));
-      if (rng() > chance) {
-        continue;
-      }
-
-      tile.deadLog.fungi.push({
-        species_id: logFungus.id,
-        yield_current_grams: 0,
-        fruiting_windows: logFungus.fruitingWindows.map((window) => ({ ...window })),
-        per_log_yield_range: [...logFungus.perLogYieldRange],
-        log_size_multiplier: Math.max(0.7, Math.min(1.8, (Number(tile.deadLog.sizeAtDeath) || 8) / 8)),
-        rolled_year_by_window: {},
-      });
-      existingSpecies.add(logFungus.id);
-    }
-  }
+  return colonizeDeadLogFungiByYearImpl(state, rng, {
+    ensureDeadLogFungusShape,
+    MAX_LOG_FUNGI_PER_LOG,
+    LOG_FUNGUS_BY_ID,
+    logFungusHostCompatible,
+    clamp01,
+    moistureYieldMultiplier,
+  });
 }
 
 function generateGroundFungusZonesInternal(state, rng) {
-  if (state.groundFungusZonesGenerated) {
-    return;
-  }
-
-  const eligibleSpecies = GROUND_FUNGUS_CATALOG.filter((fungus) => state.tiles.some(
-    (tile) => computeGroundFungusSoilMatch(fungus, tile) > 0,
-  ));
-  if (eligibleSpecies.length === 0) {
-    state.runGroundFungusPool = [];
-    state.groundFungusZonesGenerated = true;
-    return;
-  }
-
-  const shuffled = [...eligibleSpecies].sort(() => rng() - 0.5);
-  const desiredPoolSize = 4 + Math.floor(rng() * 4);
-  const poolSize = Math.max(1, Math.min(desiredPoolSize, shuffled.length));
-  const runPool = shuffled.slice(0, poolSize);
-
-  state.runGroundFungusPool = runPool.map((fungus) => fungus.id);
-
-  for (const fungus of runPool) {
-    const candidateTiles = state.tiles.filter(
-      (tile) => !tile.waterType && !isRockTile(tile) && computeGroundFungusSoilMatch(fungus, tile) > 0,
-    );
-    if (candidateTiles.length === 0) {
-      continue;
-    }
-
-    const zoneCount = rangeRollIntRandom(fungus.zoneCountRange, rng, 15);
-    const placedCenters = [];
-
-    for (let zoneIndex = 0; zoneIndex < zoneCount; zoneIndex += 1) {
-      let centerTile = candidateTiles[Math.floor(rng() * candidateTiles.length)];
-      if (placedCenters.length > 0) {
-        const anchor = placedCenters[Math.floor(rng() * placedCenters.length)];
-        let walkX = anchor.x;
-        let walkY = anchor.y;
-        const walkSteps = 3 + Math.floor(rng() * 12);
-
-        for (let step = 0; step < walkSteps; step += 1) {
-          const directionRoll = rng();
-          if (directionRoll < 0.25) {
-            walkX -= 1;
-          } else if (directionRoll < 0.5) {
-            walkX += 1;
-          } else if (directionRoll < 0.75) {
-            walkY -= 1;
-          } else {
-            walkY += 1;
-          }
-          walkX = Math.max(0, Math.min(state.width - 1, walkX));
-          walkY = Math.max(0, Math.min(state.height - 1, walkY));
-        }
-
-        const walkedTile = state.tiles[tileIndex(walkX, walkY, state.width)];
-        if (walkedTile && !walkedTile.waterType && !isRockTile(walkedTile)
-          && computeGroundFungusSoilMatch(fungus, walkedTile) > 0) {
-          centerTile = walkedTile;
-        }
-      }
-
-      if (!centerTile) {
-        continue;
-      }
-
-      placedCenters.push({ x: centerTile.x, y: centerTile.y });
-      const zoneRadius = rangeRollIntRandom(fungus.zoneRadiusRange, rng, 3);
-      const zoneId = `${fungus.id}:${zoneIndex + 1}`;
-
-      for (let oy = -zoneRadius; oy <= zoneRadius; oy += 1) {
-        for (let ox = -zoneRadius; ox <= zoneRadius; ox += 1) {
-          const nx = centerTile.x + ox;
-          const ny = centerTile.y + oy;
-          if (!inBounds(nx, ny, state.width, state.height)) {
-            continue;
-          }
-          if (Math.hypot(ox, oy) > zoneRadius) {
-            continue;
-          }
-
-          const tile = state.tiles[tileIndex(nx, ny, state.width)];
-          if (tile.waterType || isRockTile(tile)) {
-            continue;
-          }
-          if (tile.groundFungusZone && tile.groundFungusZone.speciesId !== fungus.id) {
-            continue;
-          }
-          if (tile.groundFungusZone && tile.groundFungusZone.speciesId === fungus.id) {
-            continue;
-          }
-          if (computeGroundFungusSoilMatch(fungus, tile) <= 0) {
-            continue;
-          }
-
-          assignGroundFungusZoneToTile(tile, fungus, zoneId);
-        }
-      }
-    }
-  }
-
-  state.groundFungusZonesGenerated = true;
+  return generateGroundFungusZonesInternalImpl(state, rng, {
+    GROUND_FUNGUS_CATALOG,
+    computeGroundFungusSoilMatch,
+    isRockTile,
+    rangeRollIntRandom,
+    tileIndex,
+    inBounds,
+    assignGroundFungusZoneToTile,
+  });
 }
 
 function generateBeehivesInternal(state, rng) {
-  if (state.beehivesGenerated) {
-    return;
-  }
-
-  const candidates = [];
-  for (const plant of Object.values(state.plants || {})) {
-    if (!plant?.alive) {
-      continue;
-    }
-
-    const species = PLANT_BY_ID[plant.speciesId];
-    if (!species || species.longevity !== 'perennial') {
-      continue;
-    }
-    if (lifeStageSize(species, plant.stageName) < 8) {
-      continue;
-    }
-
-    const tile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
-    if (!tile || tile.waterType || tile.deadLog || isRockTile(tile) || tile.beehive) {
-      continue;
-    }
-
-    const moisture = Number(tile.moisture) || 0;
-    const fertility = Number(tile.fertility) || 0;
-    const shade = Number(tile.shade) || 0;
-    const score = moisture * 0.45 + fertility * 0.4 + (1 - shade) * 0.15 + rng() * 0.35;
-    candidates.push({ tile, score });
-  }
-
-  if (candidates.length === 0) {
-    state.beehivesGenerated = true;
-    return;
-  }
-
-  candidates.sort((a, b) => b.score - a.score);
-  const targetCount = Math.max(1, Math.min(candidates.length, Math.round(candidates.length * 0.15)));
-  for (const { tile } of candidates.slice(0, targetCount)) {
-    tile.beehive = {
-      speciesId: BEEHIVE_SPECIES_ID,
-      yieldCurrentHoneyGrams: 0,
-      yieldCurrentLarvaeGrams: 0,
-      yieldCurrentBeeswaxGrams: 0,
-      active: false,
-      lastHarvestYear: null,
-      lastHarvestDay: null,
-    };
-  }
-
-  state.beehivesGenerated = true;
-  applyBeehiveSeasonalState(state);
+  return generateBeehivesInternalImpl(state, rng, {
+    PLANT_BY_ID,
+    lifeStageSize,
+    tileIndex,
+    isRockTile,
+    BEEHIVE_SPECIES_ID,
+    applyBeehiveSeasonalState,
+  });
 }
 
 function generateSquirrelCachesInternal(state, rng, options = {}) {
@@ -4441,6 +2453,7 @@ export function advanceTick(state, options = {}) {
     progressPartnerTaskQueueOneTick,
     processAutoRodTickResolution,
     applyColdExposureTick,
+    applyTemperatureThirstTick,
     TICKS_PER_DAY,
     getActorDayStartTickBudgetBase,
   });
@@ -4609,20 +2622,148 @@ function findPartAndSubStage(species, partName, subStageId) {
   return { part, subStage };
 }
 
+function normalizeHarvestActionPoolValue(value) {
+  if (!Number.isFinite(Number(value))) {
+    return null;
+  }
+  return Math.max(0, Math.floor(Number(value)));
+}
+
+function resolveHarvestCyclePoolDefaults(subStage, fallbackActions) {
+  const fallback = Math.max(1, Math.floor(Number(fallbackActions) || 1));
+  const reachTier = typeof subStage?.reach_tier === 'string' ? subStage.reach_tier : 'ground';
+  const groundAuthored = normalizeHarvestActionPoolValue(
+    subStage?.remaining_actions_ground ?? subStage?.harvest_yield?.remaining_actions_ground,
+  );
+  const elevatedAuthored = normalizeHarvestActionPoolValue(
+    subStage?.remaining_actions_elevated ?? subStage?.harvest_yield?.remaining_actions_elevated,
+  );
+  const canopyAuthored = normalizeHarvestActionPoolValue(
+    subStage?.remaining_actions_canopy ?? subStage?.harvest_yield?.remaining_actions_canopy,
+  );
+
+  const hasAuthoredPools = groundAuthored !== null || elevatedAuthored !== null || canopyAuthored !== null;
+  if (!hasAuthoredPools) {
+    if (reachTier === 'ground') {
+      return { ground: fallback, elevated: 0, canopy: 0 };
+    }
+    if (reachTier === 'canopy') {
+      return { ground: 0, elevated: 0, canopy: fallback };
+    }
+    return { ground: 0, elevated: fallback, canopy: 0 };
+  }
+
+  return {
+    ground: groundAuthored ?? (reachTier === 'ground' ? fallback : 0),
+    elevated: elevatedAuthored ?? (reachTier === 'ground' ? 0 : fallback),
+    canopy: canopyAuthored ?? (reachTier === 'canopy' ? fallback : 0),
+  };
+}
+
+function migrateLegacyRemainingActionsByReachTier(remainingActions, reachTier) {
+  const remaining = Math.max(0, Math.floor(Number(remainingActions) || 0));
+  if (reachTier === 'ground') {
+    return { ground: remaining, elevated: 0, canopy: 0 };
+  }
+  if (reachTier === 'canopy') {
+    return { ground: 0, elevated: 0, canopy: remaining };
+  }
+  return { ground: 0, elevated: remaining, canopy: 0 };
+}
+
 function ensureHarvestEntryState(entry, subStage) {
   if (!entry || !subStage) {
     return;
   }
 
   const rolledActions = rangeRollInt(subStage.harvest_yield?.actions_until_depleted, entry.initialActionsRoll || 1);
-  if (!Number.isInteger(entry.initialActionsRoll) || entry.initialActionsRoll < 1) {
-    entry.initialActionsRoll = rolledActions;
+  const cyclePoolDefaults = resolveHarvestCyclePoolDefaults(subStage, rolledActions);
+  const reachTier = typeof subStage?.reach_tier === 'string' ? subStage.reach_tier : 'ground';
+  const hasLegacyInitialRoll = Number.isInteger(entry.initialActionsRoll) && entry.initialActionsRoll > 0;
+  const hasInitialGround = Number.isInteger(entry.initialActionsGround) && entry.initialActionsGround >= 0;
+  const hasInitialElevated = Number.isInteger(entry.initialActionsElevated) && entry.initialActionsElevated >= 0;
+  const hasInitialCanopy = Number.isInteger(entry.initialActionsCanopy) && entry.initialActionsCanopy >= 0;
+  if (!hasInitialGround && !hasInitialElevated && !hasInitialCanopy && hasLegacyInitialRoll) {
+    const migratedInitial = migrateLegacyRemainingActionsByReachTier(entry.initialActionsRoll, reachTier);
+    entry.initialActionsGround = migratedInitial.ground;
+    entry.initialActionsElevated = migratedInitial.elevated;
+    entry.initialActionsCanopy = migratedInitial.canopy;
+  } else {
+    if (!hasInitialGround) {
+      entry.initialActionsGround = cyclePoolDefaults.ground;
+    }
+    if (!hasInitialElevated) {
+      entry.initialActionsElevated = cyclePoolDefaults.elevated;
+    }
+    if (!hasInitialCanopy) {
+      entry.initialActionsCanopy = cyclePoolDefaults.canopy;
+    }
   }
+
+  let initialTotal = entry.initialActionsGround + entry.initialActionsElevated + entry.initialActionsCanopy;
+  if (initialTotal <= 0) {
+    if (Number.isInteger(entry.initialActionsRoll) && entry.initialActionsRoll > 0) {
+      const migrated = migrateLegacyRemainingActionsByReachTier(entry.initialActionsRoll, reachTier);
+      entry.initialActionsGround = migrated.ground;
+      entry.initialActionsElevated = migrated.elevated;
+      entry.initialActionsCanopy = migrated.canopy;
+      initialTotal = entry.initialActionsRoll;
+    } else {
+      entry.initialActionsGround = cyclePoolDefaults.ground;
+      entry.initialActionsElevated = cyclePoolDefaults.elevated;
+      entry.initialActionsCanopy = cyclePoolDefaults.canopy;
+      initialTotal = entry.initialActionsGround + entry.initialActionsElevated + entry.initialActionsCanopy;
+      if (initialTotal <= 0) {
+        entry.initialActionsGround = Math.max(1, rolledActions);
+        entry.initialActionsElevated = 0;
+        entry.initialActionsCanopy = 0;
+        initialTotal = entry.initialActionsGround;
+      }
+    }
+  }
+  entry.initialActionsRoll = initialTotal;
 
   const regrowthMax = Number.isInteger(subStage.regrowth_max_harvests) && subStage.regrowth_max_harvests > 0
     ? subStage.regrowth_max_harvests
     : 1;
   entry.seasonalHarvestBudgetActions = Math.max(1, entry.initialActionsRoll * regrowthMax);
+
+  const hasGroundRemaining = Number.isInteger(entry.remainingActionsGround) && entry.remainingActionsGround >= 0;
+  const hasElevatedRemaining = Number.isInteger(entry.remainingActionsElevated) && entry.remainingActionsElevated >= 0;
+  const hasCanopyRemaining = Number.isInteger(entry.remainingActionsCanopy) && entry.remainingActionsCanopy >= 0;
+  const legacyRemaining = Number.isInteger(entry.remainingActions) && entry.remainingActions >= 0
+    ? entry.remainingActions
+    : null;
+  const migratedRemaining = legacyRemaining !== null
+    ? migrateLegacyRemainingActionsByReachTier(legacyRemaining, reachTier)
+    : null;
+
+  if (!hasGroundRemaining) {
+    if (migratedRemaining) {
+      entry.remainingActionsGround = migratedRemaining.ground;
+    } else {
+      entry.remainingActionsGround = entry.initialActionsGround;
+    }
+  }
+  if (!hasElevatedRemaining) {
+    if (migratedRemaining) {
+      entry.remainingActionsElevated = migratedRemaining.elevated;
+    } else {
+      entry.remainingActionsElevated = entry.initialActionsElevated;
+    }
+  }
+  if (!hasCanopyRemaining) {
+    if (migratedRemaining) {
+      entry.remainingActionsCanopy = migratedRemaining.canopy;
+    } else {
+      entry.remainingActionsCanopy = entry.initialActionsCanopy;
+    }
+  }
+
+  entry.remainingActionsGround = Math.max(0, Math.floor(Number(entry.remainingActionsGround) || 0));
+  entry.remainingActionsElevated = Math.max(0, Math.floor(Number(entry.remainingActionsElevated) || 0));
+  entry.remainingActionsCanopy = Math.max(0, Math.floor(Number(entry.remainingActionsCanopy) || 0));
+  entry.remainingActions = entry.remainingActionsGround + entry.remainingActionsElevated + entry.remainingActionsCanopy;
 
   if (!Number.isInteger(entry.remainingActions) || entry.remainingActions < 0) {
     entry.remainingActions = entry.initialActionsRoll;
@@ -4671,7 +2812,10 @@ function advanceActiveSubStageRegrowth(plantInstance, species, dayOfYear) {
     entry.regrowthCountdown -= 1;
     if (entry.regrowthCountdown <= 0) {
       entry.regrowthCountdown = null;
-      entry.remainingActions = entry.initialActionsRoll;
+      entry.remainingActionsGround = Math.max(0, Math.floor(Number(entry.initialActionsGround) || 0));
+      entry.remainingActionsElevated = Math.max(0, Math.floor(Number(entry.initialActionsElevated) || 0));
+      entry.remainingActionsCanopy = Math.max(0, Math.floor(Number(entry.initialActionsCanopy) || 0));
+      entry.remainingActions = entry.remainingActionsGround + entry.remainingActionsElevated + entry.remainingActionsCanopy;
     }
   }
 }
@@ -5346,268 +3490,59 @@ function disperseSeeds(state, plantInstance, species, rng) {
 }
 
 function updatePlantLife(state, plantInstance, rng) {
-  const species = PLANT_BY_ID[plantInstance.speciesId];
-
-  plantInstance.age += 1;
-  let stage = stageForDay(species, plantInstance.age, state.dayOfYear);
-
-  if (stage && species.longevity !== 'perennial') {
-    const terminalMinAge = maxLifeStageMinAge(species);
-    if (plantInstance.age > terminalMinAge) {
-      const maxLifecycleYear = maxLifecycleYearOrdinal(species);
-      if (Number.isFinite(maxLifecycleYear)) {
-        const stageLifecycleYear = lifecycleYearOrdinal(stage.stage);
-        if (!Number.isFinite(stageLifecycleYear) || stageLifecycleYear < maxLifecycleYear) {
-          stage = null;
-        }
-      } else if (stage.min_age_days < terminalMinAge) {
-        stage = null;
-      }
-    }
-  }
-
-  if (!stage && species.longevity !== 'perennial') {
-    plantInstance.alive = false;
-    return;
-  }
-
-  if (stage) {
-    plantInstance.stageName = stage.stage;
-  }
-
-  const isOldPerennial = species.longevity === 'perennial'
-    && Number.isFinite(species.ageOfMaturity)
-    && plantInstance.age >= species.ageOfMaturity * 2;
-  if (isOldPerennial && getSeason(state.dayOfYear) === 'winter' && rng() < PERENNIAL_WINTER_DAILY_DEATH_RATE) {
-    plantInstance.alive = false;
-    return;
-  }
-
-  plantInstance.activeSubStages = buildActiveSubStages(
-    species,
-    plantInstance.stageName,
-    state.dayOfYear,
-    plantInstance.activeSubStages,
-  );
-  advanceActiveSubStageRegrowth(plantInstance, species, state.dayOfYear);
-
-  disperseSeeds(state, plantInstance, species, rng);
+  return updatePlantLifeImpl(state, plantInstance, rng, {
+    PLANT_BY_ID,
+    stageForDay,
+    maxLifeStageMinAge,
+    maxLifecycleYearOrdinal,
+    lifecycleYearOrdinal,
+    getSeason,
+    PERENNIAL_WINTER_DAILY_DEATH_RATE,
+    buildActiveSubStages,
+    advanceActiveSubStageRegrowth,
+    disperseSeeds,
+  });
 }
 
 export function applyHarvestAction(state, plantId, partName, subStageId, options = {}) {
-  const plant = state?.plants?.[plantId];
-  if (!plant || !plant.alive) {
-    return { appliedActions: 0, vitalityLoss: 0, depleted: false, blocked: 'missing_plant' };
-  }
-
-  const species = PLANT_BY_ID[plant.speciesId];
-  if (!species) {
-    return { appliedActions: 0, vitalityLoss: 0, depleted: false, blocked: 'missing_species' };
-  }
-
-  const { part, subStage } = findPartAndSubStage(species, partName, subStageId);
-  if (!part || !subStage) {
-    return { appliedActions: 0, vitalityLoss: 0, depleted: false, blocked: 'missing_part_or_sub_stage' };
-  }
-
-  const entry = (plant.activeSubStages || []).find(
-    (candidate) => candidate.partName === partName && candidate.subStageId === subStageId,
-  );
-  if (!entry) {
-    return { appliedActions: 0, vitalityLoss: 0, depleted: false, blocked: 'inactive_sub_stage' };
-  }
-
-  if (Number.isInteger(entry.regrowthCountdown) && entry.regrowthCountdown > 0) {
-    return { appliedActions: 0, vitalityLoss: 0, depleted: false, blocked: 'regrowing' };
-  }
-
-  const requestedActions = Math.max(1, Math.floor(options.actions ?? 1));
-  ensureHarvestEntryState(entry, subStage);
-
-  let appliedActions = 0;
-  let vitalityLoss = 0;
-  let depleted = false;
-
-  while (appliedActions < requestedActions && plant.alive) {
-    if (!Number.isInteger(entry.remainingActions) || entry.remainingActions <= 0) {
-      break;
-    }
-
-    entry.remainingActions -= 1;
-    appliedActions += 1;
-
-    const actionDamage = perActionVitalityDamage(subStage, entry);
-    if (actionDamage > 0) {
-      plant.vitality = clamp01(plant.vitality - actionDamage);
-      entry.vitalityDamageAppliedThisSeason += actionDamage;
-      vitalityLoss += actionDamage;
-      if (plant.vitality <= 0) {
-        plant.alive = false;
-      }
-    }
-
-    if (entry.remainingActions <= 0) {
-      depleted = true;
-      entry.harvestsThisSeason += 1;
-
-      const regrowthDays = Number.isInteger(subStage.regrowth_days) ? subStage.regrowth_days : null;
-      const regrowthMax = Number.isInteger(subStage.regrowth_max_harvests) ? subStage.regrowth_max_harvests : null;
-      const canRegrow = Number.isInteger(regrowthDays)
-        && regrowthDays > 0
-        && Number.isInteger(regrowthMax)
-        && regrowthMax > 0
-        && entry.harvestsThisSeason < regrowthMax;
-
-      if (canRegrow) {
-        entry.regrowthCountdown = regrowthDays;
-        break;
-      }
-
-      plant.activeSubStages = (plant.activeSubStages || []).filter(
-        (candidate) => !(candidate.partName === partName && candidate.subStageId === subStageId),
-      );
-      break;
-    }
-  }
-
-  return {
-    appliedActions,
-    vitalityLoss,
-    depleted,
-    blocked: appliedActions > 0 ? null : 'no_actions_remaining',
-  };
+  return applyHarvestActionImpl(state, plantId, partName, subStageId, options, {
+    PLANT_BY_ID,
+    findPartAndSubStage,
+    ensureHarvestEntryState,
+    perActionVitalityDamage,
+    clamp01,
+  });
 }
 
 function processDormantSeeds(state, rng) {
-  const currentSeason = getSeason(state.dayOfYear);
-
-  for (const tile of state.tiles) {
-    if (isRockTile(tile)) {
-      tile.dormantSeeds = {};
-      continue;
-    }
-
-    const seedEntries = Object.entries(tile.dormantSeeds);
-    if (seedEntries.length === 0) {
-      continue;
-    }
-
-    for (const [speciesId, entry] of seedEntries) {
-      const species = PLANT_BY_ID[speciesId];
-      entry.ageDays += 1;
-
-      if (entry.ageDays > species.dispersal.viable_lifespan_days) {
-        delete tile.dormantSeeds[speciesId];
-        continue;
-      }
-
-      if (species.dispersal.germination_season !== currentSeason) {
-        continue;
-      }
-
-      if (tile.plantIds.length >= MAX_PLANTS_PER_TILE) {
-        continue;
-      }
-
-      const isDisturbed = tile.disturbed === true;
-      if (!isPlantWithinEnvironmentalTolerance(species, tile)) {
-        continue;
-      }
-
-      const soilMatch = computeSoilMatch(species, tile);
-      const methodModifier = species.dispersal.method === 'animal_eaten' ? 0.7 : 1;
-      const disturbanceModifier = species.dispersal.requires_disturbance && !isDisturbed ? 0.05 : 1;
-      const pioneerModifier = species.dispersal.pioneer && isDisturbed ? 2 : 1;
-      const chance = Math.min(
-        1,
-        species.dispersal.germination_rate * soilMatch * methodModifier * disturbanceModifier * pioneerModifier,
-      );
-      if (rng() > chance) {
-        continue;
-      }
-
-      const spot = findOpenSpot(state.tiles, state.width, state.height, tile.x, tile.y);
-      if (!spot) {
-        continue;
-      }
-
-      const spotTile = state.tiles[tileIndex(spot.x, spot.y, state.width)];
-      if (isTileBlockedForPlantLife(spotTile) || !isPlantWithinEnvironmentalTolerance(species, spotTile)) {
-        continue;
-      }
-
-      addPlantInstance(state, speciesId, spot.x, spot.y, 0, 'seed');
-      delete tile.dormantSeeds[speciesId];
-    }
-  }
+  return processDormantSeedsImpl(state, rng, {
+    getSeason,
+    isRockTile,
+    PLANT_BY_ID,
+    MAX_PLANTS_PER_TILE,
+    isPlantWithinEnvironmentalTolerance,
+    computeSoilMatch,
+    findOpenSpot,
+    tileIndex,
+    isTileBlockedForPlantLife,
+    addPlantInstance,
+  });
 }
 
 function cleanupDeadPlants(state) {
-  for (const plantId of Object.keys(state.plants)) {
-    const plant = state.plants[plantId];
-    if (plant.alive) {
-      continue;
-    }
-
-    maybeCreateDeadLog(state, plant);
-    const tile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
-    tile.plantIds = tile.plantIds.filter((id) => id !== plantId);
-    delete state.plants[plantId];
-  }
+  return cleanupDeadPlantsImpl(state, {
+    maybeCreateDeadLog,
+    tileIndex,
+  });
 }
 
 function reconcilePlantOccupancy(state) {
-  for (const tile of state.tiles) {
-    if (isRockTile(tile)) {
-      tile.plantIds = [];
-      continue;
-    }
-
-    if (!Array.isArray(tile.plantIds)) {
-      tile.plantIds = [];
-      continue;
-    }
-
-    const validIds = [];
-    for (const plantId of tile.plantIds) {
-      const plant = state.plants[plantId];
-      if (!plant || !plant.alive) {
-        continue;
-      }
-      if (plant.x !== tile.x || plant.y !== tile.y) {
-        continue;
-      }
-      validIds.push(plantId);
-      if (validIds.length >= MAX_PLANTS_PER_TILE) {
-        break;
-      }
-    }
-    tile.plantIds = validIds;
-  }
-
-  for (const [plantId, plant] of Object.entries(state.plants)) {
-    if (!plant || !plant.alive) {
-      continue;
-    }
-    if (!inBounds(plant.x, plant.y, state.width, state.height)) {
-      delete state.plants[plantId];
-      continue;
-    }
-
-    const hostTile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
-    if (isRockTile(hostTile)) {
-      delete state.plants[plantId];
-      continue;
-    }
-
-    if (!hostTile.plantIds.includes(plantId)) {
-      if (hostTile.plantIds.length < MAX_PLANTS_PER_TILE) {
-        hostTile.plantIds.push(plantId);
-      } else {
-        delete state.plants[plantId];
-      }
-    }
-  }
+  return reconcilePlantOccupancyImpl(state, {
+    isRockTile,
+    MAX_PLANTS_PER_TILE,
+    inBounds,
+    tileIndex,
+  });
 }
 
 export function createInitialGameState(seed = 10000, options = {}) {
@@ -5690,6 +3625,7 @@ export function advanceDay(state, steps = 1) {
     applyFishPopulationRecovery,
     applyDailyItemDecay,
     applyDailySapTapFill,
+    applyDailyLeachingBasketProgress,
     applyDailySimpleSnareResolution,
     applyDailyDeadfallTrapResolution,
     applyDailyFishTrapResolution,
@@ -5731,6 +3667,295 @@ export function getTileAt(state, x, y) {
     return null;
   }
   return state.tiles[tileIndex(x, y, state.width)];
+}
+
+export function getNatureSightOverlayOptions() {
+  return [...NATURE_SIGHT_OVERLAY_OPTIONS];
+}
+
+export function getNatureSightOverlayData(state, options = {}) {
+  const actorId = typeof options?.actorId === 'string' ? options.actorId : 'player';
+  const actor = state?.actors?.[actorId] || null;
+  const sightRemaining = Number.isInteger(actor?.natureSightDaysRemaining)
+    ? actor.natureSightDaysRemaining
+    : Math.floor(Number(actor?.natureSightDaysRemaining || 0));
+  if (sightRemaining <= 0) {
+    return {
+      active: false,
+      overlay: null,
+      valuesByTile: {},
+      minValue: 0,
+      maxValue: 0,
+      selectedPlantSpeciesId: null,
+      selectedAnimalSpeciesId: null,
+      selectedFishSpeciesId: null,
+    };
+  }
+
+  const requestedOverlay = typeof options?.overlay === 'string' ? options.overlay.trim().toLowerCase() : '';
+  const actorOverlay = typeof actor?.natureSightOverlayChoice === 'string'
+    ? actor.natureSightOverlayChoice.trim().toLowerCase()
+    : '';
+  const overlay = NATURE_SIGHT_OVERLAY_OPTION_SET.has(requestedOverlay)
+    ? requestedOverlay
+    : NATURE_SIGHT_OVERLAY_OPTION_SET.has(actorOverlay)
+      ? actorOverlay
+      : 'calorie_heatmap';
+
+  const selectedPlantSpeciesIdRaw = typeof options?.selectedPlantSpeciesId === 'string'
+    ? options.selectedPlantSpeciesId
+    : typeof options?.selectedSpeciesId === 'string'
+      ? options.selectedSpeciesId
+    : typeof actor?.natureSightPlantSpeciesId === 'string'
+      ? actor.natureSightPlantSpeciesId
+      : PLANT_CATALOG[0]?.id || null;
+  const selectedPlantSpeciesId = typeof selectedPlantSpeciesIdRaw === 'string' && PLANT_BY_ID[selectedPlantSpeciesIdRaw]
+    ? selectedPlantSpeciesIdRaw
+    : null;
+  const selectedAnimalSpeciesIdRaw = typeof options?.selectedAnimalSpeciesId === 'string'
+    ? options.selectedAnimalSpeciesId
+    : typeof actor?.natureSightAnimalSpeciesId === 'string'
+      ? actor.natureSightAnimalSpeciesId
+      : resolveDefaultAnimalSpeciesId();
+  const selectedAnimalSpeciesId = typeof selectedAnimalSpeciesIdRaw === 'string' && ANIMAL_BY_ID[selectedAnimalSpeciesIdRaw]
+    ? selectedAnimalSpeciesIdRaw
+    : resolveDefaultAnimalSpeciesId();
+  const selectedFishSpeciesIdRaw = typeof options?.selectedFishSpeciesId === 'string'
+    ? options.selectedFishSpeciesId
+    : typeof actor?.natureSightFishSpeciesId === 'string'
+      ? actor.natureSightFishSpeciesId
+      : resolveDefaultFishSpeciesId();
+  const selectedFishSpeciesId = typeof selectedFishSpeciesIdRaw === 'string' && ANIMAL_BY_ID[selectedFishSpeciesIdRaw]
+    ? selectedFishSpeciesIdRaw
+    : resolveDefaultFishSpeciesId();
+
+  const valuesByTile = {};
+  let minValue = Number.POSITIVE_INFINITY;
+  let maxValue = Number.NEGATIVE_INFINITY;
+  for (const tile of state?.tiles || []) {
+    const tileKey = `${tile.x},${tile.y}`;
+    const value = computeNatureSightOverlayValue(state, tile, overlay, {
+      selectedPlantSpeciesId,
+      selectedAnimalSpeciesId,
+      selectedFishSpeciesId,
+    });
+    const normalized = Number.isFinite(value) ? Math.max(0, value) : 0;
+    valuesByTile[tileKey] = normalized;
+    minValue = Math.min(minValue, normalized);
+    maxValue = Math.max(maxValue, normalized);
+  }
+
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    minValue = 0;
+    maxValue = 0;
+  }
+
+  return {
+    active: true,
+    overlay,
+    valuesByTile,
+    minValue,
+    maxValue,
+    selectedPlantSpeciesId,
+    selectedAnimalSpeciesId,
+    selectedFishSpeciesId,
+  };
+}
+
+function computeNatureSightOverlayValue(state, tile, overlay, selections) {
+  if (!tile || !overlay) {
+    return 0;
+  }
+  if (overlay === 'calorie_heatmap') {
+    return estimateTileCalories(state, tile);
+  }
+  if (overlay === 'animal_density') {
+    return estimateTileAnimalDensity(state, tile, selections?.selectedAnimalSpeciesId);
+  }
+  if (overlay === 'mushroom_zones') {
+    return estimateTileMushroomZoneSignal(tile);
+  }
+  if (overlay === 'plant_compatibility') {
+    return estimateTilePlantCompatibility(tile, selections?.selectedPlantSpeciesId);
+  }
+  if (overlay === 'fishing_hotspots') {
+    return estimateTileFishingHotspot(state, tile, selections?.selectedFishSpeciesId);
+  }
+  return 0;
+}
+
+function estimateTileCalories(state, tile) {
+  let total = 0;
+  total += estimateTilePlantCalories(state, tile);
+  total += estimateTileGroundFungusCalories(tile);
+  total += estimateTileBeehiveCalories(tile);
+  total += estimateTileSquirrelCacheCalories(tile);
+  total += estimateTileTrapCalories(tile, state);
+  return total;
+}
+
+function estimateTilePlantCalories(state, tile) {
+  const plantIds = Array.isArray(tile?.plantIds) ? tile.plantIds : [];
+  let total = 0;
+  for (const plantId of plantIds) {
+    const plant = state?.plants?.[plantId];
+    if (!plant || plant.alive === false) {
+      continue;
+    }
+    const species = PLANT_BY_ID[plant.speciesId] || null;
+    if (!species) {
+      continue;
+    }
+    for (const active of Array.isArray(plant.activeSubStages) ? plant.activeSubStages : []) {
+      const part = (species.parts || []).find((entry) => entry?.name === active?.partName) || null;
+      const subStage = (part?.subStages || []).find((entry) => entry?.id === active?.subStageId) || null;
+      const calories = Number(subStage?.nutrition?.calories);
+      if (!Number.isFinite(calories) || calories <= 0) {
+        continue;
+      }
+      const unitsRange = subStage?.harvest_yield?.units_per_action;
+      const unitsPerAction = Array.isArray(unitsRange) && unitsRange.length >= 2
+        ? Math.max(1, ((Number(unitsRange[0]) || 1) + (Number(unitsRange[1]) || 1)) / 2)
+        : 1;
+      const remainingActions = Number.isFinite(Number(active?.remainingActions))
+        ? Math.max(1, Math.min(3, Number(active.remainingActions)))
+        : 1;
+      total += calories * unitsPerAction * remainingActions;
+    }
+  }
+  return total;
+}
+
+function estimateTileGroundFungusCalories(tile) {
+  const grams = Number(tile?.groundFungusZone?.yieldCurrentGrams);
+  if (!Number.isFinite(grams) || grams <= 0) {
+    return 0;
+  }
+  return grams * FUNGUS_CALORIES_PER_GRAM_ESTIMATE;
+}
+
+function estimateTileBeehiveCalories(tile) {
+  const honey = Number(tile?.beehive?.yieldCurrentHoneyGrams);
+  const larvae = Number(tile?.beehive?.yieldCurrentLarvaeGrams);
+  const honeyCalories = Number.isFinite(honey) && honey > 0 ? honey * HONEY_CALORIES_PER_GRAM_ESTIMATE : 0;
+  const larvaeCalories = Number.isFinite(larvae) && larvae > 0 ? larvae * LARVAE_CALORIES_PER_GRAM_ESTIMATE : 0;
+  return honeyCalories + larvaeCalories;
+}
+
+function estimateTileSquirrelCacheCalories(tile) {
+  const grams = Number(tile?.squirrelCache?.nutContentGrams);
+  if (!Number.isFinite(grams) || grams <= 0) {
+    return 0;
+  }
+  return grams * NUT_CALORIES_PER_GRAM_ESTIMATE;
+}
+
+function estimateTileTrapCalories(tile, state) {
+  let calories = 0;
+  if (tile?.simpleSnare?.hasCatch === true) {
+    calories += estimateAnimalCarcassCalories('sylvilagus_floridanus');
+  } else if (tile?.simpleSnare?.active === true) {
+    const density = Number(tile?.simpleSnare?.rabbitDensity);
+    calories += Number.isFinite(density) ? Math.max(0, density) * 120 : 0;
+  }
+  if (tile?.deadfallTrap?.hasCatch === true) {
+    calories += estimateAnimalCarcassCalories(tile?.deadfallTrap?.caughtSpeciesId);
+  } else if (tile?.deadfallTrap?.active === true) {
+    const density = Number(tile?.deadfallTrap?.lastDensity);
+    calories += Number.isFinite(density) ? Math.max(0, density) * 150 : 0;
+  }
+  const fishStored = Array.isArray(tile?.fishTrap?.storedCatchSpeciesIds)
+    ? tile.fishTrap.storedCatchSpeciesIds
+    : [];
+  for (const speciesId of fishStored) {
+    calories += estimateAnimalCarcassCalories(speciesId);
+  }
+  if (fishStored.length <= 0 && tile?.fishTrap?.active === true) {
+    calories += estimateTileFishingHotspot(state, tile, resolveDefaultFishSpeciesId()) * 120;
+  }
+  if (tile?.autoRod?.state === 'triggered_catch' && tile?.autoRod?.lastSpeciesId) {
+    calories += estimateAnimalCarcassCalories(tile.autoRod.lastSpeciesId);
+  }
+  return calories;
+}
+
+function estimateAnimalCarcassCalories(speciesId) {
+  if (typeof speciesId !== 'string' || !speciesId) {
+    return 0;
+  }
+  const species = ANIMAL_BY_ID[speciesId] || null;
+  const meatPart = (species?.parts || []).find((entry) => entry?.id === 'meat') || null;
+  if (!meatPart) {
+    return 0;
+  }
+  const calories = Number(meatPart?.nutrition?.calories);
+  if (!Number.isFinite(calories) || calories <= 0) {
+    return 0;
+  }
+  const yieldGrams = Number(meatPart?.yield_grams || meatPart?.yieldGrams || 100);
+  const normalizedYield = Number.isFinite(yieldGrams) && yieldGrams > 0 ? (yieldGrams / 100) : 1;
+  return calories * normalizedYield;
+}
+
+function estimateTileAnimalDensity(state, tile, speciesId) {
+  if (typeof speciesId !== 'string' || !speciesId) {
+    return 0;
+  }
+  const tileKey = `${tile.x},${tile.y}`;
+  const density = Number(state?.animalDensityByZone?.[speciesId]?.[tileKey]);
+  return Number.isFinite(density) ? Math.max(0, Math.min(1, density)) : 0;
+}
+
+function estimateTileMushroomZoneSignal(tile) {
+  if (!tile?.groundFungusZone) {
+    return 0;
+  }
+  const yieldCurrent = Number(tile.groundFungusZone.yieldCurrentGrams);
+  if (!Number.isFinite(yieldCurrent) || yieldCurrent <= 0) {
+    return 0.35;
+  }
+  return Math.min(1, 0.35 + (yieldCurrent / 100));
+}
+
+function estimateTilePlantCompatibility(tile, selectedSpeciesId) {
+  if (!selectedSpeciesId) {
+    return 0;
+  }
+  const species = PLANT_BY_ID[selectedSpeciesId] || null;
+  if (!species || !tile || tile.waterType || isRockTile(tile)) {
+    return 0;
+  }
+  const match = Number(computeSoilMatch(species, tile));
+  return Number.isFinite(match) ? Math.max(0, Math.min(1, match)) : 0;
+}
+
+function estimateTileFishingHotspot(state, tile, speciesId) {
+  if (typeof speciesId !== 'string' || !speciesId) {
+    return 0;
+  }
+  const tileKey = `${tile.x},${tile.y}`;
+  const density = Number(state?.fishDensityByTile?.[speciesId]?.[tileKey]);
+  return Number.isFinite(density) ? Math.max(0, Math.min(1, density)) : 0;
+}
+
+function resolveDefaultAnimalSpeciesId() {
+  for (const species of Object.values(ANIMAL_BY_ID || {})) {
+    const animalClass = typeof species?.animalClass === 'string' ? species.animalClass : species?.animal_class;
+    if (animalClass && animalClass !== 'fish' && typeof species?.id === 'string') {
+      return species.id;
+    }
+  }
+  return null;
+}
+
+function resolveDefaultFishSpeciesId() {
+  for (const species of Object.values(ANIMAL_BY_ID || {})) {
+    const animalClass = typeof species?.animalClass === 'string' ? species.animalClass : species?.animal_class;
+    if (animalClass === 'fish' && typeof species?.id === 'string') {
+      return species.id;
+    }
+  }
+  return null;
 }
 
 export function getMetrics(state) {

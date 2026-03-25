@@ -292,6 +292,9 @@ function normalizeInventory(inventory) {
   const stacks = Array.isArray(inventory?.stacks)
     ? inventory.stacks.map((entry) => ({ ...(entry || {}) }))
     : [];
+  const equipmentRaw = inventory?.equipment && typeof inventory.equipment === 'object'
+    ? inventory.equipment
+    : {};
 
   return {
     gridWidth: Number.isInteger(inventory?.gridWidth) ? Math.max(1, inventory.gridWidth) : 6,
@@ -300,6 +303,17 @@ function normalizeInventory(inventory) {
       ? Math.max(0, Number(inventory.maxCarryWeightKg))
       : 15,
     stacks,
+    equipment: {
+      gloves: equipmentRaw?.gloves && typeof equipmentRaw.gloves === 'object'
+        ? { ...equipmentRaw.gloves }
+        : null,
+      coat: equipmentRaw?.coat && typeof equipmentRaw.coat === 'object'
+        ? { ...equipmentRaw.coat }
+        : null,
+      head: equipmentRaw?.head && typeof equipmentRaw.head === 'object'
+        ? { ...equipmentRaw.head }
+        : null,
+    },
   };
 }
 
@@ -329,6 +343,15 @@ function normalizeActors(actors, width, height) {
       tickBudgetBase: 200,
       tickBudgetCurrent: 200,
       overdraftTicks: 0,
+      visionNextDayTickPenalty: 0,
+      natureSightDaysRemaining: 0,
+      natureSightPendingDays: 0,
+      natureSightOverlayChoice: null,
+      natureSightOverlayChosenDay: null,
+      natureSightPlantSpeciesId: null,
+      natureSightAnimalSpeciesId: null,
+      natureSightFishSpeciesId: null,
+      visionRewardCounts: { plant: 0, tech: 0, sight: 0 },
       inventory: normalizeInventory(null),
     },
     partner: {
@@ -342,6 +365,15 @@ function normalizeActors(actors, width, height) {
       tickBudgetBase: 200,
       tickBudgetCurrent: 200,
       overdraftTicks: 0,
+      visionNextDayTickPenalty: 0,
+      natureSightDaysRemaining: 0,
+      natureSightPendingDays: 0,
+      natureSightOverlayChoice: null,
+      natureSightOverlayChosenDay: null,
+      natureSightPlantSpeciesId: null,
+      natureSightAnimalSpeciesId: null,
+      natureSightFishSpeciesId: null,
+      visionRewardCounts: { plant: 0, tech: 0, sight: 0 },
       inventory: normalizeInventory(null),
       taskQueue: normalizeTaskQueue(null),
     },
@@ -375,6 +407,37 @@ function normalizeActors(actors, width, height) {
       tickBudgetBase: Number.isFinite(Number(actor?.tickBudgetBase)) ? Math.max(0, Number(actor.tickBudgetBase)) : base.tickBudgetBase,
       tickBudgetCurrent: Number.isFinite(Number(actor?.tickBudgetCurrent)) ? Number(actor.tickBudgetCurrent) : base.tickBudgetCurrent,
       overdraftTicks: Number.isFinite(Number(actor?.overdraftTicks)) ? Math.max(0, Math.floor(Number(actor.overdraftTicks))) : base.overdraftTicks,
+      visionNextDayTickPenalty: Number.isInteger(actor?.visionNextDayTickPenalty)
+        ? Math.max(0, actor.visionNextDayTickPenalty)
+        : base.visionNextDayTickPenalty,
+      natureSightDaysRemaining: Number.isInteger(actor?.natureSightDaysRemaining)
+        ? Math.max(0, actor.natureSightDaysRemaining)
+        : base.natureSightDaysRemaining,
+      natureSightPendingDays: Number.isInteger(actor?.natureSightPendingDays)
+        ? Math.max(0, actor.natureSightPendingDays)
+        : base.natureSightPendingDays,
+      natureSightOverlayChoice: typeof actor?.natureSightOverlayChoice === 'string'
+        ? actor.natureSightOverlayChoice
+        : base.natureSightOverlayChoice,
+      natureSightOverlayChosenDay: Number.isInteger(actor?.natureSightOverlayChosenDay)
+        ? actor.natureSightOverlayChosenDay
+        : base.natureSightOverlayChosenDay,
+      natureSightPlantSpeciesId: typeof actor?.natureSightPlantSpeciesId === 'string'
+        ? actor.natureSightPlantSpeciesId
+        : base.natureSightPlantSpeciesId,
+      natureSightAnimalSpeciesId: typeof actor?.natureSightAnimalSpeciesId === 'string'
+        ? actor.natureSightAnimalSpeciesId
+        : base.natureSightAnimalSpeciesId,
+      natureSightFishSpeciesId: typeof actor?.natureSightFishSpeciesId === 'string'
+        ? actor.natureSightFishSpeciesId
+        : base.natureSightFishSpeciesId,
+      visionRewardCounts: actor?.visionRewardCounts && typeof actor.visionRewardCounts === 'object'
+        ? {
+          plant: Math.max(0, Math.floor(Number(actor.visionRewardCounts.plant) || 0)),
+          tech: Math.max(0, Math.floor(Number(actor.visionRewardCounts.tech) || 0)),
+          sight: Math.max(0, Math.floor(Number(actor.visionRewardCounts.sight) || 0)),
+        }
+        : { ...base.visionRewardCounts },
       inventory: normalizeInventory(actor?.inventory),
       taskQueue: normalizeTaskQueue(actor?.taskQueue),
     };
@@ -406,6 +469,37 @@ function normalizeCampState(camp, width, height) {
   const dryingRackSlots = Array.isArray(camp?.dryingRack?.slots)
     ? camp.dryingRack.slots.map((entry) => ({ ...(entry || {}) }))
     : [];
+  const mealPlanIngredients = Array.isArray(camp?.mealPlan?.ingredients)
+    ? camp.mealPlan.ingredients.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const mealPlanPreview = camp?.mealPlan?.preview && typeof camp.mealPlan.preview === 'object'
+    ? { ...camp.mealPlan.preview }
+    : null;
+  const debriefMedicineRequests = Array.isArray(camp?.debrief?.medicineRequests)
+    ? camp.debrief.medicineRequests.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const debriefMedicineNotifications = Array.isArray(camp?.debrief?.medicineNotifications)
+    ? camp.debrief.medicineNotifications.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const debriefVisionNotifications = Array.isArray(camp?.debrief?.visionNotifications)
+    ? camp.debrief.visionNotifications.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const debriefVisionRequest = camp?.debrief?.visionRequest && typeof camp.debrief.visionRequest === 'object'
+    ? { ...camp.debrief.visionRequest }
+    : null;
+  const debriefVisionSelectionOptions = Array.isArray(camp?.debrief?.visionSelectionOptions)
+    ? camp.debrief.visionSelectionOptions.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const debriefPendingVisionRevelation = camp?.debrief?.pendingVisionRevelation
+    && typeof camp.debrief.pendingVisionRevelation === 'object'
+    ? { ...camp.debrief.pendingVisionRevelation }
+    : null;
+  const debriefPendingVisionChoices = Array.isArray(camp?.debrief?.pendingVisionChoices)
+    ? camp.debrief.pendingVisionChoices.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const debriefChosenVisionRewards = Array.isArray(camp?.debrief?.chosenVisionRewards)
+    ? camp.debrief.chosenVisionRewards.map((entry) => ({ ...(entry || {}) }))
+    : [];
   return {
     anchorX: Number.isInteger(camp?.anchorX) ? camp.anchorX : fallbackX,
     anchorY: Number.isInteger(camp?.anchorY) ? camp.anchorY : fallbackY,
@@ -421,9 +515,42 @@ function normalizeCampState(camp, width, height) {
       ? camp.comforts.filter((entry) => typeof entry === 'string')
       : [],
     partnerTaskQueue: normalizeTaskQueue(camp?.partnerTaskQueue),
+    partnerTaskHistory: Array.isArray(camp?.partnerTaskHistory)
+      ? camp.partnerTaskHistory.map((entry) => ({ ...(entry || {}) }))
+      : [],
     dryingRack: {
       capacity: 4,
       slots: dryingRackSlots,
+    },
+    mealPlan: {
+      ingredients: mealPlanIngredients,
+      preview: mealPlanPreview,
+    },
+    nauseaByIngredient: camp?.nauseaByIngredient && typeof camp.nauseaByIngredient === 'object'
+      ? { ...camp.nauseaByIngredient }
+      : {},
+    lastMealResult: camp?.lastMealResult && typeof camp.lastMealResult === 'object'
+      ? { ...camp.lastMealResult }
+      : null,
+    nextDayStewTickBonus: Number.isFinite(Number(camp?.nextDayStewTickBonus))
+      ? Math.max(0, Math.floor(Number(camp.nextDayStewTickBonus)))
+      : 0,
+    debrief: {
+      active: camp?.debrief?.active === true,
+      openedAtDay: Number.isInteger(camp?.debrief?.openedAtDay) ? camp.debrief.openedAtDay : null,
+      medicineRequests: debriefMedicineRequests,
+      medicineNotifications: debriefMedicineNotifications,
+      visionRequest: debriefVisionRequest,
+      visionSelectionOptions: debriefVisionSelectionOptions,
+      requiresVisionConfirmation: camp?.debrief?.requiresVisionConfirmation === true,
+      visionNotifications: debriefVisionNotifications,
+      visionUsesThisSeason: Number.isInteger(camp?.debrief?.visionUsesThisSeason)
+        ? Math.max(0, camp.debrief.visionUsesThisSeason)
+        : 0,
+      visionSeasonKey: typeof camp?.debrief?.visionSeasonKey === 'string' ? camp.debrief.visionSeasonKey : null,
+      pendingVisionRevelation: debriefPendingVisionRevelation,
+      pendingVisionChoices: debriefPendingVisionChoices,
+      chosenVisionRewards: debriefChosenVisionRewards,
     },
   };
 }
@@ -527,6 +654,40 @@ function normalizeSapTap(sapTap) {
   };
 }
 
+function normalizeLeachingBasket(leachingBasket) {
+  if (!leachingBasket || typeof leachingBasket !== 'object') {
+    return null;
+  }
+
+  return {
+    active: leachingBasket.active === true,
+    itemId: typeof leachingBasket.itemId === 'string' ? leachingBasket.itemId : null,
+    quantity: Number.isInteger(leachingBasket.quantity) ? Math.max(1, leachingBasket.quantity) : 1,
+    freshness: Number.isFinite(Number(leachingBasket.freshness))
+      ? Math.max(0, Math.min(1, Number(leachingBasket.freshness)))
+      : null,
+    decayDaysRemaining: Number.isFinite(Number(leachingBasket.decayDaysRemaining))
+      ? Math.max(0, Number(leachingBasket.decayDaysRemaining))
+      : null,
+    dryness: Number.isFinite(Number(leachingBasket.dryness))
+      ? Math.max(0, Math.min(1, Number(leachingBasket.dryness)))
+      : null,
+    tanninRemaining: Number.isFinite(Number(leachingBasket.tanninRemaining))
+      ? Math.max(0, Math.min(1, Number(leachingBasket.tanninRemaining)))
+      : null,
+    unitWeightKg: Number.isFinite(Number(leachingBasket.unitWeightKg))
+      ? Math.max(0, Number(leachingBasket.unitWeightKg))
+      : null,
+    footprintW: Number.isInteger(leachingBasket.footprintW) ? Math.max(1, leachingBasket.footprintW) : 1,
+    footprintH: Number.isInteger(leachingBasket.footprintH) ? Math.max(1, leachingBasket.footprintH) : 1,
+    placedYear: Number.isInteger(leachingBasket.placedYear) ? leachingBasket.placedYear : null,
+    placedDay: Number.isInteger(leachingBasket.placedDay) ? leachingBasket.placedDay : null,
+    placedDayTick: Number.isInteger(leachingBasket.placedDayTick) ? leachingBasket.placedDayTick : null,
+    lastResolvedYear: Number.isInteger(leachingBasket.lastResolvedYear) ? leachingBasket.lastResolvedYear : null,
+    lastResolvedDay: Number.isInteger(leachingBasket.lastResolvedDay) ? leachingBasket.lastResolvedDay : null,
+  };
+}
+
 function normalizeDeadLog(deadLog) {
   if (!deadLog || typeof deadLog !== 'object') {
     return null;
@@ -587,6 +748,7 @@ function normalizeTileForLoad(tile) {
     beehive: normalizeBeehive(tile.beehive),
     squirrelCache: normalizeSquirrelCache(tile.squirrelCache),
     sapTap: normalizeSapTap(tile.sapTap),
+    leachingBasket: normalizeLeachingBasket(tile.leachingBasket),
     simpleSnare: normalizeSimpleSnare(tile.simpleSnare),
     deadfallTrap: normalizeDeadfallTrap(tile.deadfallTrap),
     fishTrap: normalizeFishTrap(tile.fishTrap),
@@ -642,6 +804,7 @@ function serializeTile(tile) {
     beehive: normalizeBeehive(tile.beehive),
     squirrelCache: normalizeSquirrelCache(tile.squirrelCache),
     sapTap: normalizeSapTap(tile.sapTap),
+    leachingBasket: normalizeLeachingBasket(tile.leachingBasket),
     simpleSnare: normalizeSimpleSnare(tile.simpleSnare),
     deadfallTrap: normalizeDeadfallTrap(tile.deadfallTrap),
     fishTrap: normalizeFishTrap(tile.fishTrap),
@@ -686,6 +849,10 @@ function serializeTile(tile) {
 
   if (!serialized.sapTap || serialized.sapTap.hasSpout !== true) {
     delete serialized.sapTap;
+  }
+
+  if (!serialized.leachingBasket || serialized.leachingBasket.active !== true) {
+    delete serialized.leachingBasket;
   }
 
   if (!serialized.simpleSnare || serialized.simpleSnare.active !== true) {

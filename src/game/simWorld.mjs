@@ -4,10 +4,6 @@ import { generateWater } from './waterGen.js';
 const DRAINAGE_BY_INDEX = ['poor', 'moderate', 'well', 'excellent'];
 const FORCE_COARSE_NOISE_ONLY = false;
 
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
-}
-
 export function drainageToIndex(drainage) {
   const classIndex = DRAINAGE_BY_INDEX.indexOf(drainage);
   if (classIndex === -1) {
@@ -111,6 +107,7 @@ function createTile(x, y, seed, width, height) {
     beehive: null,
     squirrelCache: null,
     sapTap: null,
+    leachingBasket: null,
     simpleSnare: null,
     deadfallTrap: null,
     fishTrap: null,
@@ -322,171 +319,6 @@ function computeInitialDisturbance(tile, seed, nearestWaterDistance) {
   const disturbanceNoise = hashNoise(seed + 211, tile.x, tile.y);
   const naturallyOpen = tile.fertility < 0.42 || tile.moisture < 0.28 || nearestWaterDistance <= 1;
   return naturallyOpen && disturbanceNoise > 0.88;
-}
-
-function carveTributaryFromEdge(tiles, width, height, startY, riverX, rng) {
-  const fromLeft = rng() < 0.5;
-  let x = fromLeft ? 0 : width - 1;
-  let y = Math.max(0, Math.min(height - 1, startY + Math.floor((rng() - 0.5) * 4)));
-
-  const maxSteps = width + height;
-  for (let step = 0; step < maxSteps; step += 1) {
-    const tile = tiles[tileIndex(x, y, width)];
-    if (!tile.waterType) {
-      tile.waterType = 'stream';
-      tile.waterDepth = 'shallow';
-    }
-
-    if (Math.abs(x - riverX) <= 1) {
-      return;
-    }
-
-    if (rng() < 0.35) {
-      const driftToStart = startY - y;
-      if (driftToStart !== 0 && rng() < 0.7) {
-        y += Math.sign(driftToStart);
-      } else {
-        y += rng() < 0.5 ? -1 : 1;
-      }
-      y = Math.max(0, Math.min(height - 1, y));
-    }
-
-    x += fromLeft ? 1 : -1;
-    x = Math.max(0, Math.min(width - 1, x));
-  }
-}
-
-function buildMainRiverCenterline(width, height, rng) {
-  const centerlineXByRow = new Array(height);
-  const edgePadding = Math.max(3, Math.floor(width * 0.02));
-  const moderateShift = Math.max(2, Math.round(width * 0.06));
-  const largeShift = Math.max(moderateShift + 1, Math.round(width * 0.12));
-  const minSegmentLength = 8;
-  const segmentLengthVariance = 8;
-
-  const controlPoints = [{ y: 0, x: Math.floor(width * 0.5) }];
-
-  while (controlPoints[controlPoints.length - 1].y < height - 1) {
-    const previous = controlPoints[controlPoints.length - 1];
-    const segmentLength = minSegmentLength + Math.floor(rng() * (segmentLengthVariance + 1));
-    const nextY = Math.min(height - 1, previous.y + segmentLength);
-    const maxShift = rng() < 0.25 ? largeShift : moderateShift;
-    const shift = Math.round((rng() - 0.5) * 2 * maxShift);
-    const nextX = Math.max(edgePadding, Math.min(width - edgePadding - 1, previous.x + shift));
-    controlPoints.push({ y: nextY, x: nextX });
-  }
-
-  function smoothStep(t) {
-    return t * t * (3 - 2 * t);
-  }
-
-  let segmentIndex = 0;
-  for (let y = 0; y < height; y += 1) {
-    while (segmentIndex < controlPoints.length - 2 && y > controlPoints[segmentIndex + 1].y) {
-      segmentIndex += 1;
-    }
-
-    const start = controlPoints[segmentIndex];
-    const end = controlPoints[Math.min(segmentIndex + 1, controlPoints.length - 1)];
-
-    if (end.y === start.y) {
-      centerlineXByRow[y] = start.x;
-      continue;
-    }
-
-    const t = (y - start.y) / (end.y - start.y);
-    const eased = smoothStep(Math.max(0, Math.min(1, t)));
-    centerlineXByRow[y] = Math.round(start.x + (end.x - start.x) * eased);
-  }
-
-  for (let y = 1; y < height; y += 1) {
-    const previous = centerlineXByRow[y - 1];
-    if (centerlineXByRow[y] > previous + 1) {
-      centerlineXByRow[y] = previous + 1;
-    } else if (centerlineXByRow[y] < previous - 1) {
-      centerlineXByRow[y] = previous - 1;
-    }
-  }
-
-  for (let y = 1; y < height - 1; y += 1) {
-    const prev = centerlineXByRow[y - 1];
-    const cur = centerlineXByRow[y];
-    const next = centerlineXByRow[y + 1];
-    if (prev === next && Math.abs(cur - prev) === 1) {
-      centerlineXByRow[y] = prev;
-    }
-  }
-
-  return centerlineXByRow;
-}
-
-function floodFillRiverDistance(width, height, centerlineXByRow, maxDistance) {
-  const distances = new Array(width * height).fill(Number.POSITIVE_INFINITY);
-  const queue = [];
-  let head = 0;
-
-  for (let y = 0; y < height; y += 1) {
-    const x = centerlineXByRow[y];
-    const index = tileIndex(x, y, width);
-    if (distances[index] === 0) {
-      continue;
-    }
-    distances[index] = 0;
-    queue.push({ x, y });
-  }
-
-  while (head < queue.length) {
-    const current = queue[head];
-    head += 1;
-
-    const currentIndex = tileIndex(current.x, current.y, width);
-    const currentDistance = distances[currentIndex];
-    if (currentDistance >= maxDistance) {
-      continue;
-    }
-
-    const nextDistance = currentDistance + 1;
-    const neighbors = [
-      [current.x - 1, current.y],
-      [current.x + 1, current.y],
-      [current.x, current.y - 1],
-      [current.x, current.y + 1],
-    ];
-
-    for (const [nx, ny] of neighbors) {
-      if (!inBounds(nx, ny, width, height)) {
-        continue;
-      }
-      const neighborIndex = tileIndex(nx, ny, width);
-      if (nextDistance >= distances[neighborIndex] || nextDistance > maxDistance) {
-        continue;
-      }
-      distances[neighborIndex] = nextDistance;
-      queue.push({ x: nx, y: ny });
-    }
-  }
-
-  return distances;
-}
-
-function carveMainRiver(tiles, width, height, centerlineXByRow) {
-  const maxRiverDistance = 2;
-  const deepDistance = 1;
-  const distances = floodFillRiverDistance(width, height, centerlineXByRow, maxRiverDistance);
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = tileIndex(x, y, width);
-      const distance = distances[index];
-      if (!Number.isFinite(distance) || distance > maxRiverDistance) {
-        continue;
-      }
-
-      const tile = tiles[index];
-      tile.waterType = y < height * 0.35 ? 'fast_river' : 'slow_river';
-      tile.waterDepth = distance <= deepDistance ? 'deep' : 'shallow';
-    }
-  }
 }
 
 function classifyCurrentBand(strength) {

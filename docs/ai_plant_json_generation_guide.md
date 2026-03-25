@@ -728,6 +728,11 @@ All other fields are automatically copied from the first sub-stage. This makes i
 **`harvest_yield_full_age_days`** (int or omit)
 - Optional on a sub-stage. Age in days when this sub-stage’s catalog `harvest_yield` is at **full** strength (scale 1). JSON: `harvest_yield_full_age_days`. `0` = always full strength. Omit = use species `age_of_maturity`.
 
+**`harvest_unit_weight_scales_with_age`** (bool, optional)
+- Default `false` if omitted. When `true`, each harvested inventory unit’s mass scales by the **same** age factor as harvest yield (`plant` age ÷ reference from `harvest_yield_full_age_days`, else species `age_of_maturity`; clamped to \[0.1, 1\]). Catalog `unit_weight_g` is the **full-maturity** mass per unit; young plants deposit lighter stacks (`stack.unitWeightKg` in the sim).
+- Use for organ-like parts where one “unit” is a whole root, tuber, or similar — not for loose leaves or bulk-counted greens where `units_per_action` already expresses yield volume.
+- **Squirrel caches** and other sources without a live plant age still use catalog `unit_weight_g` (full size). Stew nutrition preview scales plant-part ingredients by **actual** stockpile mass vs catalog so small roots contribute proportionally fewer calories.
+
 **`reach_tier`** (string enum, conditionally required)
 - **Required on all directly-harvested sub-stages of tree species** (typically species whose mature life stage is in canopy size bands, usually `size >= 7`)
 - **Must be omitted** on all non-tree, underground, and output-only parts
@@ -993,6 +998,8 @@ The game generates cordage and bark cloth directly from parts tagged with `corda
 - `harvest_yield.units_per_action` — array of 2 ints [min, max]; required on directly-harvested sub-stages; null on output-only parts
 - `harvest_yield.actions_until_depleted` — array of 2 ints [min, max]; required on directly-harvested sub-stages; null on output-only parts
 - `harvest_damage` — float 0.0-1.0; required on directly-harvested sub-stages; null on output-only parts
+- `harvest_yield_full_age_days` — int or omit; age at full-strength harvest yield scaling (see field reference above)
+- `harvest_unit_weight_scales_with_age` — bool, optional; when `true`, catalog `unit_weight_g` is full-maturity mass per harvested unit and runtime stack weight scales with the same age factor as yield
 - `regrowth_days` — int or null; non-null only for regrowing vegetative parts (leaves, shoots)
 - `regrowth_max_harvests` — int or null; non-null only when regrowth_days is non-null
 - `dig_ticks_to_discover` — int, optional; present only on underground parts; typical range 15-40 (shallow roots 15-20, medium roots 25-30, deep roots 35-40, tree roots 40+)

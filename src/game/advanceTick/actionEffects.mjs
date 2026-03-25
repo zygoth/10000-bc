@@ -7,7 +7,10 @@ import {
 } from '../medicineDebrief.mjs';
 import { PLANT_BY_ID } from '../plantCatalog.mjs';
 import { parsePlantPartItemId } from '../plantPartDescriptors.mjs';
-import { scaledUnitsPerHarvestActionMidpoint } from '../harvestYieldResolve.mjs';
+import {
+  harvestYieldScaleFactor,
+  scaledUnitsPerHarvestActionMidpoint,
+} from '../harvestYieldResolve.mjs';
 
 export function applyActionEffectImpl(state, action, deps) {
   const {
@@ -1751,6 +1754,12 @@ export function applyActionEffectImpl(state, action, deps) {
         } else if (Number.isFinite(Number(action.payload?.inventoryUnitWeightKg))) {
           unitWeightKg = Number(action.payload.inventoryUnitWeightKg);
         }
+      }
+      const scalesUnitWeight = harvestSubStage?.harvest_unit_weight_scales_with_age === true
+        || harvestSubStage?.harvestUnitWeightScalesWithAge === true;
+      if (scalesUnitWeight && Number.isFinite(unitWeightKg) && unitWeightKg > 0 && speciesDef && plant) {
+        const scale = harvestYieldScaleFactor(plant, speciesDef, harvestSubStage);
+        unitWeightKg *= scale;
       }
       addActorInventoryItemWithOverflowDrop(state, actor, itemId, stackQty, {
         freshness: Number(action.payload?.inventoryFreshness),

@@ -159,6 +159,8 @@ const PLANT_CATALOG_SOURCE = [
             "potency_multiplier": 0,
             "harvest_base_ticks": 1,
             "harvest_tool_modifiers": {},
+            "harvest_yield_full_age_days": 20,
+            "harvest_unit_weight_scales_with_age": true,
             "harvest_yield": {
               "units_per_action": [
                 1,

@@ -158,6 +158,8 @@ function normalizePlant(rawPlant) {
     subStages: (part.sub_stages || []).map((subStage) => ({
       ...subStage,
       harvestYieldFullAgeDays: subStage.harvest_yield_full_age_days ?? subStage.harvestYieldFullAgeDays,
+      harvestUnitWeightScalesWithAge: subStage.harvest_unit_weight_scales_with_age === true
+        || subStage.harvestUnitWeightScalesWithAge === true,
       seasonalWindow: normalizeSeasonalWindow(subStage.seasonal_window),
       tannin_level: normalizeOptionalUnitInterval(subStage.tannin_level),
       processing_options: normalizeProcessingOptions(

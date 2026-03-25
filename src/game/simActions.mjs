@@ -1965,6 +1965,47 @@ function getMealVarietyBand(monotonyScore) {
   return { label: 'monotonous', nauseaGain: STEW_NAUSEA_GAIN_MONOTONOUS };
 }
 
+/** Plant-part stew ingredients: scale nutrition by stockpile mass vs catalog `unit_weight_g` (handles age-scaled harvest weight). */
+function stockpilePlantPartMassNutritionScale(state, itemId, quantity) {
+  const descriptor = parsePlantPartItemId(itemId);
+  if (!descriptor) {
+    return 1;
+  }
+  const catalogGrams = Number(descriptor.subStage?.unit_weight_g);
+  if (!Number.isFinite(catalogGrams) || catalogGrams <= 0) {
+    return 1;
+  }
+  const catalogKgPerUnit = catalogGrams / 1000;
+  const q = Math.max(1, Math.floor(Number(quantity) || 1));
+  const expectedKg = q * catalogKgPerUnit;
+
+  const stacks = Array.isArray(state?.camp?.stockpile?.stacks) ? state.camp.stockpile.stacks : [];
+  let need = q;
+  let actualKg = 0;
+  for (const stack of stacks) {
+    if (stack?.itemId !== itemId || need <= 0) {
+      continue;
+    }
+    const avail = Math.max(0, Math.floor(Number(stack.quantity) || 0));
+    if (avail <= 0) {
+      continue;
+    }
+    const take = Math.min(need, avail);
+    const stackKg = Number.isFinite(Number(stack.unitWeightKg)) && Number(stack.unitWeightKg) >= 0
+      ? Number(stack.unitWeightKg)
+      : catalogKgPerUnit;
+    actualKg += take * stackKg;
+    need -= take;
+  }
+  if (need > 0) {
+    actualKg += need * catalogKgPerUnit;
+  }
+  if (expectedKg <= 0) {
+    return 1;
+  }
+  return actualKg / expectedKg;
+}
+
 function buildMealPlanPreview(state, normalizedIngredients) {
   const nauseaByIngredient = state?.camp?.nauseaByIngredient && typeof state.camp.nauseaByIngredient === 'object'
     ? state.camp.nauseaByIngredient
@@ -1978,15 +2019,16 @@ function buildMealPlanPreview(state, normalizedIngredients) {
       }
       const q = Math.max(1, Math.floor(Number(ingredient.quantity) || 1));
       const extraction = Math.max(0, Number(descriptor.extraction) || 0);
+      const massScale = stockpilePlantPartMassNutritionScale(state, ingredient.itemId, q);
       return {
         itemId: ingredient.itemId,
         quantity: q,
         descriptor,
         totalNutrition: {
-          calories: (Number(descriptor.nutrition.calories) || 0) * q * extraction,
-          protein: (Number(descriptor.nutrition.protein) || 0) * q * extraction,
-          carbs: (Number(descriptor.nutrition.carbs) || 0) * q * extraction,
-          fat: (Number(descriptor.nutrition.fat) || 0) * q * extraction,
+          calories: (Number(descriptor.nutrition.calories) || 0) * q * extraction * massScale,
+          protein: (Number(descriptor.nutrition.protein) || 0) * q * extraction * massScale,
+          carbs: (Number(descriptor.nutrition.carbs) || 0) * q * extraction * massScale,
+          fat: (Number(descriptor.nutrition.fat) || 0) * q * extraction * massScale,
         },
       };
     })

@@ -53,22 +53,32 @@ export function applyHarvestActionImpl(state, plantId, partName, subStageId, opt
 
   function consumeOneHarvestAction() {
     if (reachTier === 'canopy') {
-      if (!canAccessCanopyPool) {
+      if (canAccessCanopyPool) {
+        if (entry.remainingActionsCanopy > 0) {
+          entry.remainingActionsCanopy -= 1;
+          consumedCanopyActions += 1;
+          return true;
+        }
+        if (entry.remainingActionsElevated > 0) {
+          entry.remainingActionsElevated -= 1;
+          consumedElevatedActions += 1;
+          return true;
+        }
+        if (entry.remainingActionsGround > 0) {
+          entry.remainingActionsGround -= 1;
+          consumedGroundActions += 1;
+          return true;
+        }
         return false;
-      }
-      if (entry.remainingActionsCanopy > 0) {
-        entry.remainingActionsCanopy -= 1;
-        consumedCanopyActions += 1;
-        return true;
-      }
-      if (entry.remainingActionsElevated > 0) {
-        entry.remainingActionsElevated -= 1;
-        consumedElevatedActions += 1;
-        return true;
       }
       if (entry.remainingActionsGround > 0) {
         entry.remainingActionsGround -= 1;
         consumedGroundActions += 1;
+        return true;
+      }
+      if (canAccessElevatedPool && entry.remainingActionsElevated > 0) {
+        entry.remainingActionsElevated -= 1;
+        consumedElevatedActions += 1;
         return true;
       }
       return false;

@@ -39,6 +39,18 @@ export function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {
   const comforts = Array.isArray(camp?.comforts)
     ? [...camp.comforts]
     : [];
+  const stationPlacements = camp?.stationPlacements && typeof camp.stationPlacements === 'object'
+    ? Object.fromEntries(
+      Object.entries(camp.stationPlacements)
+        .filter(([stationId, placement]) => (
+          typeof stationId === 'string'
+          && stationId
+          && Number.isInteger(placement?.x)
+          && Number.isInteger(placement?.y)
+        ))
+        .map(([stationId, placement]) => [stationId, { x: placement.x, y: placement.y }]),
+    )
+    : {};
   const activeTask = camp?.partnerTaskQueue?.active
     ? { ...camp.partnerTaskQueue.active }
     : null;
@@ -88,6 +100,7 @@ export function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {
     anchorY: Number.isInteger(camp?.anchorY) ? camp.anchorY : fallbackY,
     stockpile: { stacks: stockpileStacks },
     stationsUnlocked,
+    stationPlacements,
     comforts,
     partnerTaskQueue: {
       active: activeTask,

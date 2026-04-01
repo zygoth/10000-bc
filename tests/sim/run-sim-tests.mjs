@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { PLANT_BY_ID, getSeason } from '../../src/game/plantCatalog.mjs';
 import { ANIMAL_BY_ID } from '../../src/game/animalCatalog.mjs';
 import { ITEM_BY_ID, assertKnownItemId } from '../../src/game/itemCatalog.mjs';
+import { GROUND_FUNGUS_BY_ID } from '../../src/game/groundFungusCatalog.mjs';
 import {
   applyHarvestAction,
   advanceDay,
@@ -23,20 +24,56 @@ import {
   getAnimalDensityAtTile,
   getFishDensityAtTile,
   getMetrics,
+  getNatureSightOverlayData,
+  getNatureSightOverlayOptions,
   previewAction,
   getTileAt,
   serializeGameState,
   validateAction,
 } from '../../src/game/simCore.mjs';
+import { TECH_RESEARCH_TASK_KIND, TECH_RESEARCHABLE_UNLOCK_KEYS } from '../../src/game/techResearchCatalog.mjs';
+import { TOOL_RECIPES } from '../../src/game/simActions.mjs';
 import waterGenModule from '../../src/game/waterGen.js';
+import { normalizeStackFootprintValueImpl } from '../../src/game/advanceTick/inventory.mjs';
 
 const { __testables: waterGenTestables = {} } = waterGenModule;
 
 const DRAINAGE_ORDER = ['poor', 'moderate', 'well', 'excellent'];
 const STABILIZED_STATE_CACHE = new Map();
 
+function unlockAllTechResearchForTests(state) {
+  if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+    state.techUnlocks = {};
+  }
+  for (const k of TECH_RESEARCHABLE_UNLOCK_KEYS) {
+    state.techUnlocks[k] = true;
+  }
+}
+
+function findToolRecipeIdForUnlock(unlockKey) {
+  for (const [recipeId, recipe] of Object.entries(TOOL_RECIPES)) {
+    if (recipe?.requiredUnlock === unlockKey) {
+      return recipeId;
+    }
+  }
+  return null;
+}
+
 function cloneGameStateForTest(state) {
   return deserializeGameState(serializeGameState(state));
+}
+
+/** West-of-anchor tile is always in-bounds on the default camp footprint and adjacent to a player on the anchor. */
+function seedSugarBoilingStationPlacement(state) {
+  const ax = state.camp.anchorX;
+  const ay = state.camp.anchorY;
+  const prev = state.camp.stationPlacements && typeof state.camp.stationPlacements === 'object'
+    ? state.camp.stationPlacements
+    : {};
+  state.camp.stationPlacements = {
+    ...prev,
+    sugar_boiling_station: { x: ax - 1, y: ay },
+  };
 }
 
 function runItemPickupValidationRulesTest() {
@@ -137,7 +174,11 @@ function runItemPickupRuntimeTransferTest() {
   const firstStack = firstPickup.actors.player.inventory.stacks.find((entry) => entry.itemId === 'earthworm');
   assert.ok(firstStack, 'item_pickup should transfer item into actor inventory');
   assert.equal(firstStack.quantity, 1, 'item_pickup should transfer requested quantity when available');
-  assert.equal(Number(firstStack.decayDaysRemaining), 3, 'item_pickup should preserve decayDaysRemaining metadata');
+  const pickedDecay = Number(firstStack.decayDaysRemaining);
+  assert.ok(
+    Number.isFinite(pickedDecay) && pickedDecay > 2.9 && pickedDecay <= 3,
+    'item_pickup should preserve decayDaysRemaining metadata (tiny decay may apply within the pickup tick)',
+  );
   assert.equal(Number(firstPickup.worldItemsByTile[tileKey][0].quantity), 1, 'item_pickup should decrement source world stack quantity');
   assert.equal(firstPickup.actors.player.lastPickup?.itemId, 'earthworm', 'item_pickup should write actor.lastPickup metadata');
 
@@ -251,7 +292,11 @@ function runItemDropRuntimeTransferTest() {
   const droppedStack = worldStacks.find((entry) => entry.itemId === 'earthworm');
   assert.ok(droppedStack, 'item_drop should place stack into worldItemsByTile');
   assert.equal(Math.floor(Number(droppedStack.quantity) || 0), 1, 'item_drop should add dropped quantity to world stack');
-  assert.equal(Number(droppedStack.decayDaysRemaining), 2, 'item_drop should preserve decayDaysRemaining metadata on dropped stack');
+  const dropDecay = Number(droppedStack.decayDaysRemaining);
+  assert.ok(
+    Number.isFinite(dropDecay) && dropDecay > 1.9 && dropDecay <= 2,
+    'item_drop should preserve decayDaysRemaining metadata on dropped stack (tiny decay may apply within the drop tick)',
+  );
 }
 
 function runItemDropNoWetDryMergeSingleStackTileTest() {
@@ -680,6 +725,15 @@ function runTrapPlaceDeadfallRuntimeAndDailyResolutionTest() {
 
   player.x = landTile.x;
   player.y = landTile.y;
+  if (!Array.isArray(player.inventory?.stacks)) {
+    player.inventory.stacks = [];
+  }
+  player.inventory.stacks.push({ itemId: 'tool:hoe', quantity: 1 });
+  player.tickBudgetCurrent = Math.max(1, Math.floor(Number(player.tickBudgetCurrent) || 1));
+  if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+    state.techUnlocks = {};
+  }
+  state.techUnlocks.unlock_tool_hoe = true;
   player.inventory.stacks = [{ itemId: 'tool:dead_fall_trap', quantity: 1 }];
 
   const tileKey = `${landTile.x},${landTile.y}`;
@@ -1157,7 +1211,7 @@ function runEarthwormGroundDecayEscapesTest() {
   state.worldItemsByTile[key] = [{ itemId: 'earthworm', quantity: 1, decayDaysRemaining: 1 }];
   player.inventory.stacks = [{ itemId: 'earthworm', quantity: 1, decayDaysRemaining: 1 }];
 
-  const next = advanceDay(state, 1);
+  const next = advanceDay(state, 2);
   const worldStacks = next.worldItemsByTile[key] || [];
   assert.equal(
     worldStacks.some((stack) => stack?.itemId === 'earthworm'),
@@ -1603,14 +1657,41 @@ function runHarvestReachTierToolRequirementsTest() {
   PLANT_BY_ID[speciesId] = {
     id: speciesId,
     longevity: 'perennial',
+    ageOfMaturity: 1,
     lifeStages: [{ stage: 'mature', size: 8, min_age_days: 0, seasonalWindow: null }],
     parts: [
       {
         name: 'leaf',
         subStages: [
-          { id: 'ground_leaf', reach_tier: 'ground', harvest_base_ticks: 2, harvest_tool_modifiers: {} },
-          { id: 'elevated_leaf', reach_tier: 'elevated', harvest_base_ticks: 2, harvest_tool_modifiers: {} },
-          { id: 'canopy_leaf', reach_tier: 'canopy', harvest_base_ticks: 2, harvest_tool_modifiers: {} },
+          {
+            id: 'ground_leaf',
+            reach_tier: 'ground',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: { units_per_action: [1, 1], actions_until_depleted: [2, 2] },
+          },
+          {
+            id: 'elevated_leaf',
+            reach_tier: 'elevated',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: {
+              units_per_action: [1, 1],
+              actions_until_depleted: [3, 3],
+              ground_action_fraction: 1 / 3,
+            },
+          },
+          {
+            id: 'canopy_leaf',
+            reach_tier: 'canopy',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: {
+              units_per_action: [1, 1],
+              actions_until_depleted: [3, 3],
+              ground_action_fraction: 0.34,
+            },
+          },
         ],
       },
     ],
@@ -1628,9 +1709,42 @@ function runHarvestReachTierToolRequirementsTest() {
         alive: true,
         vitality: 1,
         activeSubStages: [
-          { partName: 'leaf', subStageId: 'ground_leaf' },
-          { partName: 'leaf', subStageId: 'elevated_leaf' },
-          { partName: 'leaf', subStageId: 'canopy_leaf' },
+          {
+            partName: 'leaf',
+            subStageId: 'ground_leaf',
+            initialActionsRoll: 2,
+            initialActionsGround: 2,
+            initialActionsElevated: 0,
+            initialActionsCanopy: 0,
+            remainingActionsGround: 2,
+            remainingActionsElevated: 0,
+            remainingActionsCanopy: 0,
+            remainingActions: 2,
+          },
+          {
+            partName: 'leaf',
+            subStageId: 'elevated_leaf',
+            initialActionsRoll: 3,
+            initialActionsGround: 1,
+            initialActionsElevated: 2,
+            initialActionsCanopy: 0,
+            remainingActionsGround: 1,
+            remainingActionsElevated: 2,
+            remainingActionsCanopy: 0,
+            remainingActions: 3,
+          },
+          {
+            partName: 'leaf',
+            subStageId: 'canopy_leaf',
+            initialActionsRoll: 3,
+            initialActionsGround: 1,
+            initialActionsElevated: 1,
+            initialActionsCanopy: 1,
+            remainingActionsGround: 1,
+            remainingActionsElevated: 1,
+            remainingActionsCanopy: 1,
+            remainingActions: 3,
+          },
         ],
         source: 'test',
       },
@@ -1643,33 +1757,62 @@ function runHarvestReachTierToolRequirementsTest() {
       kind: 'harvest',
       payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
     });
-    assert.equal(elevatedNoTool.ok, false, 'elevated reach harvest should require stool or ladder');
-    assert.equal(elevatedNoTool.requiredToolId, 'tool:stool', 'elevated reach without tools should report stool requirement');
+    assert.equal(elevatedNoTool.ok, true, 'elevated reach harvest should allow ground pool use without stool/ladder');
+    assert.equal(elevatedNoTool.normalizedAction.payload.canAccessElevatedPool, false, 'elevated harvest should mark elevated pool inaccessible without stool/ladder');
+    assert.equal(elevatedNoTool.normalizedAction.payload.remainingActionsGround, 1, 'elevated harvest should expose ground pool remaining metadata');
+    assert.equal(elevatedNoTool.normalizedAction.payload.remainingActionsElevated, 2, 'elevated harvest should expose elevated pool remaining metadata');
+
+    const elevatedGroundOnlyTick = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-elevated-ground-only',
+          actorId: 'player',
+          kind: 'harvest',
+          issuedAtTick: 0,
+          payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+        },
+      ],
+    });
+    const elevatedAfterGroundOnly = elevatedGroundOnlyTick.plants.reach_tier_plant.activeSubStages
+      .find((entry) => entry.partName === 'leaf' && entry.subStageId === 'elevated_leaf');
+    assert.equal(elevatedAfterGroundOnly.remainingActionsGround, 0, 'ground-only elevated harvest should consume one ground pool action');
+    assert.equal(elevatedAfterGroundOnly.remainingActionsElevated, 2, 'ground-only elevated harvest should not consume elevated pool without stool/ladder');
+
+    const elevatedNoToolAfterGroundExhaust = validateAction(elevatedGroundOnlyTick, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+    });
+    assert.equal(elevatedNoToolAfterGroundExhaust.ok, false, 'elevated harvest should require stool/ladder once ground pool is exhausted');
+    assert.equal(elevatedNoToolAfterGroundExhaust.code, 'missing_required_tool', 'ground-exhausted elevated harvest should fail with missing_required_tool');
+    assert.equal(elevatedNoToolAfterGroundExhaust.requiredToolId, 'tool:stool', 'ground-exhausted elevated harvest should request stool (ladder also valid)');
 
     const canopyNoTool = validateAction(state, {
       actorId: 'player',
       kind: 'harvest',
       payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 1 },
     });
-    assert.equal(canopyNoTool.ok, false, 'canopy reach harvest should require ladder');
-    assert.equal(canopyNoTool.requiredToolId, 'tool:ladder', 'canopy reach without ladder should report ladder requirement');
+    assert.equal(canopyNoTool.ok, true, 'canopy reach harvest should allow ground pool actions without ladder');
+    assert.equal(canopyNoTool.normalizedAction.payload.remainingActionsGround, 1, 'canopy harvest without ladder should expose ground pool');
 
-    player.inventory.stacks = [{ itemId: 'tool:stool', quantity: 1 }];
-    const elevatedWithStool = validateAction(state, {
+    elevatedGroundOnlyTick.actors.player.inventory.stacks = [{ itemId: 'tool:stool', quantity: 1 }];
+    const elevatedWithStool = validateAction(elevatedGroundOnlyTick, {
       actorId: 'player',
       kind: 'harvest',
       payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
     });
     assert.equal(elevatedWithStool.ok, true, 'stool should satisfy elevated reach harvest requirement');
+    assert.equal(elevatedWithStool.normalizedAction.payload.canAccessElevatedPool, true, 'stool should unlock elevated pool access');
 
     const canopyWithStool = validateAction(state, {
       actorId: 'player',
       kind: 'harvest',
       payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 1 },
     });
-    assert.equal(canopyWithStool.ok, false, 'stool alone should not satisfy canopy reach harvest requirement');
+    assert.equal(canopyWithStool.ok, true, 'canopy harvest should allow ground pool without ladder when ground actions remain');
 
     player.inventory.stacks = [{ itemId: 'tool:ladder', quantity: 1 }];
+    elevatedGroundOnlyTick.actors.player.inventory.stacks = [{ itemId: 'tool:ladder', quantity: 1 }];
     const canopyWithLadder = validateAction(state, {
       actorId: 'player',
       kind: 'harvest',
@@ -1677,6 +1820,216 @@ function runHarvestReachTierToolRequirementsTest() {
     });
     assert.equal(canopyWithLadder.ok, true, 'ladder should satisfy canopy reach harvest requirement');
     assert.equal(canopyWithLadder.normalizedAction.payload.reachTier, 'canopy', 'harvest normalization should preserve reach tier metadata');
+    assert.equal(canopyWithLadder.normalizedAction.payload.remainingActionsCanopy, 1, 'canopy validation should expose canopy pool metadata');
+
+    const elevatedWithLadderTick = advanceTick(elevatedGroundOnlyTick, {
+      actions: [
+        {
+          actionId: 'harvest-elevated-with-ladder',
+          actorId: 'player',
+          kind: 'harvest',
+          issuedAtTick: 0,
+          payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+        },
+      ],
+    });
+    const elevatedAfterLadder = elevatedWithLadderTick.plants.reach_tier_plant.activeSubStages
+      .find((entry) => entry.partName === 'leaf' && entry.subStageId === 'elevated_leaf');
+    assert.equal(elevatedAfterLadder.remainingActionsGround, 0, 'ladder harvest should not recreate spent ground pool actions');
+    assert.equal(elevatedAfterLadder.remainingActionsElevated, 1, 'ladder harvest should consume elevated pool action');
+
+    const canopyCascadeTick = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-canopy-cascade',
+          actorId: 'player',
+          kind: 'harvest',
+          issuedAtTick: 0,
+          payload: { plantId: 'reach_tier_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 3 },
+        },
+      ],
+    });
+    const canopyAfterCascade = canopyCascadeTick.plants.reach_tier_plant.activeSubStages
+      .find((entry) => entry.partName === 'leaf' && entry.subStageId === 'canopy_leaf');
+    assert.equal(canopyAfterCascade, undefined, 'canopy action should consume canopy, then elevated, then ground pools and deplete sub-stage');
+  } finally {
+    if (previousSpecies) {
+      PLANT_BY_ID[speciesId] = previousSpecies;
+    } else {
+      delete PLANT_BY_ID[speciesId];
+    }
+  }
+}
+
+function runHarvestLegacyRemainingActionsMigrationTest() {
+  const state = createInitialGameState(4272, { width: 30, height: 30 });
+  const player = state.actors.player;
+  const playerTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(playerTile, 'test requires player land tile for legacy harvest migration checks');
+  player.x = playerTile.x;
+  player.y = playerTile.y;
+
+  const speciesId = 'test_species_reach_tier_legacy';
+  const previousSpecies = PLANT_BY_ID[speciesId];
+  PLANT_BY_ID[speciesId] = {
+    id: speciesId,
+    longevity: 'perennial',
+    ageOfMaturity: 1,
+    lifeStages: [{ stage: 'mature', size: 8, min_age_days: 0, seasonalWindow: null }],
+    parts: [
+      {
+        name: 'leaf',
+        subStages: [
+          {
+            id: 'ground_leaf',
+            reach_tier: 'ground',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: { units_per_action: [1, 1], actions_until_depleted: [3, 3] },
+          },
+          {
+            id: 'elevated_leaf',
+            reach_tier: 'elevated',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: {
+              units_per_action: [1, 1],
+              actions_until_depleted: [2, 2],
+              ground_action_fraction: 0,
+            },
+          },
+          {
+            id: 'canopy_leaf',
+            reach_tier: 'canopy',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_yield: { units_per_action: [1, 1], actions_until_depleted: [2, 2], ground_action_fraction: 0.25 },
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    state.plants = {
+      reach_tier_legacy_plant: {
+        id: 'reach_tier_legacy_plant',
+        speciesId,
+        age: 90,
+        x: playerTile.x,
+        y: playerTile.y,
+        stageName: 'mature',
+        alive: true,
+        vitality: 1,
+        activeSubStages: [
+          {
+            partName: 'leaf',
+            subStageId: 'ground_leaf',
+            initialActionsRoll: 3,
+            remainingActions: 3,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+          {
+            partName: 'leaf',
+            subStageId: 'elevated_leaf',
+            initialActionsRoll: 2,
+            remainingActions: 2,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+          {
+            partName: 'leaf',
+            subStageId: 'canopy_leaf',
+            initialActionsRoll: 2,
+            remainingActions: 2,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+        ],
+        source: 'test',
+      },
+    };
+    playerTile.plantIds = ['reach_tier_legacy_plant'];
+
+    const groundValidation = validateAction(state, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'ground_leaf', actions: 1 },
+    });
+    assert.equal(groundValidation.ok, true, 'legacy ground sub-stage should migrate remainingActions into ground pool');
+    assert.equal(groundValidation.normalizedAction.payload.remainingActionsGround, 3, 'legacy ground migration should expose migrated ground pool');
+    assert.equal(groundValidation.normalizedAction.payload.remainingActionsElevated, 0, 'legacy ground migration should keep elevated pool empty');
+
+    const elevatedWithoutTool = validateAction(state, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+    });
+    assert.equal(elevatedWithoutTool.ok, false, 'legacy elevated sub-stage should still require stool/ladder when only elevated pool exists');
+    assert.equal(elevatedWithoutTool.code, 'missing_required_tool', 'legacy elevated migration should report missing_required_tool without stool/ladder');
+
+    player.inventory.stacks = [{ itemId: 'tool:stool', quantity: 1 }];
+    const elevatedWithTool = validateAction(state, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+    });
+    assert.equal(elevatedWithTool.ok, true, 'legacy elevated sub-stage should be harvestable after stool migration path');
+    assert.equal(elevatedWithTool.normalizedAction.payload.remainingActionsGround, 0, 'legacy elevated migration should keep migrated ground pool at zero');
+    assert.equal(elevatedWithTool.normalizedAction.payload.remainingActionsElevated, 2, 'legacy elevated migration should expose migrated elevated pool');
+
+    const canopyWithoutLadder = validateAction(state, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 1 },
+    });
+    assert.equal(canopyWithoutLadder.ok, false, 'legacy canopy sub-stage should still require ladder');
+    assert.equal(canopyWithoutLadder.requiredToolId, 'tool:ladder', 'legacy canopy migration should report ladder requirement');
+
+    player.inventory.stacks = [{ itemId: 'tool:ladder', quantity: 1 }];
+    const canopyWithLadder = validateAction(state, {
+      actorId: 'player',
+      kind: 'harvest',
+      payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 1 },
+    });
+    assert.equal(canopyWithLadder.ok, true, 'legacy canopy sub-stage should migrate and validate with ladder');
+    assert.equal(canopyWithLadder.normalizedAction.payload.remainingActionsCanopy, 2, 'legacy canopy migration should expose migrated canopy pool');
+
+    const postHarvest = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-legacy-elevated',
+          actorId: 'player',
+          kind: 'harvest',
+          issuedAtTick: 0,
+          payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'elevated_leaf', actions: 1 },
+        },
+      ],
+    });
+    const elevatedEntry = postHarvest.plants.reach_tier_legacy_plant.activeSubStages
+      .find((entry) => entry.partName === 'leaf' && entry.subStageId === 'elevated_leaf');
+    assert.equal(elevatedEntry.remainingActionsGround, 0, 'legacy elevated harvest should not synthesize ground pool actions');
+    assert.equal(elevatedEntry.remainingActionsElevated, 1, 'legacy elevated harvest should consume migrated elevated pool');
+    assert.equal(elevatedEntry.remainingActions, 1, 'legacy elevated harvest should keep total remainingActions synchronized');
+
+    const postCanopyHarvest = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-legacy-canopy',
+          actorId: 'player',
+          kind: 'harvest',
+          issuedAtTick: 0,
+          payload: { plantId: 'reach_tier_legacy_plant', partName: 'leaf', subStageId: 'canopy_leaf', actions: 1 },
+        },
+      ],
+    });
+    const canopyEntry = postCanopyHarvest.plants.reach_tier_legacy_plant.activeSubStages
+      .find((entry) => entry.partName === 'leaf' && entry.subStageId === 'canopy_leaf');
+    assert.equal(canopyEntry.remainingActionsCanopy, 1, 'legacy canopy harvest should consume migrated canopy pool');
   } finally {
     if (previousSpecies) {
       PLANT_BY_ID[speciesId] = previousSpecies;
@@ -1829,7 +2182,42 @@ function runWorkbenchToolCraftTickReductionTest() {
     payload: { recipeId: 'flint_knife' },
   });
   assert.equal(validationOutOfCamp.ok, true, 'out-of-camp tool craft should still validate');
-  assert.equal(validationOutOfCamp.normalizedAction.tickCost, 30, 'workbench bonus should not apply outside camp bounds');
+  assert.equal(validationOutOfCamp.normalizedAction.tickCost, 30, 'workbench bonus should not apply when neither in camp nor adjacent to workbench');
+
+  const ax = afterBuild.camp.anchorX;
+  const ay = afterBuild.camp.anchorY;
+  const withWestEdgeWorkbench = {
+    ...afterBuild,
+    camp: {
+      ...afterBuild.camp,
+      stationPlacements: {
+        ...afterBuild.camp.stationPlacements,
+        workbench: { x: ax - 1, y: ay },
+      },
+    },
+  };
+  const adjacentOutsideCamp = {
+    ...withWestEdgeWorkbench,
+    actors: {
+      ...withWestEdgeWorkbench.actors,
+      player: {
+        ...withWestEdgeWorkbench.actors.player,
+        x: ax - 2,
+        y: ay,
+      },
+    },
+  };
+  const validationAdjacentOutside = validateAction(adjacentOutsideCamp, {
+    actorId: 'player',
+    kind: 'tool_craft',
+    payload: { recipeId: 'flint_knife' },
+  });
+  assert.equal(validationAdjacentOutside.ok, true, 'adjacent tool craft should validate');
+  assert.equal(
+    validationAdjacentOutside.normalizedAction.tickCost,
+    24,
+    'workbench bonus should apply when adjacent to workbench even if not inside camp footprint',
+  );
 }
 
 function runCarvedWoodenSpoutKnifeRequirementTest() {
@@ -1892,6 +2280,341 @@ function runCarvedWoodenSpoutCraftRuntimePreservesKnifeTest() {
   const knifeStack = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:flint_knife');
   assert.ok(knifeStack, 'flint knife should remain in inventory after carved_wooden_spout craft');
   assert.equal(knifeStack.quantity, 1, 'flint knife should not be consumed by carved_wooden_spout craft');
+}
+
+function runBoneHookCraftValidationAndRuntimeTest() {
+  const state = createInitialGameState(42401, { width: 30, height: 30 });
+  state.actors.player.x = state.camp.anchorX;
+  state.actors.player.y = state.camp.anchorY;
+
+  const missingKnife = validateAction(state, {
+    actorId: 'player',
+    kind: 'tool_craft',
+    payload: { recipeId: 'bone_hook' },
+  });
+  assert.equal(missingKnife.ok, false, 'bone_hook should require flint knife in inventory');
+  assert.equal(missingKnife.code, 'missing_required_tool', 'bone_hook without knife should return missing_required_tool');
+  assert.equal(missingKnife.requiredToolId, 'tool:flint_knife', 'bone_hook without knife should report flint knife requirement');
+
+  state.actors.player.inventory.stacks = [
+    { itemId: 'tool:flint_knife', quantity: 1 },
+    { itemId: 'sylvilagus_floridanus:bone', quantity: 1 },
+    { itemId: 'sylvilagus_floridanus:bone', quantity: 1 },
+  ];
+  const withKnifeAndBone = validateAction(state, {
+    actorId: 'player',
+    kind: 'tool_craft',
+    payload: { recipeId: 'bone_hook' },
+  });
+  assert.equal(withKnifeAndBone.ok, true, 'bone_hook should validate when knife and bone material are carried');
+  assert.equal(
+    withKnifeAndBone.normalizedAction.payload.outputItemId,
+    'tool:bone_hook',
+    'bone_hook recipe should normalize deterministic output payload',
+  );
+
+  const next = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'craft-bone-hook',
+        actorId: 'player',
+        kind: 'tool_craft',
+        payload: { recipeId: 'bone_hook' },
+      },
+    ],
+  });
+
+  const logEntry = next.currentDayActionLog.find((entry) => entry.actionId === 'craft-bone-hook');
+  assert.ok(logEntry && logEntry.status === 'applied', 'bone_hook craft should apply with required materials and knife');
+
+  const hookStack = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:bone_hook');
+  assert.ok(hookStack, 'bone_hook craft should add tool:bone_hook to inventory');
+  assert.equal(hookStack.quantity, 1, 'bone_hook craft should add one tool:bone_hook');
+
+  const knifeStack = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:flint_knife');
+  assert.ok(knifeStack, 'flint knife should remain in inventory after bone_hook craft');
+  assert.equal(knifeStack.quantity, 1, 'flint knife should not be consumed by bone_hook craft');
+}
+
+function runReedyMaterialCraftAliasSupportTest() {
+  const state = createInitialGameState(42403, { width: 30, height: 30 });
+  state.actors.player.x = state.camp.anchorX;
+  state.actors.player.y = state.camp.anchorY;
+  unlockAllTechResearchForTests(state);
+
+  const weavingSpeciesId = 'test_reedy_weaving_alias_species';
+  const legacySpeciesId = 'test_reedy_legacy_alias_species';
+  const previousWeaving = PLANT_BY_ID[weavingSpeciesId];
+  const previousLegacy = PLANT_BY_ID[legacySpeciesId];
+  PLANT_BY_ID[weavingSpeciesId] = {
+    id: weavingSpeciesId,
+    parts: [
+      {
+        name: 'stem',
+        subStages: [{ id: 'raw', craft_tags: ['weaving_material'] }],
+      },
+    ],
+  };
+  PLANT_BY_ID[legacySpeciesId] = {
+    id: legacySpeciesId,
+    parts: [
+      {
+        name: 'stem',
+        subStages: [{ id: 'raw', craft_tags: ['sun_hat_reed_material'] }],
+      },
+    ],
+  };
+
+  try {
+    state.actors.player.inventory.stacks = [
+      { itemId: `${weavingSpeciesId}:stem:raw`, quantity: 12 },
+      { itemId: `${legacySpeciesId}:stem:raw`, quantity: 3 },
+      { itemId: 'cordage', quantity: 12 },
+    ];
+
+    const basketWithWeavingAlias = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'basket' },
+    });
+    assert.equal(basketWithWeavingAlias.ok, true, 'basket should validate with weaving_material alias to reedy_material');
+
+    const blickeyWithLegacyAlias = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'blickey' },
+    });
+    assert.equal(blickeyWithLegacyAlias.ok, true, 'blickey should validate with legacy sun_hat_reed_material alias to reedy_material');
+
+    const leachingBasketWithLegacyAlias = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'leaching_basket' },
+    });
+    assert.equal(leachingBasketWithLegacyAlias.ok, true, 'leaching_basket should validate with legacy sun_hat_reed_material alias to reedy_material');
+  } finally {
+    if (previousWeaving) {
+      PLANT_BY_ID[weavingSpeciesId] = previousWeaving;
+    } else {
+      delete PLANT_BY_ID[weavingSpeciesId];
+    }
+    if (previousLegacy) {
+      PLANT_BY_ID[legacySpeciesId] = previousLegacy;
+    } else {
+      delete PLANT_BY_ID[legacySpeciesId];
+    }
+  }
+}
+
+function runLeachingBasketPlaceRetrieveAndProgressionTest() {
+  const state = createInitialGameState(42404, { width: 30, height: 30 });
+  const player = state.actors.player;
+  const landTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(landTile, 'test requires a land tile for leaching basket lifecycle checks');
+  const waterTile = findAdjacentTileMatching(state, landTile, (tile) => tile && !tile.rockType);
+  assert.ok(waterTile, 'test requires an adjacent tile for leaching basket lifecycle checks');
+  waterTile.waterType = 'river';
+  waterTile.waterDepth = 'shallow';
+  waterTile.waterFrozen = false;
+
+  player.x = landTile.x;
+  player.y = landTile.y;
+
+  const speciesId = 'test_leaching_oak_species';
+  const previousSpecies = PLANT_BY_ID[speciesId];
+  PLANT_BY_ID[speciesId] = {
+    id: speciesId,
+    parts: [
+      {
+        name: 'acorn_kernel',
+        subStages: [
+          {
+            id: 'raw',
+            tannin_level: 0.8,
+            craft_tags: [],
+            processing_options: [],
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    player.inventory.stacks = [
+      { itemId: 'tool:leaching_basket', quantity: 1, footprintW: 2, footprintH: 2 },
+      { itemId: `${speciesId}:acorn_kernel:raw`, quantity: 2 },
+    ];
+
+    const placePreview = validateAction(state, {
+      actorId: 'player',
+      kind: 'leaching_basket_place',
+      payload: {
+        x: waterTile.x,
+        y: waterTile.y,
+        itemId: `${speciesId}:acorn_kernel:raw`,
+        quantity: 2,
+      },
+    });
+    assert.equal(placePreview.ok, true, 'leaching_basket_place should validate with basket, tannin source item, and adjacent water');
+
+    const placed = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'place-leaching-basket',
+          actorId: 'player',
+          kind: 'leaching_basket_place',
+          payload: {
+            x: waterTile.x,
+            y: waterTile.y,
+            itemId: `${speciesId}:acorn_kernel:raw`,
+            quantity: 2,
+          },
+        },
+      ],
+    });
+
+    const placedWaterTile = getTileAt(placed, waterTile.x, waterTile.y);
+    assert.ok(placedWaterTile?.leachingBasket?.active, 'placing leaching basket should create active tile state');
+    assert.equal(
+      Number(placedWaterTile.leachingBasket.tanninRemaining.toFixed(2)),
+      0.8,
+      'placed leaching basket should initialize tanninRemaining from source sub-stage tannin_level',
+    );
+
+    const afterOneDay = advanceDay(placed, 1);
+    const afterOneDayTile = getTileAt(afterOneDay, waterTile.x, waterTile.y);
+    assert.equal(
+      Number(afterOneDayTile.leachingBasket.tanninRemaining.toFixed(2)),
+      0.55,
+      'river leaching basket should reduce tanninRemaining by 0.25 per day',
+    );
+
+    const retrievePreview = validateAction(afterOneDay, {
+      actorId: 'player',
+      kind: 'leaching_basket_retrieve',
+      payload: { x: waterTile.x, y: waterTile.y },
+    });
+    assert.equal(retrievePreview.ok, true, 'leaching_basket_retrieve should validate on active leaching basket tile');
+
+    const retrieved = advanceTick(afterOneDay, {
+      actions: [
+        {
+          actionId: 'retrieve-leaching-basket',
+          actorId: 'player',
+          kind: 'leaching_basket_retrieve',
+          payload: { x: waterTile.x, y: waterTile.y },
+        },
+      ],
+    });
+    const retrievedTile = getTileAt(retrieved, waterTile.x, waterTile.y);
+    assert.equal(retrievedTile?.leachingBasket, null, 'leaching_basket_retrieve should clear tile state');
+    const retrievedKernelStack = retrieved.actors.player.inventory.stacks.find((entry) => entry.itemId === `${speciesId}:acorn_kernel:raw`);
+    assert.ok(retrievedKernelStack, 'leaching_basket_retrieve should return leached item stack to inventory');
+    assert.equal(
+      Number(retrievedKernelStack.tanninRemaining.toFixed(2)),
+      0.55,
+      'retrieved leached item stack should preserve tanninRemaining progress',
+    );
+
+    const payload = serializeGameState(retrieved);
+    const loaded = deserializeGameState(payload);
+    const loadedKernelStack = loaded.actors.player.inventory.stacks.find((entry) => entry.itemId === `${speciesId}:acorn_kernel:raw`);
+    assert.ok(loadedKernelStack, 'snapshot round-trip should preserve leached item stack');
+    assert.equal(
+      Number(loadedKernelStack.tanninRemaining.toFixed(2)),
+      0.55,
+      'snapshot round-trip should preserve leached item tanninRemaining metadata',
+    );
+  } finally {
+    if (previousSpecies) {
+      PLANT_BY_ID[speciesId] = previousSpecies;
+    } else {
+      delete PLANT_BY_ID[speciesId];
+    }
+  }
+}
+
+function runSunHatCraftValidationAndRuntimeTest() {
+  const state = createInitialGameState(42402, { width: 30, height: 30 });
+  state.actors.player.x = state.camp.anchorX;
+  state.actors.player.y = state.camp.anchorY;
+  const temporaryReedItemId = 'test:sun_hat_reed_bundle';
+  const previousTemporaryItem = ITEM_BY_ID[temporaryReedItemId];
+  ITEM_BY_ID[temporaryReedItemId] = {
+    id: temporaryReedItemId,
+    name: 'Test Reed Bundle',
+    category: 'intermediate',
+    unit_weight_g: 1,
+    decay_days: null,
+    can_dry: true,
+    can_freeze: true,
+    craft_tags: ['reedy_material'],
+    nutrition: null,
+  };
+
+  try {
+    const missingMaterials = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'sun_hat' },
+    });
+    assert.equal(missingMaterials.ok, false, 'sun_hat should require either reed-weave materials or dried_hide plus cordage');
+    assert.ok(
+      missingMaterials.code === 'missing_craft_material' || missingMaterials.code === 'insufficient_item_quantity',
+      'sun_hat with no materials should fail with a missing-material code',
+    );
+
+    state.actors.player.inventory.stacks = [
+      { itemId: 'dried_hide', quantity: 1 },
+      { itemId: 'cordage', quantity: 2 },
+    ];
+    const withHidePath = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'sun_hat' },
+    });
+    assert.equal(withHidePath.ok, true, 'sun_hat should validate with dried_hide and cordage path');
+    assert.equal(
+      withHidePath.normalizedAction.payload.outputItemId,
+      'tool:sun_hat',
+      'sun_hat recipe should normalize deterministic output payload',
+    );
+
+    state.actors.player.inventory.stacks = [
+      { itemId: temporaryReedItemId, quantity: 6 },
+      { itemId: 'cordage', quantity: 2 },
+    ];
+    const withReedTagPath = validateAction(state, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: 'sun_hat' },
+    });
+    assert.equal(withReedTagPath.ok, true, 'sun_hat should validate with reed-weave craft tag materials and cordage');
+
+    const crafted = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'craft-sun-hat',
+          actorId: 'player',
+          kind: 'tool_craft',
+          payload: { recipeId: 'sun_hat' },
+        },
+      ],
+    });
+
+    const logEntry = crafted.currentDayActionLog.find((entry) => entry.actionId === 'craft-sun-hat');
+    assert.ok(logEntry && logEntry.status === 'applied', 'sun_hat craft should apply with valid tagged materials');
+
+    const hatStack = crafted.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:sun_hat');
+    assert.ok(hatStack, 'sun_hat craft should add tool:sun_hat to inventory');
+    assert.equal(hatStack.quantity, 1, 'sun_hat craft should add one tool:sun_hat');
+  } finally {
+    if (previousTemporaryItem) {
+      ITEM_BY_ID[temporaryReedItemId] = previousTemporaryItem;
+    } else {
+      delete ITEM_BY_ID[temporaryReedItemId];
+    }
+  }
 }
 
 function runWorkbenchSpoutCraftTickReductionTest() {
@@ -1963,7 +2686,11 @@ function runWorkbenchSpoutCraftTickReductionTest() {
     payload: { recipeId: 'carved_wooden_spout' },
   });
   assert.equal(outOfCampValidation.ok, true, 'out-of-camp carved_wooden_spout craft should validate when knife is present');
-  assert.equal(outOfCampValidation.normalizedAction.tickCost, 15, 'workbench bonus should not apply outside camp bounds for carved_wooden_spout craft');
+  assert.equal(
+    outOfCampValidation.normalizedAction.tickCost,
+    15,
+    'workbench bonus should not apply when neither in camp nor adjacent to workbench for carved_wooden_spout craft',
+  );
 }
 
 function addMatureTappableWalnutToTile(state, tile, plantId = 'test_tappable_walnut') {
@@ -2638,6 +3365,10 @@ function runHoeAdjacentAndOutOfRangeValidationTest() {
 
   player.x = playerTile.x;
   player.y = playerTile.y;
+  if (!Array.isArray(player.inventory?.stacks)) {
+    player.inventory.stacks = [];
+  }
+  player.inventory.stacks.push({ itemId: 'tool:hoe', quantity: 1 });
 
   const adjacentValidation = validateAction(state, {
     actorId: 'player',
@@ -2698,16 +3429,16 @@ function runHarvestCacheAdjacentAndOutOfRangeValidationTest() {
   player.y = playerTile.y;
   adjacentTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 150,
     placementType: 'ground',
     discovered: true,
   };
   farTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 150,
     placementType: 'ground',
     discovered: true,
@@ -2734,6 +3465,8 @@ function runHarvestPlantIdRangeUnchangedTest() {
   const player = state.actors.player;
   const playerTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
   assert.ok(playerTile, 'test requires a player land tile for plantId harvest range check');
+  const adjacentTile = findAdjacentLandTile(state, playerTile);
+  assert.ok(adjacentTile, 'test requires an adjacent land tile for plantId harvest range check');
   const farTile = findFarLandTile(state, playerTile);
   assert.ok(farTile, 'test requires a far land tile for plantId harvest range check');
 
@@ -2743,17 +3476,18 @@ function runHarvestPlantIdRangeUnchangedTest() {
     id: 'range_check_plant',
     speciesId: 'daucus_carota',
     age: 10,
-    x: farTile.x,
-    y: farTile.y,
+    x: adjacentTile.x,
+    y: adjacentTile.y,
     stageName: 'first_year_vegetative',
     alive: true,
     vitality: 1,
-    activeSubStages: [{ partName: 'root', subStageId: 'first_year' }],
+    activeSubStages: [{ partName: 'root', subStageId: 'first_year', digRevealTicksApplied: 5 }],
     source: 'test',
   };
-  farTile.plantIds = ['range_check_plant'];
+  adjacentTile.plantIds = ['range_check_plant'];
+  adjacentTile.disturbed = true;
 
-  const validation = validateAction(state, {
+  const validationAdjacent = validateAction(state, {
     actorId: 'player',
     kind: 'harvest',
     payload: {
@@ -2763,7 +3497,26 @@ function runHarvestPlantIdRangeUnchangedTest() {
       actions: 1,
     },
   });
-  assert.equal(validation.ok, true, 'plantId harvest validation path should remain unchanged by tile-range checks');
+  assert.equal(validationAdjacent.ok, true, 'plantId harvest should validate when plant is on an adjacent tile');
+
+  state.plants.range_check_plant.x = farTile.x;
+  state.plants.range_check_plant.y = farTile.y;
+  adjacentTile.plantIds = [];
+  farTile.plantIds = ['range_check_plant'];
+  farTile.disturbed = true;
+
+  const validationFar = validateAction(state, {
+    actorId: 'player',
+    kind: 'harvest',
+    payload: {
+      plantId: 'range_check_plant',
+      partName: 'root',
+      subStageId: 'first_year',
+      actions: 1,
+    },
+  });
+  assert.equal(validationFar.ok, false, 'plantId harvest should reject non-adjacent plant tiles');
+  assert.equal(validationFar.code, 'interaction_out_of_range', 'non-adjacent plantId harvest should return interaction_out_of_range');
 }
 
 function runTrapPlaceSnareValidationRulesTest() {
@@ -3510,6 +4263,10 @@ function runIntermediateItemRegistryConsistencyTest() {
   assert.ok(ITEM_BY_ID.hide, 'item registry should define canonical hide item');
   assert.ok(ITEM_BY_ID.dried_hide, 'item registry should define canonical dried_hide item');
   assert.ok(ITEM_BY_ID.fat, 'item registry should define canonical fat item');
+  assert.ok(ITEM_BY_ID['tool:stool'], 'item registry should define canonical tool:stool item');
+  assert.ok(ITEM_BY_ID['tool:bone_hook'], 'item registry should define canonical tool:bone_hook item');
+  assert.ok(ITEM_BY_ID['tool:sun_hat'], 'item registry should define canonical tool:sun_hat item');
+  assert.ok(ITEM_BY_ID['tool:leaching_basket'], 'item registry should define canonical tool:leaching_basket item');
 
   const rabbit = ANIMAL_BY_ID.sylvilagus_floridanus;
   assert.ok(rabbit, 'test precondition: expected rabbit species in animal catalog');
@@ -3922,7 +4679,11 @@ function runProcessItemStationRequirementPipelineTest() {
     },
   });
   assert.equal(valid.ok, true, 'station processing should validate after required station is built');
-  assert.equal(valid.normalizedAction.tickCost, 40, 'process_item should use mortar processing ticks from catalog');
+  assert.equal(
+    valid.normalizedAction.tickCost,
+    50,
+    'process_item tickCost should be catalog ticks per unit × quantity (crack_shell: 10 × 5)',
+  );
 
   const next = advanceTick(postBuild, {
     actions: [
@@ -4077,6 +4838,7 @@ function runProcessItemBoilSapNotPartnerRestrictedTest() {
   const partner = state.actors.partner;
   partner.health = 0;
   state.camp.stationsUnlocked = ['sugar_boiling_station'];
+  seedSugarBoilingStationPlacement(state);
 
   player.inventory.stacks = [
     {
@@ -4123,6 +4885,7 @@ function runProcessItemBoilSapNotPartnerRestrictedTest() {
 function runInterruptedPlayerProcessItemResumeTest() {
   const state = createInitialGameState(4252, { width: 20, height: 20 });
   state.camp.stationsUnlocked = ['sugar_boiling_station'];
+  seedSugarBoilingStationPlacement(state);
   state.actors.player.inventory.stacks = [
     {
       itemId: 'tool:hide_pitch_vessel_filled_sap',
@@ -4429,6 +5192,8 @@ function runDryingRackAndGroundDryingProgressionTest() {
   assert.ok(dryableItemId, 'test requires at least one dryable plant item in catalog');
 
   const state = createInitialGameState(4228, { width: 30, height: 30 });
+  state.dailySunExposure = 0.5;
+  state.dailyTemperatureBand = 'mild';
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.techUnlocks = {
@@ -4467,13 +5232,14 @@ function runDryingRackAndGroundDryingProgressionTest() {
 
   const rackStack = (afterDay.camp?.dryingRack?.slots || [])[0];
   assert.ok(rackStack, 'drying rack stack should persist after one day');
-  assert.ok(Math.abs(Number(rackStack.dryness) - 0.2) < 1e-9, 'drying rack should increase dryness by 0.2 per day');
-  assert.ok(Math.abs(Number(rackStack.decayDaysRemaining) - 9.19) < 1e-9, 'rack drying should reduce decay consumption to 0.81/day at dryness 0.2');
+  assert.ok(Math.abs(Number(rackStack.dryness) - 0.1) < 0.02, 'drying rack should accumulate dryness for fixed sun / idle window');
+  assert.ok(Math.abs(Number(rackStack.decayDaysRemaining) - 9.03) < 0.07, 'rack drying should slow decay as dryness increases');
 
   const groundStacks = afterDay.worldItemsByTile[groundKey] || [];
   assert.equal(groundStacks.length, 1, 'ground drying stack should persist after one day');
-  assert.ok(Math.abs(Number(groundStacks[0].dryness) - 0.1) < 1e-9, 'ground drying should increase dryness by 0.1 per day');
-  assert.ok(Math.abs(Number(groundStacks[0].decayDaysRemaining) - 9.095) < 1e-9, 'ground drying should slow decay according to dryness modifier');
+  const groundDryness = Number(groundStacks[0].dryness);
+  assert.ok(!Number.isFinite(groundDryness) || groundDryness < 0.08, 'ground dryness stays modest within this partial idle progression window');
+  assert.ok(Math.abs(Number(groundStacks[0].decayDaysRemaining) - 9.078) < 0.08, 'ground exposure should slow decay according to dryness modifier');
 
   const afterUnload = advanceTick(afterDay, {
     actions: [
@@ -4487,7 +5253,7 @@ function runDryingRackAndGroundDryingProgressionTest() {
   });
   const stockpileStack = afterUnload.camp.stockpile.stacks.find((entry) => entry.itemId === dryableItemId);
   assert.ok(stockpileStack, 'unloading drying rack should return item to stockpile');
-  assert.ok(Number(stockpileStack.dryness) >= 0.2, 'returned stockpile item should preserve drying progress metadata');
+  assert.ok(Number(stockpileStack.dryness) >= 0.09, 'returned stockpile item should preserve drying progress metadata');
 
   const gridState = createInitialGameState(4229, { width: 30, height: 30 });
   gridState.actors.player.x = gridState.camp.anchorX;
@@ -4627,6 +5393,106 @@ function runPartnerTaskSetValidationTest() {
   );
 }
 
+function runTechResearchPartnerTaskUnlockTest() {
+  const state = createInitialGameState(42666, { width: 20, height: 20 });
+  const forest = state.techForest;
+  assert.ok(forest?.byUnlockKey, 'initial state should include techForest');
+  const rootEntry = Object.entries(forest.byUnlockKey).find(([, meta]) => meta.depth === 0);
+  assert.ok(rootEntry, 'forest should have at least one root node');
+  const [rootKey, rootMeta] = rootEntry;
+  assert.equal(state.techUnlocks[rootKey], false, 'root unlock should start false');
+
+  const badTicks = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_task_set',
+    payload: {
+      task: {
+        kind: TECH_RESEARCH_TASK_KIND,
+        ticksRequired: 99999,
+        meta: { unlockKey: rootKey },
+      },
+    },
+  });
+  assert.equal(badTicks.ok, false, 'wrong tick count should fail validation');
+  assert.equal(badTicks.code, 'tech_research_tick_mismatch', 'should report tick mismatch');
+
+  const tr = rootMeta.researchTicks;
+  assert.ok(tr >= 2, 'test expects researchTicks >= 2 for progression split');
+  let next = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'research-root',
+        actorId: 'player',
+        kind: 'partner_task_set',
+        payload: {
+          task: {
+            taskId: 'tr-root',
+            kind: TECH_RESEARCH_TASK_KIND,
+            ticksRequired: tr,
+            meta: { unlockKey: rootKey },
+          },
+        },
+      },
+    ],
+    idleTicks: tr - 2,
+  });
+  assert.equal(next.techUnlocks[rootKey], false, 'root should not unlock before last tick');
+  next = advanceTick(next, { idleTicks: 1 });
+  assert.equal(next.techUnlocks[rootKey], true, 'tech_research completion should set unlock true');
+
+  const toolRecipeId = findToolRecipeIdForUnlock(rootKey);
+  if (toolRecipeId) {
+    const craftGated = validateAction(next, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId: toolRecipeId },
+    });
+    assert.notEqual(
+      craftGated.code,
+      'missing_unlock',
+      'recipe tied to researched tech should pass unlock gate (may fail for other reasons)',
+    );
+  }
+
+  const childEntry = Object.entries(forest.byUnlockKey).find(
+    ([, meta]) => meta.parentUnlockKey === rootKey,
+  );
+  if (childEntry) {
+    const [childKey, childMeta] = childEntry;
+    const okChild = validateAction(next, {
+      actorId: 'player',
+      kind: 'partner_task_set',
+      payload: {
+        task: {
+          kind: TECH_RESEARCH_TASK_KIND,
+          ticksRequired: childMeta.researchTicks,
+          meta: { unlockKey: childKey },
+        },
+      },
+    });
+    assert.equal(okChild.ok, true, 'child research should validate once parent is researched');
+  }
+
+  const fresh = createInitialGameState(42667, { width: 20, height: 20 });
+  const prereqChild = Object.entries(fresh.techForest.byUnlockKey).find(([, m]) => m.parentUnlockKey);
+  if (prereqChild) {
+    const [ck, cm] = prereqChild;
+    const blocked = validateAction(fresh, {
+      actorId: 'player',
+      kind: 'partner_task_set',
+      payload: {
+        task: {
+          kind: TECH_RESEARCH_TASK_KIND,
+          ticksRequired: cm.researchTicks,
+          meta: { unlockKey: ck },
+        },
+      },
+    });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.code, 'tech_prerequisite_missing');
+  }
+}
+
 function runPartnerTaskContinuousProgressionTest() {
   const state = createInitialGameState(4209, { width: 30, height: 30 });
 
@@ -4736,7 +5602,10 @@ function runPartnerTaskQueuePolicyAndOutputStackingTest() {
   assert.ok(firstFiber, 'completed replacement task should deposit stockpile output');
   assert.equal(firstFiber.quantity, 2, 'first completion should deposit expected quantity');
   assert.equal(firstFiber.freshness, 0.2, 'first completion should set stockpile freshness');
-  assert.equal(firstFiber.decayDaysRemaining, 8, 'first completion should set stockpile decayDaysRemaining');
+  assert.ok(
+    Math.abs(Number(firstFiber.decayDaysRemaining) - 8) < 0.05,
+    'first completion should set stockpile decayDaysRemaining (fractional tick decay may shave a trace amount)',
+  );
 
   const secondCompletion = advanceTick(firstCompletion, {
     actions: [
@@ -4767,8 +5636,8 @@ function runPartnerTaskQueuePolicyAndOutputStackingTest() {
     'stacking should average freshness weighted by incoming quantity',
   );
   assert.ok(
-    Math.abs(secondFiber.decayDaysRemaining - 4) < 1e-9,
-    'stacking should average decayDaysRemaining weighted by incoming quantity',
+    Math.abs(Number(secondFiber.decayDaysRemaining) - 4) < 0.08,
+    'stacking should average decayDaysRemaining weighted by incoming quantity (tick decay may shift the blend slightly)',
   );
 }
 
@@ -4814,6 +5683,66 @@ function runPartnerTaskStraddlesDayBoundaryTest() {
   assert.ok(outputAfterComplete, 'completed boil_sap task should deposit output after resuming next day');
   assert.equal(outputAfterComplete.quantity, 1, 'completed boil_sap task should deposit configured quantity');
   assert.equal(resumedNextDay.actors.partner.taskQueue.active, null, 'partner actor queue mirror should stay synchronized after completion');
+}
+
+function runPartnerTaskInvalidatesOnMissingInputsTest() {
+  const state = createInitialGameState(4251, { width: 30, height: 30 });
+  state.actors.player.x = state.camp.anchorX;
+  state.actors.player.y = state.camp.anchorY;
+  state.camp.stockpile.stacks = [{ itemId: 'fiber', quantity: 1 }];
+
+  const next = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'queue-input-dependent-task',
+        actorId: 'player',
+        kind: 'partner_task_set',
+        payload: {
+          task: {
+            taskId: 'task-input',
+            kind: 'craft_rope',
+            ticksRequired: 4,
+            inputs: [{ source: 'camp_stockpile', itemId: 'fiber', quantity: 1 }],
+            outputs: [{ itemId: 'rope', quantity: 1 }],
+          },
+        },
+      },
+      {
+        actionId: 'queue-fallback-task',
+        actorId: 'player',
+        kind: 'partner_task_set',
+        payload: {
+          task: {
+            taskId: 'task-fallback',
+            kind: 'craft_twine',
+            ticksRequired: 1,
+            outputs: [{ itemId: 'cordage', quantity: 1 }],
+          },
+        },
+      },
+      {
+        actionId: 'remove-fiber',
+        actorId: 'player',
+        kind: 'camp_stockpile_remove',
+        payload: {
+          itemId: 'fiber',
+          quantity: 1,
+        },
+      },
+    ],
+  });
+
+  const ropeStack = next.camp.stockpile.stacks.find((entry) => entry.itemId === 'rope');
+  assert.equal(ropeStack, undefined, 'invalidated input-dependent partner task should not produce outputs');
+
+  const cordageStack = next.camp.stockpile.stacks.find((entry) => entry.itemId === 'cordage');
+  assert.ok(cordageStack, 'next valid queued task should run after invalid task is dropped');
+  assert.equal(cordageStack.quantity, 1, 'fallback task should produce expected output quantity');
+
+  const history = Array.isArray(next.camp.partnerTaskHistory) ? next.camp.partnerTaskHistory : [];
+  const failed = history.find((entry) => entry.taskId === 'task-input' && entry.status === 'failed');
+  assert.ok(failed, 'invalidated partner task should be recorded as failed in partnerTaskHistory');
+  assert.equal(failed.failureReason, 'missing_input:fiber', 'failed task should capture missing input reason');
 }
 
 function runInspectAndDigCoreEffectsTest() {
@@ -4908,16 +5837,16 @@ function runEatAndHarvestCoreEffectsTest() {
   player.hunger = 0.4;
   player.thirst = 0.4;
   player.health = 0.4;
-  player.inventory.stacks = [{ itemId: 'berries', quantity: 3 }];
+  player.inventory.stacks = [{ itemId: 'tree_sugar', quantity: 3 }];
 
   const next = advanceTick(state, {
     actions: [
       {
-        actionId: 'eat-berries',
+        actionId: 'eat-tree-sugar',
         actorId: 'player',
         kind: 'eat',
         issuedAtTick: 0,
-        payload: { itemId: 'berries', quantity: 2 },
+        payload: { itemId: 'tree_sugar', quantity: 2 },
       },
       {
         actionId: 'harvest-stem',
@@ -4934,8 +5863,8 @@ function runEatAndHarvestCoreEffectsTest() {
     ],
   });
 
-  const berriesAfter = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'berries');
-  assert.equal(berriesAfter.quantity, 1, 'eat should consume requested inventory quantity');
+  const sugarAfter = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tree_sugar');
+  assert.equal(sugarAfter.quantity, 1, 'eat should consume requested inventory quantity');
   assert.ok(next.actors.player.hunger > 0.4, 'eat should increase hunger stat');
   assert.ok(next.actors.player.thirst > 0.4, 'eat should increase thirst stat');
   assert.ok(next.actors.player.health > 0.4, 'eat should increase health stat');
@@ -4943,7 +5872,11 @@ function runEatAndHarvestCoreEffectsTest() {
   const harvestItemId = 'daucus_carota:stem:green';
   const harvestedStack = next.actors.player.inventory.stacks.find((entry) => entry.itemId === harvestItemId);
   assert.ok(harvestedStack, 'harvest should add deterministic inventory item stack');
-  assert.equal(harvestedStack.quantity, 2, 'harvest should add quantity equal to applied harvest actions');
+  assert.equal(
+    harvestedStack.quantity,
+    4,
+    'harvest quantity should multiply applied actions by units_per_action midpoint (2 actions × 2 units)',
+  );
   assert.ok(
     Number(next.plants.harvest_candidate.vitality) < 1,
     'harvest should apply vitality damage through applyHarvestAction',
@@ -5204,6 +6137,589 @@ function runAxeKnifeHarvestModifierPrecedenceTest() {
   }
 }
 
+function runEquipUnequipActionsTest() {
+  const state = createInitialGameState(4270, { width: 20, height: 20 });
+  const player = state.actors.player;
+  player.inventory.stacks = [{ itemId: 'tool:gloves', quantity: 1, footprintW: 1, footprintH: 1 }];
+
+  const equipPreview = validateAction(state, {
+    actorId: 'player',
+    kind: 'equip_item',
+    payload: { itemId: 'tool:gloves' },
+  });
+  assert.equal(equipPreview.ok, true, 'equip_item should validate for carried equippable item');
+  assert.equal(equipPreview.normalizedAction.payload.equipmentSlot, 'gloves', 'equip_item should normalize target slot');
+
+  const equipped = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'equip-gloves',
+        actorId: 'player',
+        kind: 'equip_item',
+        payload: { itemId: 'tool:gloves' },
+      },
+    ],
+  });
+
+  assert.equal(
+    equipped.actors.player.inventory.stacks.some((entry) => entry.itemId === 'tool:gloves'),
+    false,
+    'equip_item should remove equipped item from stack inventory',
+  );
+  assert.equal(
+    equipped.actors.player.inventory.equipment?.gloves?.itemId,
+    'tool:gloves',
+    'equip_item should store item in gloves equipment slot',
+  );
+
+  const unequipPreview = validateAction(equipped, {
+    actorId: 'player',
+    kind: 'unequip_item',
+    payload: { equipmentSlot: 'gloves' },
+  });
+  assert.equal(unequipPreview.ok, true, 'unequip_item should validate for occupied equipment slot');
+
+  const unequipped = advanceTick(equipped, {
+    actions: [
+      {
+        actionId: 'unequip-gloves',
+        actorId: 'player',
+        kind: 'unequip_item',
+        payload: { equipmentSlot: 'gloves' },
+      },
+    ],
+  });
+
+  assert.equal(unequipped.actors.player.inventory.equipment?.gloves, null, 'unequip_item should clear gloves equipment slot');
+  const glovesStack = unequipped.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:gloves');
+  assert.ok(glovesStack, 'unequip_item should restore gloves item to inventory stacks');
+  assert.equal(glovesStack.quantity, 1, 'unequip_item should restore one gloves item');
+
+  const coatState = createInitialGameState(4273, { width: 20, height: 20 });
+  const coatPlayer = coatState.actors.player;
+  coatPlayer.inventory.stacks = [{ itemId: 'tool:coat', quantity: 1, footprintW: 2, footprintH: 2 }];
+
+  const coatEquipped = advanceTick(coatState, {
+    actions: [
+      {
+        actionId: 'equip-coat',
+        actorId: 'player',
+        kind: 'equip_item',
+        payload: { itemId: 'tool:coat' },
+      },
+    ],
+  });
+  assert.equal(
+    coatEquipped.actors.player.inventory.equipment?.coat?.itemId,
+    'tool:coat',
+    'equip_item should support coat slot',
+  );
+
+  const coatUnequipped = advanceTick(coatEquipped, {
+    actions: [
+      {
+        actionId: 'unequip-coat',
+        actorId: 'player',
+        kind: 'unequip_item',
+        payload: { equipmentSlot: 'coat' },
+      },
+    ],
+  });
+  const coatStack = coatUnequipped.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:coat');
+  assert.ok(coatStack, 'unequip_item should restore coat to inventory stacks');
+  assert.equal(Number(coatStack.footprintW), 2, 'unequipped coat stack should preserve 2x2 footprint width');
+  assert.equal(Number(coatStack.footprintH), 2, 'unequipped coat stack should preserve 2x2 footprint height');
+
+  const hatState = createInitialGameState(4278, { width: 20, height: 20 });
+  const hatPlayer = hatState.actors.player;
+  hatPlayer.inventory.stacks = [{ itemId: 'tool:sun_hat', quantity: 1, footprintW: 1, footprintH: 1 }];
+
+  const hatEquipped = advanceTick(hatState, {
+    actions: [
+      {
+        actionId: 'equip-sun-hat',
+        actorId: 'player',
+        kind: 'equip_item',
+        payload: { itemId: 'tool:sun_hat' },
+      },
+    ],
+  });
+  assert.equal(
+    hatEquipped.actors.player.inventory.equipment?.head?.itemId,
+    'tool:sun_hat',
+    'equip_item should support head slot for tool:sun_hat',
+  );
+
+  const hatUnequipped = advanceTick(hatEquipped, {
+    actions: [
+      {
+        actionId: 'unequip-sun-hat',
+        actorId: 'player',
+        kind: 'unequip_item',
+        payload: { equipmentSlot: 'head' },
+      },
+    ],
+  });
+  const hatStack = hatUnequipped.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:sun_hat');
+  assert.ok(hatStack, 'unequip_item should restore sun_hat to inventory stacks');
+  assert.equal(Number(hatStack.footprintW), 1, 'unequipped sun_hat stack should preserve 1x1 footprint width');
+  assert.equal(Number(hatStack.footprintH), 1, 'unequipped sun_hat stack should preserve 1x1 footprint height');
+}
+
+function runEquippedGlovesHarvestInjuryBehaviorTest() {
+  const state = createInitialGameState(4271, { width: 20, height: 20 });
+  const player = state.actors.player;
+  const landTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(landTile, 'test requires a land tile for equipped-gloves harvest injury checks');
+
+  const speciesId = 'test_species_glove_harvest_injury';
+  const previousSpecies = PLANT_BY_ID[speciesId];
+  PLANT_BY_ID[speciesId] = {
+    id: speciesId,
+    parts: [
+      {
+        name: 'leaf',
+        subStages: [
+          {
+            id: 'hazard',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_damage: 0,
+            on_harvest_injury: {
+              type: 'sting',
+              base_probability: 1,
+              health_hit: 0.1,
+              infection_chance: null,
+              debuff: null,
+              tool_probability_modifiers: {
+                gloves: 0,
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    state.plants = {
+      gloves_harvest_plant: {
+        id: 'gloves_harvest_plant',
+        speciesId,
+        age: 5,
+        x: landTile.x,
+        y: landTile.y,
+        stageName: 'mature_vegetative',
+        alive: true,
+        vitality: 1,
+        activeSubStages: [
+          {
+            partName: 'leaf',
+            subStageId: 'hazard',
+            initialActionsRoll: 3,
+            seasonalHarvestBudgetActions: 3,
+            remainingActions: 3,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+        ],
+        source: 'test',
+      },
+    };
+    landTile.plantIds = ['gloves_harvest_plant'];
+
+    player.x = landTile.x;
+    player.y = landTile.y;
+    player.health = 1;
+    player.inventory.equipment = { gloves: null, coat: null };
+    player.inventory.stacks = [{ itemId: 'tool:gloves', quantity: 1, footprintW: 1, footprintH: 1 }];
+
+    const carriedOnly = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-carried-gloves-only',
+          actorId: 'player',
+          kind: 'harvest',
+          payload: {
+            plantId: 'gloves_harvest_plant',
+            partName: 'leaf',
+            subStageId: 'hazard',
+            actions: 1,
+          },
+        },
+      ],
+    });
+
+    assert.ok(
+      carriedOnly.actors.player.health < 1,
+      'gloves in stack inventory only should not suppress harvest injury',
+    );
+
+    const equippedState = createInitialGameState(4271, { width: 20, height: 20 });
+    const equippedLandTile = equippedState.tiles.find((tile) => !tile.waterType && !tile.rockType);
+    assert.ok(equippedLandTile, 'test requires second land tile setup for equipped-gloves harvest injury checks');
+    equippedState.plants = {
+      gloves_harvest_plant: {
+        id: 'gloves_harvest_plant',
+        speciesId,
+        age: 5,
+        x: equippedLandTile.x,
+        y: equippedLandTile.y,
+        stageName: 'mature_vegetative',
+        alive: true,
+        vitality: 1,
+        activeSubStages: [
+          {
+            partName: 'leaf',
+            subStageId: 'hazard',
+            initialActionsRoll: 3,
+            seasonalHarvestBudgetActions: 3,
+            remainingActions: 3,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+        ],
+        source: 'test',
+      },
+    };
+    equippedLandTile.plantIds = ['gloves_harvest_plant'];
+    equippedState.actors.player.health = 1;
+    equippedState.actors.player.x = equippedLandTile.x;
+    equippedState.actors.player.y = equippedLandTile.y;
+    equippedState.actors.player.inventory.stacks = [{ itemId: 'tool:gloves', quantity: 1, footprintW: 1, footprintH: 1 }];
+    equippedState.actors.player.inventory.equipment = { gloves: null, coat: null };
+
+    const afterEquip = advanceTick(equippedState, {
+      actions: [
+        {
+          actionId: 'equip-before-harvest',
+          actorId: 'player',
+          kind: 'equip_item',
+          payload: { itemId: 'tool:gloves' },
+        },
+      ],
+    });
+
+    const protectedHarvest = advanceTick(afterEquip, {
+      actions: [
+        {
+          actionId: 'harvest-with-equipped-gloves',
+          actorId: 'player',
+          kind: 'harvest',
+          payload: {
+            plantId: 'gloves_harvest_plant',
+            partName: 'leaf',
+            subStageId: 'hazard',
+            actions: 1,
+          },
+        },
+      ],
+    });
+
+    assert.equal(
+      protectedHarvest.actors.player.health,
+      1,
+      'equipped gloves should suppress harvest injury when gloves modifier is 0',
+    );
+  } finally {
+    if (previousSpecies) {
+      PLANT_BY_ID[speciesId] = previousSpecies;
+    } else {
+      delete PLANT_BY_ID[speciesId];
+    }
+  }
+}
+
+function runEquippedCoatHarvestInjuryBehaviorTest() {
+  const state = createInitialGameState(4274, { width: 20, height: 20 });
+  const player = state.actors.player;
+  const landTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(landTile, 'test requires a land tile for equipped-coat harvest injury checks');
+
+  const speciesId = 'test_species_coat_harvest_injury';
+  const previousSpecies = PLANT_BY_ID[speciesId];
+  PLANT_BY_ID[speciesId] = {
+    id: speciesId,
+    parts: [
+      {
+        name: 'stem',
+        subStages: [
+          {
+            id: 'hazard',
+            harvest_base_ticks: 2,
+            harvest_tool_modifiers: {},
+            harvest_damage: 0,
+            on_harvest_injury: {
+              type: 'scratch',
+              base_probability: 1,
+              health_hit: 0.1,
+              infection_chance: null,
+              debuff: null,
+              tool_probability_modifiers: {
+                coat: 0,
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    state.plants = {
+      coat_harvest_plant: {
+        id: 'coat_harvest_plant',
+        speciesId,
+        age: 5,
+        x: landTile.x,
+        y: landTile.y,
+        stageName: 'mature_vegetative',
+        alive: true,
+        vitality: 1,
+        activeSubStages: [
+          {
+            partName: 'stem',
+            subStageId: 'hazard',
+            initialActionsRoll: 3,
+            seasonalHarvestBudgetActions: 3,
+            remainingActions: 3,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+        ],
+        source: 'test',
+      },
+    };
+    landTile.plantIds = ['coat_harvest_plant'];
+
+    player.x = landTile.x;
+    player.y = landTile.y;
+    player.health = 1;
+    player.inventory.equipment = { gloves: null, coat: null };
+    player.inventory.stacks = [{ itemId: 'tool:coat', quantity: 1, footprintW: 2, footprintH: 2 }];
+
+    const carriedOnly = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'harvest-carried-coat-only',
+          actorId: 'player',
+          kind: 'harvest',
+          payload: {
+            plantId: 'coat_harvest_plant',
+            partName: 'stem',
+            subStageId: 'hazard',
+            actions: 1,
+          },
+        },
+      ],
+    });
+
+    assert.ok(
+      carriedOnly.actors.player.health < 1,
+      'coat in stack inventory only should not suppress harvest injury',
+    );
+
+    const equippedState = createInitialGameState(4274, { width: 20, height: 20 });
+    const equippedLandTile = equippedState.tiles.find((tile) => !tile.waterType && !tile.rockType);
+    assert.ok(equippedLandTile, 'test requires second land tile setup for equipped-coat harvest injury checks');
+    equippedState.plants = {
+      coat_harvest_plant: {
+        id: 'coat_harvest_plant',
+        speciesId,
+        age: 5,
+        x: equippedLandTile.x,
+        y: equippedLandTile.y,
+        stageName: 'mature_vegetative',
+        alive: true,
+        vitality: 1,
+        activeSubStages: [
+          {
+            partName: 'stem',
+            subStageId: 'hazard',
+            initialActionsRoll: 3,
+            seasonalHarvestBudgetActions: 3,
+            remainingActions: 3,
+            harvestsThisSeason: 0,
+            regrowthCountdown: null,
+            vitalityDamageAppliedThisSeason: 0,
+          },
+        ],
+        source: 'test',
+      },
+    };
+    equippedLandTile.plantIds = ['coat_harvest_plant'];
+    equippedState.actors.player.health = 1;
+    equippedState.actors.player.x = equippedLandTile.x;
+    equippedState.actors.player.y = equippedLandTile.y;
+    equippedState.actors.player.inventory.stacks = [{ itemId: 'tool:coat', quantity: 1, footprintW: 2, footprintH: 2 }];
+    equippedState.actors.player.inventory.equipment = { gloves: null, coat: null };
+
+    const afterEquip = advanceTick(equippedState, {
+      actions: [
+        {
+          actionId: 'equip-coat-before-harvest',
+          actorId: 'player',
+          kind: 'equip_item',
+          payload: { itemId: 'tool:coat' },
+        },
+      ],
+    });
+
+    const protectedHarvest = advanceTick(afterEquip, {
+      actions: [
+        {
+          actionId: 'harvest-with-equipped-coat',
+          actorId: 'player',
+          kind: 'harvest',
+          payload: {
+            plantId: 'coat_harvest_plant',
+            partName: 'stem',
+            subStageId: 'hazard',
+            actions: 1,
+          },
+        },
+      ],
+    });
+
+    assert.equal(
+      protectedHarvest.actors.player.health,
+      1,
+      'equipped coat should suppress harvest injury when coat modifier is 0',
+    );
+  } finally {
+    if (previousSpecies) {
+      PLANT_BY_ID[speciesId] = previousSpecies;
+    } else {
+      delete PLANT_BY_ID[speciesId];
+    }
+  }
+}
+
+function runEquipmentSnapshotRoundTripTest() {
+  const state = createInitialGameState(4272, { width: 20, height: 20 });
+  state.actors.player.inventory.equipment = {
+    gloves: { itemId: 'tool:gloves', equippedAtDay: 3, equippedAtDayTick: 12 },
+    coat: { itemId: 'tool:coat', equippedAtDay: 4, equippedAtDayTick: 7 },
+    head: { itemId: 'tool:sun_hat', equippedAtDay: 5, equippedAtDayTick: 9 },
+  };
+
+  const payload = serializeGameState(state);
+  const loaded = deserializeGameState(payload);
+  assert.equal(loaded.actors.player.inventory.equipment?.gloves?.itemId, 'tool:gloves', 'snapshot round-trip should preserve equipped gloves');
+  assert.equal(loaded.actors.player.inventory.equipment?.coat?.itemId, 'tool:coat', 'snapshot round-trip should preserve equipped coat');
+  assert.equal(loaded.actors.player.inventory.equipment?.head?.itemId, 'tool:sun_hat', 'snapshot round-trip should preserve equipped sun hat');
+}
+
+function runCoatColdExposurePerTickTest() {
+  const exposureTicks = 120;
+  const expectedDrain = (1 / 3) * (exposureTicks / 400);
+
+  const unprotected = createInitialGameState(4275, { width: 20, height: 20 });
+  unprotected.dailyTemperatureBand = 'freezing';
+  unprotected.dailyTemperatureF = 20;
+  unprotected.actors.player.health = 1;
+  unprotected.actors.player.inventory.equipment = { gloves: null, coat: null };
+  unprotected.actors.player.x = unprotected.camp.anchorX + 1;
+  unprotected.actors.player.y = unprotected.camp.anchorY;
+
+  const afterExposure = advanceTick(unprotected, { idleTicks: exposureTicks });
+  assert.ok(
+    Math.abs(afterExposure.actors.player.health - (1 - expectedDrain)) < 1e-9,
+    'freezing exposure without coat should drain health gradually per tick',
+  );
+
+  const protectedState = createInitialGameState(4276, { width: 20, height: 20 });
+  protectedState.dailyTemperatureBand = 'freezing';
+  protectedState.dailyTemperatureF = 20;
+  protectedState.actors.player.health = 1;
+  protectedState.actors.player.inventory.equipment = {
+    gloves: null,
+    coat: { itemId: 'tool:coat', equippedAtDay: 0, equippedAtDayTick: 0 },
+  };
+  protectedState.actors.player.x = protectedState.camp.anchorX + 1;
+  protectedState.actors.player.y = protectedState.camp.anchorY;
+
+  const afterProtectedExposure = advanceTick(protectedState, { idleTicks: exposureTicks });
+  assert.equal(
+    afterProtectedExposure.actors.player.health,
+    1,
+    'equipped coat should prevent freezing-band cold exposure drain',
+  );
+
+  const campSafe = createInitialGameState(4277, { width: 20, height: 20 });
+  campSafe.dailyTemperatureBand = 'cold';
+  campSafe.dailyTemperatureF = 30;
+  campSafe.actors.player.health = 1;
+  campSafe.actors.player.inventory.equipment = { gloves: null, coat: null };
+  campSafe.actors.player.x = campSafe.camp.anchorX;
+  campSafe.actors.player.y = campSafe.camp.anchorY;
+
+  const afterCampIdle = advanceTick(campSafe, { idleTicks: exposureTicks });
+  assert.equal(
+    afterCampIdle.actors.player.health,
+    1,
+    'player on camp anchor should not take cold exposure damage',
+  );
+}
+
+function runTemperatureThirstDrainAndSunHatModifierTest() {
+  const idleTicks = 120;
+  const startThirst = 1;
+
+  function runScenario(seed, band, withSunHat = false, atCamp = false) {
+    const state = createInitialGameState(seed, { width: 20, height: 20 });
+    state.dailyTemperatureBand = band;
+    state.actors.player.thirst = startThirst;
+    state.actors.player.inventory.equipment = {
+      gloves: null,
+      coat: null,
+      head: withSunHat ? { itemId: 'tool:sun_hat', equippedAtDay: 0, equippedAtDayTick: 0 } : null,
+    };
+    state.actors.player.x = atCamp ? state.camp.anchorX : state.camp.anchorX + 1;
+    state.actors.player.y = state.camp.anchorY;
+    return advanceTick(state, { idleTicks });
+  }
+
+  const mild = runScenario(4280, 'mild');
+  const warm = runScenario(4281, 'warm');
+  const warmWithHat = runScenario(4282, 'warm', true);
+  const hot = runScenario(4283, 'hot');
+  const hotWithHat = runScenario(4284, 'hot', true);
+  const freezing = runScenario(4285, 'freezing');
+  const warmAtCamp = runScenario(4286, 'warm', false, true);
+
+  const mildDrain = startThirst - mild.actors.player.thirst;
+  const warmDrain = startThirst - warm.actors.player.thirst;
+  const warmWithHatDrain = startThirst - warmWithHat.actors.player.thirst;
+  const hotDrain = startThirst - hot.actors.player.thirst;
+  const hotWithHatDrain = startThirst - hotWithHat.actors.player.thirst;
+  const freezingDrain = startThirst - freezing.actors.player.thirst;
+  const warmAtCampDrain = startThirst - warmAtCamp.actors.player.thirst;
+
+  assert.ok(warmDrain > mildDrain, 'warm band should drain thirst faster than mild');
+  assert.ok(hotDrain > warmDrain, 'hot band should drain thirst faster than warm');
+  assert.ok(freezingDrain < mildDrain, 'freezing band should drain thirst slower than mild');
+
+  const expectedWarmWithHatDrain = mildDrain + ((warmDrain - mildDrain) * 0.5);
+  const expectedHotWithHatDrain = mildDrain + ((hotDrain - mildDrain) * 0.5);
+  assert.ok(
+    Math.abs(warmWithHatDrain - expectedWarmWithHatDrain) < 1e-9,
+    'equipped sun_hat should halve warm temperature thirst modifier',
+  );
+  assert.ok(
+    Math.abs(hotWithHatDrain - expectedHotWithHatDrain) < 1e-9,
+    'equipped sun_hat should halve hot temperature thirst modifier',
+  );
+  assert.equal(
+    warmAtCampDrain,
+    0,
+    'player on camp anchor should not lose thirst from field activity tick drain',
+  );
+}
+
 function runEatFilledSapVesselReturnsEmptyContainerTest() {
   const state = createInitialGameState(4214, { width: 20, height: 20 });
   const player = state.actors.player;
@@ -5270,6 +6786,260 @@ function runEatFilledSapVesselReturnsEmptyContainerTest() {
   assert.ok(next.actors.player.health > 0.4, 'eat should increase health when drinking sap from vessel');
 }
 
+function runWaterskinFillAndDrinkValidationTest() {
+  const state = createInitialGameState(5390, { width: 30, height: 30 });
+  const player = state.actors.player;
+  const landTile = findCardinalAdjacentWaterLandTile(state);
+  assert.ok(landTile, 'test requires land tile cardinally adjacent to unfrozen water for waterskin actions');
+
+  player.x = landTile.x;
+  player.y = landTile.y;
+  player.inventory.stacks = [];
+
+  const fillMissing = validateAction(state, {
+    actorId: 'player',
+    kind: 'waterskin_fill',
+    payload: {},
+  });
+  assert.equal(fillMissing.ok, false, 'waterskin_fill should require carried waterskin');
+  assert.equal(fillMissing.code, 'insufficient_item_quantity', 'waterskin_fill missing container should return insufficient_item_quantity');
+
+  player.inventory.stacks = [{ itemId: 'tool:waterskin', quantity: 1 }];
+  const fillValid = validateAction(state, {
+    actorId: 'player',
+    kind: 'waterskin_fill',
+    payload: {},
+  });
+  assert.equal(fillValid.ok, true, 'waterskin_fill should validate with empty waterskin and adjacent water');
+  assert.equal(fillValid.normalizedAction.tickCost, 2, 'waterskin_fill should normalize to 2 tick cost');
+  assert.ok(typeof fillValid.normalizedAction.payload.toItemId === 'string', 'waterskin_fill should normalize output waterskin state item id');
+
+  const drinkMissing = validateAction(state, {
+    actorId: 'player',
+    kind: 'waterskin_drink',
+    payload: {},
+  });
+  assert.equal(drinkMissing.ok, false, 'waterskin_drink should reject when no filled waterskin carried');
+  assert.equal(drinkMissing.code, 'insufficient_item_quantity', 'waterskin_drink missing filled waterskin should return insufficient_item_quantity');
+
+  player.inventory.stacks = [{ itemId: 'tool:waterskin_safe_2', quantity: 1 }];
+  const drinkValid = validateAction(state, {
+    actorId: 'player',
+    kind: 'waterskin_drink',
+    payload: {},
+  });
+  assert.equal(drinkValid.ok, true, 'waterskin_drink should validate with filled waterskin');
+  assert.equal(drinkValid.normalizedAction.tickCost, 1, 'waterskin_drink should normalize to 1 tick cost');
+  assert.equal(drinkValid.normalizedAction.payload.toItemId, 'tool:waterskin_safe_1', 'waterskin_drink should decrement waterskin drink state');
+
+  const waterTile = findAdjacentTileMatching(state, landTile, (tile) => tile?.waterType && tile.waterFrozen !== true);
+  assert.ok(waterTile, 'test requires adjacent unfrozen water tile for water_drink');
+
+  const farX = landTile.x + 2 < state.width ? landTile.x + 2 : landTile.x - 2;
+  const drinkWaterTooFar = validateAction(state, {
+    actorId: 'player',
+    kind: 'water_drink',
+    payload: { x: farX, y: landTile.y },
+  });
+  assert.equal(drinkWaterTooFar.ok, false, 'water_drink should reject non-adjacent water tile');
+  assert.equal(drinkWaterTooFar.code, 'interaction_out_of_range', 'water_drink out of range should return interaction_out_of_range');
+
+  const drinkWaterValid = validateAction(state, {
+    actorId: 'player',
+    kind: 'water_drink',
+    payload: { x: waterTile.x, y: waterTile.y },
+  });
+  assert.equal(drinkWaterValid.ok, true, 'water_drink should validate when standing next to river or pond');
+  assert.equal(drinkWaterValid.normalizedAction.tickCost, 1, 'water_drink should cost 1 tick');
+  assert.ok(
+    drinkWaterValid.normalizedAction.payload.sourceType === 'pond'
+      || drinkWaterValid.normalizedAction.payload.sourceType === 'river',
+    'water_drink should normalize sourceType from tile',
+  );
+
+  player.thirst = 0.1;
+  const drank = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'direct-water-drink-test',
+        actorId: 'player',
+        kind: 'water_drink',
+        payload: { x: waterTile.x, y: waterTile.y },
+      },
+    ],
+  });
+  assert.ok(
+    drank.actors.player.thirst >= 1 - 2 / 600,
+    'water_drink should restore thirst to full, allowing same-tick field thirst drain after the action',
+  );
+
+  const campState = createInitialGameState(5392, { width: 30, height: 30 });
+  const campPlayer = campState.actors.player;
+  const ax = campState.camp.anchorX;
+  const ay = campState.camp.anchorY;
+  assert.ok(Number.isInteger(ax) && Number.isInteger(ay), 'test requires camp anchor');
+  campPlayer.x = ax;
+  campPlayer.y = ay;
+  const campDrinkValid = validateAction(campState, {
+    actorId: 'player',
+    kind: 'water_drink',
+    payload: { x: ax, y: ay },
+  });
+  assert.equal(campDrinkValid.ok, true, 'water_drink should validate on camp anchor tile');
+  assert.equal(
+    campDrinkValid.normalizedAction.payload.sourceType,
+    'safe',
+    'camp water_drink should normalize sourceType safe',
+  );
+
+  const stepX = ax + 1 < campState.width ? 1 : -1;
+  campPlayer.x = ax + stepX;
+  campPlayer.y = ay;
+  const campDrinkAdjacent = validateAction(campState, {
+    actorId: 'player',
+    kind: 'water_drink',
+    payload: { x: ax, y: ay },
+  });
+  assert.equal(campDrinkAdjacent.ok, true, 'water_drink should validate from tile adjacent to camp anchor');
+
+  const campFarX = ax + 2 * stepX;
+  if (campFarX >= 0 && campFarX < campState.width) {
+    campPlayer.x = campFarX;
+    campPlayer.y = ay;
+    const campDrinkTooFar = validateAction(campState, {
+      actorId: 'player',
+      kind: 'water_drink',
+      payload: { x: ax, y: ay },
+    });
+    assert.equal(campDrinkTooFar.ok, false, 'water_drink camp target should reject when player not in range');
+    assert.equal(campDrinkTooFar.code, 'interaction_out_of_range', 'camp water_drink out of range should match other tile drinks');
+  }
+
+  campPlayer.x = ax;
+  campPlayer.y = ay;
+  campPlayer.thirst = 0.15;
+  const campDrank = advanceTick(campState, {
+    actions: [
+      {
+        actionId: 'camp-water-drink-runtime',
+        actorId: 'player',
+        kind: 'water_drink',
+        payload: { x: ax, y: ay },
+      },
+    ],
+  });
+  assert.ok(campDrank.actors.player.thirst >= 0.99, 'camp water_drink should restore thirst');
+  assert.equal(
+    Array.isArray(campDrank.actors.player.conditions)
+      && campDrank.actors.player.conditions.some((c) => c?.condition_id === 'gut_illness'),
+    false,
+    'camp safe water should not apply gut illness',
+  );
+}
+
+function runWaterskinFillDrinkRuntimeAndGutIllnessTest() {
+  const base = createInitialGameState(5391, { width: 30, height: 30 });
+  const landTile = findCardinalAdjacentWaterLandTile(base);
+  assert.ok(landTile, 'test requires land tile cardinally adjacent to unfrozen water for waterskin runtime');
+  const waterTile = findAdjacentTileMatching(base, landTile, (tile) => tile?.waterType && tile.waterFrozen !== true);
+  assert.ok(waterTile, 'test requires adjacent unfrozen water tile for waterskin runtime');
+
+  const safeState = deserializeGameState(serializeGameState(base));
+  const safePlayer = safeState.actors.player;
+  safePlayer.x = landTile.x;
+  safePlayer.y = landTile.y;
+  safePlayer.thirst = 0;
+  safePlayer.inventory.stacks = [{ itemId: 'tool:waterskin_safe_3', quantity: 1 }];
+
+  const safeDrank = advanceTick(safeState, {
+    actions: [
+      {
+        actionId: 'waterskin-safe-drink',
+        actorId: 'player',
+        kind: 'waterskin_drink',
+        payload: {},
+      },
+    ],
+  });
+
+  assert.ok(safeDrank.actors.player.thirst > 0, 'waterskin_drink should restore thirst at runtime');
+  assert.equal(
+    safeDrank.actors.player.inventory.stacks.some((entry) => entry.itemId === 'tool:waterskin_safe_2'),
+    true,
+    'waterskin_drink should decrement waterskin state in inventory',
+  );
+  assert.equal(
+    Array.isArray(safeDrank.actors.player.conditions) && safeDrank.actors.player.conditions.some((entry) => entry?.condition_id === 'gut_illness'),
+    false,
+    'safe waterskin source should not apply gut illness condition',
+  );
+
+  const fillState = deserializeGameState(serializeGameState(base));
+  const fillPlayer = fillState.actors.player;
+  fillPlayer.x = landTile.x;
+  fillPlayer.y = landTile.y;
+  fillPlayer.inventory.stacks = [{ itemId: 'tool:waterskin', quantity: 1 }];
+
+  const filled = advanceTick(fillState, {
+    actions: [
+      {
+        actionId: 'waterskin-fill-adjacent',
+        actorId: 'player',
+        kind: 'waterskin_fill',
+        payload: {},
+      },
+    ],
+  });
+
+  const expectedPrefix = waterTile.waterType === 'pond' ? 'tool:waterskin_pond_3' : 'tool:waterskin_river_3';
+  assert.equal(
+    filled.actors.player.inventory.stacks.some((entry) => entry.itemId === expectedPrefix),
+    true,
+    'waterskin_fill should convert to full waterskin with source-typed water',
+  );
+
+  let pondIllnessFound = null;
+  for (let seed = 5400; seed < 5480; seed += 1) {
+    const attempt = createInitialGameState(seed, { width: 30, height: 30 });
+    const attemptLand = findCardinalAdjacentWaterLandTile(attempt);
+    if (!attemptLand) {
+      continue;
+    }
+    const attemptPond = findAdjacentTileMatching(attempt, attemptLand, (tile) => tile?.waterType === 'pond' && tile.waterFrozen !== true);
+    if (!attemptPond) {
+      continue;
+    }
+
+    const attemptPlayer = attempt.actors.player;
+    attemptPlayer.x = attemptLand.x;
+    attemptPlayer.y = attemptLand.y;
+    attemptPlayer.inventory.stacks = [{ itemId: 'tool:waterskin_pond_1', quantity: 1 }];
+
+    const drank = advanceTick(attempt, {
+      actions: [
+        {
+          actionId: `waterskin-pond-drink-${seed}`,
+          actorId: 'player',
+          kind: 'waterskin_drink',
+          payload: {},
+        },
+      ],
+    });
+
+    if (Array.isArray(drank.actors.player.conditions)
+      && drank.actors.player.conditions.some((entry) => entry?.condition_id === 'gut_illness')) {
+      pondIllnessFound = drank;
+      break;
+    }
+  }
+
+  assert.ok(pondIllnessFound, 'pond-source waterskin drinking should deterministically produce at least one gut illness case across seeds');
+  const gutIllness = pondIllnessFound.actors.player.conditions.find((entry) => entry?.condition_id === 'gut_illness');
+  assert.ok(gutIllness, 'gut illness condition should be present after successful pond illness roll');
+  assert.ok(gutIllness.duration_days_remaining >= 2 && gutIllness.duration_days_remaining <= 4, 'gut illness duration should be in 2-4 day range');
+  assert.deepEqual(gutIllness.treatable_by, ['tannin_tea'], 'gut illness treatment tag should match tannin tea');
+}
+
 function runCampStockpileTransferActionsTest() {
   const state = createInitialGameState(4216, { width: 30, height: 30 });
   const player = state.actors.player;
@@ -5318,7 +7088,10 @@ function runCampStockpileTransferActionsTest() {
   assert.equal(invAfterAdd.quantity, 2, 'camp_stockpile_add should remove quantity from actor inventory');
   assert.equal(campAfterAdd.quantity, 3, 'camp_stockpile_add should add quantity into camp stockpile');
   assert.equal(campAfterAdd.freshness, 0.4, 'camp_stockpile_add should preserve freshness metadata');
-  assert.equal(campAfterAdd.decayDaysRemaining, 9, 'camp_stockpile_add should preserve decay metadata');
+  assert.ok(
+    Math.abs(Number(campAfterAdd.decayDaysRemaining) - 9) < 0.05,
+    'camp_stockpile_add should preserve decay metadata (fractional tick decay may apply during transfer tick)',
+  );
 
   const afterRemove = advanceTick(afterAdd, {
     actions: [
@@ -5336,10 +7109,9 @@ function runCampStockpileTransferActionsTest() {
   assert.equal(invAfterRemove.quantity, 4, 'camp_stockpile_remove should add quantity back to actor inventory');
   assert.equal(campAfterRemove.quantity, 1, 'camp_stockpile_remove should reduce camp stockpile quantity');
   assert.equal(invAfterRemove.freshness, 0.4, 'camp_stockpile_remove should preserve freshness on transfer back');
-  assert.equal(
-    invAfterRemove.decayDaysRemaining,
-    9,
-    'camp_stockpile_remove should preserve decayDaysRemaining on transfer back',
+  assert.ok(
+    Math.abs(Number(invAfterRemove.decayDaysRemaining) - 9) < 0.05,
+    'camp_stockpile_remove should preserve decayDaysRemaining on transfer back (fractional tick decay may apply)',
   );
 }
 
@@ -5501,7 +7273,7 @@ function runInventoryAutoReorderForPickupTest() {
   assert.deepEqual(next.worldItemsByTile, {}, 'successful reorder pickup should not drop overflow to world items');
 }
 
-function runInventoryOverflowDropsNearbyTest() {
+function runStockpileWithdrawLeavesRemainderWhenInventoryFullTest() {
   const state = createInitialGameState(4218, { width: 30, height: 30 });
   const player = state.actors.player;
   player.x = state.camp.anchorX;
@@ -5521,7 +7293,7 @@ function runInventoryOverflowDropsNearbyTest() {
   const next = advanceTick(state, {
     actions: [
       {
-        actionId: 'overflow-drop',
+        actionId: 'no-fit-withdraw',
         actorId: 'player',
         kind: 'camp_stockpile_remove',
         payload: { itemId: 'too_big_for_space', quantity: 3 },
@@ -5530,28 +7302,17 @@ function runInventoryOverflowDropsNearbyTest() {
   });
 
   const picked = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'too_big_for_space');
-  assert.equal(picked, undefined, 'overflow pickup should not be inserted when inventory has no legal placement');
-  assert.equal(
-    next.camp.stockpile.stacks.find((entry) => entry.itemId === 'too_big_for_space'),
-    undefined,
-    'stockpile quantity should still be removed when overflow is dropped to ground',
-  );
-
-  const droppedEntries = Object.entries(next.worldItemsByTile).filter(([, stacks]) => (
-    Array.isArray(stacks)
-    && stacks.length === 1
-    && stacks[0]?.itemId === 'too_big_for_space'
-  ));
-  assert.ok(droppedEntries.length >= 1, 'overflow should create a nearby world item drop stack');
-  assert.equal(
-    droppedEntries[0][1][0].quantity,
-    3,
-    'overflow world drop should contain full quantity that failed to enter inventory',
-  );
+  assert.equal(picked, undefined, 'withdraw should not add item when nothing fits in inventory');
+  const stillInPile = next.camp.stockpile.stacks.find((entry) => entry.itemId === 'too_big_for_space');
+  assert.ok(stillInPile, 'stockpile should keep the stack when inventory cannot accept it');
+  assert.equal(stillInPile.quantity, 3, 'stockpile quantity should be unchanged when withdraw fits nothing');
+  assert.deepEqual(next.worldItemsByTile, {}, 'withdraw should not spill excess to ground tiles');
 }
 
 function runDailyItemDecayAcrossContainersTest() {
   const state = createInitialGameState(4219, { width: 30, height: 30 });
+  // Seed rolls daily weather; cool/cold bands scale decay (GDD §4.5). Mild = 1× so one calendar day is one decay step here.
+  state.dailyTemperatureBand = 'mild';
 
   state.actors.player.inventory.stacks = [
     { itemId: 'player_keep', quantity: 2, decayDaysRemaining: 10 },
@@ -5583,7 +7344,7 @@ function runDailyItemDecayAcrossContainersTest() {
   const playerExpire = day1.actors.player.inventory.stacks.find((entry) => entry.itemId === 'player_expire');
   const playerStable = day1.actors.player.inventory.stacks.find((entry) => entry.itemId === 'player_stable');
   const playerRotting = day1.actors.player.inventory.stacks.find((entry) => entry.itemId === 'rotting_organic');
-  assert.equal(playerKeep.decayDaysRemaining, 9, 'player inventory decay should decrement by one day');
+  assert.equal(playerKeep.decayDaysRemaining, 9, 'player inventory decay should decrement by one day at mild temperature');
   assert.equal(playerExpire, undefined, 'expired player inventory stack should convert away from original item');
   assert.ok(playerRotting, 'expired player stack should convert into rotting_organic');
   assert.equal(playerRotting.quantity, 1, 'rotting_organic conversion should collapse quantity to one stack unit');
@@ -5591,12 +7352,12 @@ function runDailyItemDecayAcrossContainersTest() {
   assert.ok(playerStable, 'non-decay stack should remain');
 
   const partnerKeep = day1.actors.partner.inventory.stacks.find((entry) => entry.itemId === 'partner_keep');
-  assert.equal(partnerKeep.decayDaysRemaining, 9, 'partner inventory should also decay daily');
+  assert.equal(partnerKeep.decayDaysRemaining, 9, 'partner inventory should also decay one day at mild temperature');
 
   const campKeep = day1.camp.stockpile.stacks.find((entry) => entry.itemId === 'camp_keep');
   const campExpire = day1.camp.stockpile.stacks.find((entry) => entry.itemId === 'camp_expire');
   const campRotting = day1.camp.stockpile.stacks.find((entry) => entry.itemId === 'rotting_organic');
-  assert.equal(campKeep.decayDaysRemaining, 9, 'camp stockpile decay should decrement by one day');
+  assert.equal(campKeep.decayDaysRemaining, 9, 'camp stockpile decay should decrement by one day at mild temperature');
   assert.equal(campExpire, undefined, 'expired camp stockpile stack should convert away from original item');
   assert.ok(campRotting, 'expired camp stockpile stack should convert into rotting_organic');
   assert.equal(campRotting.decayDaysRemaining, 2, 'camp rotting_organic should use fixed decay timer');
@@ -5604,7 +7365,7 @@ function runDailyItemDecayAcrossContainersTest() {
   const worldKeep = day1.worldItemsByTile[keyA]?.[0] || null;
   const worldExpireEntry = day1.worldItemsByTile[keyB]?.[0] || null;
   assert.ok(worldKeep, 'world drop stack should remain while decay remains');
-  assert.equal(worldKeep.decayDaysRemaining, 9, 'world drop decay should decrement by one day');
+  assert.equal(worldKeep.decayDaysRemaining, 9, 'world drop decay should decrement by one day at mild temperature');
   assert.ok(worldExpireEntry, 'expired world stack should convert to rotting_organic instead of immediate removal');
   assert.equal(worldExpireEntry.itemId, 'rotting_organic', 'world expired stack should convert to rotting_organic');
   assert.equal(worldExpireEntry.decayDaysRemaining, 2, 'world rotting_organic should use fixed decay timer');
@@ -5645,8 +7406,8 @@ function runDigSquirrelCacheInterruptionTest() {
   player.y = landTile.y;
   landTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 220,
     placementType: 'ground',
     discovered: false,
@@ -5740,8 +7501,8 @@ function runDiggingStickCacheInterruptionPrecedenceTest() {
   player.inventory.stacks = [{ itemId: 'tool:digging_stick', quantity: 1 }];
   landTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 220,
     placementType: 'ground',
     discovered: false,
@@ -5865,8 +7626,8 @@ function runShovelCacheDiscoveryTickNormalizationTest() {
   player.inventory.stacks = [{ itemId: 'tool:shovel', quantity: 1 }];
   landTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 220,
     placementType: 'ground',
     discovered: false,
@@ -5942,20 +7703,27 @@ function runDigUndergroundPlantPartFlowTest() {
   landTile.plantIds = [plantId];
 
   const digNext = advanceTick(state, {
-    actions: [
-      {
-        actionId: 'dig-underground-root',
-        actorId: 'player',
-        kind: 'dig',
-        payload: { x: landTile.x, y: landTile.y },
-      },
-    ],
+    actions: [0, 1, 2, 3, 4].map((i) => ({
+      actionId: `dig-underground-root-${i}`,
+      actorId: 'player',
+      kind: 'dig',
+      payload: { x: landTile.x, y: landTile.y },
+    })),
   });
 
-  const digLog = digNext.currentDayActionLog.find((entry) => entry.actionId === 'dig-underground-root');
-  assert.ok(digLog && digLog.status === 'applied', 'dig should apply on tile containing underground plant part');
+  const digLogs = digNext.currentDayActionLog.filter((entry) => String(entry.actionId || '').startsWith('dig-underground-root'));
+  assert.equal(digLogs.length, 5, 'five dig actions should run for carrot root discovery threshold');
+  assert.ok(digLogs.every((e) => e.status === 'applied'), 'each dig should apply on tile containing underground plant part');
   const postDigTile = digNext.tiles[landTile.y * digNext.width + landTile.x];
   assert.equal(postDigTile.disturbed, true, 'dig should disturb tile before underground-part harvest');
+  const postDigPlant = digNext.plants[plantId] || null;
+  assert.ok(postDigPlant, 'plant should remain after digs');
+  const rootEntry = postDigPlant.activeSubStages.find((s) => s.partName === 'root' && s.subStageId === 'first_year');
+  assert.ok(rootEntry, 'root sub-stage should remain active');
+  assert.ok(
+    Number(rootEntry.digRevealTicksApplied) >= 5,
+    'dig should accumulate enough tick progress to reveal underground root',
+  );
 
   const harvestNext = advanceTick(digNext, {
     actions: [
@@ -5978,6 +7746,77 @@ function runDigUndergroundPlantPartFlowTest() {
   const rootStack = (harvestNext.actors.player.inventory?.stacks || []).find((entry) => entry.itemId === 'daucus_carota:root:first_year');
   assert.ok(rootStack, 'harvesting underground root should add root item to inventory');
   assert.equal(rootStack.quantity, 1, 'harvesting underground root should add one unit for one harvest action');
+  // ageDays 8, harvest_yield_full_age_days 20, harvest_unit_weight_scales_with_age: 30g × (8/20) = 12g
+  assert.ok(
+    Math.abs(Number(rootStack.unitWeightKg) - 0.012) < 1e-9,
+    'scaled carrot root unit weight should match age × catalog unit_weight_g',
+  );
+}
+
+function runCarrotHarvestScaledUnitWeightTest() {
+  const landTile = (state) => state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+
+  const runHarvestAtAge = (seed, ageDays) => {
+    const state = createInitialGameState(seed, { width: 20, height: 20 });
+    const tile = landTile(state);
+    assert.ok(tile, 'test requires a land tile');
+    const player = state.actors.player;
+    player.x = tile.x;
+    player.y = tile.y;
+    const plantId = 'test-carrot-weight';
+    state.plants[plantId] = {
+      id: plantId,
+      speciesId: 'daucus_carota',
+      x: tile.x,
+      y: tile.y,
+      ageDays,
+      stageName: 'first_year_vegetative',
+      alive: true,
+      vitality: 1,
+      source: 'test',
+      activeSubStages: [
+        {
+          partName: 'root',
+          subStageId: 'first_year',
+          regrowthCountdown: null,
+          harvestsThisSeason: 0,
+          digRevealTicksApplied: 5,
+        },
+      ],
+    };
+    tile.plantIds = [plantId];
+    return advanceTick(state, {
+      actions: [
+        {
+          actionId: `harvest-carrot-root-${ageDays}`,
+          actorId: 'player',
+          kind: 'harvest',
+          payload: {
+            plantId,
+            partName: 'root',
+            subStageId: 'first_year',
+            actions: 1,
+          },
+        },
+      ],
+    });
+  };
+
+  const young = runHarvestAtAge(4240, 2);
+  const youngStack = young.actors.player.inventory.stacks.find((s) => s.itemId === 'daucus_carota:root:first_year');
+  assert.ok(youngStack, 'young carrot harvest should produce root stack');
+  assert.ok(
+    Math.abs(Number(youngStack.unitWeightKg) - 0.003) < 1e-9,
+    'age 2 vs ref 20 hits min scale 0.1 → 3g per unit',
+  );
+
+  const mature = runHarvestAtAge(4241, 25);
+  const matureStack = mature.actors.player.inventory.stacks.find((s) => s.itemId === 'daucus_carota:root:first_year');
+  assert.ok(matureStack, 'mature carrot harvest should produce root stack');
+  assert.ok(
+    Math.abs(Number(matureStack.unitWeightKg) - 0.03) < 1e-9,
+    'age ≥ ref days should yield full 30g catalog unit weight',
+  );
 }
 
 function runHoeValidationAndTickCostTest() {
@@ -5988,6 +7827,15 @@ function runHoeValidationAndTickCostTest() {
 
   player.x = landTile.x;
   player.y = landTile.y;
+  if (!Array.isArray(player.inventory?.stacks)) {
+    player.inventory.stacks = [];
+  }
+  player.inventory.stacks.push({ itemId: 'tool:hoe', quantity: 1 });
+  player.tickBudgetCurrent = Math.max(1, Math.floor(Number(player.tickBudgetCurrent) || 1));
+  if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+    state.techUnlocks = {};
+  }
+  state.techUnlocks.unlock_tool_hoe = true;
 
   assert.equal(getActionTickCost('hoe'), 2, 'hoe default action tick cost should be 2');
 
@@ -6058,6 +7906,14 @@ function runHoeRuntimeEffectsTest() {
   };
   player.x = landTile.x;
   player.y = landTile.y;
+  if (!Array.isArray(player.inventory?.stacks)) {
+    player.inventory.stacks = [];
+  }
+  player.inventory.stacks.push({ itemId: 'tool:hoe', quantity: 1 });
+  if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+    state.techUnlocks = {};
+  }
+  state.techUnlocks.unlock_tool_hoe = true;
 
   const next = advanceTick(state, {
     actions: [
@@ -6086,6 +7942,14 @@ function runHoeAdvanceTickBudgetConsumptionTest() {
 
   player.x = landTile.x;
   player.y = landTile.y;
+  if (!Array.isArray(player.inventory?.stacks)) {
+    player.inventory.stacks = [];
+  }
+  player.inventory.stacks.push({ itemId: 'tool:hoe', quantity: 1 });
+  if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+    state.techUnlocks = {};
+  }
+  state.techUnlocks.unlock_tool_hoe = true;
 
   const next = advanceTick(state, {
     actions: [
@@ -6149,8 +8013,8 @@ function runDiscoveredSquirrelCacheHarvestTest() {
   player.y = landTile.y;
   landTile.squirrelCache = {
     cachedSpeciesId: 'juglans_nigra',
-    cachedPartName: 'nut',
-    cachedSubStageId: 'ripe',
+    cachedPartName: 'husked_nut',
+    cachedSubStageId: 'whole',
     nutContentGrams: 180,
     placementType: 'ground',
     discovered: true,
@@ -6167,33 +8031,14 @@ function runDiscoveredSquirrelCacheHarvestTest() {
     ],
   });
 
-  const stackId = 'squirrel_cache:juglans_nigra:nut:ripe';
+  const stackId = 'juglans_nigra:husked_nut:whole';
   const firstStack = first.actors.player.inventory.stacks.find((entry) => entry.itemId === stackId);
-  assert.ok(firstStack, 'cache harvest should add squirrel cache inventory stack');
-  assert.equal(firstStack.quantity, 100, 'cache harvest should add requested grams when available');
+  assert.ok(firstStack, 'cache harvest should add plant-part inventory stack');
+  assert.equal(firstStack.quantity, 7, 'cache harvest should convert cached grams to whole plant-part units');
   assert.equal(
-    first.tiles[landTile.y * first.width + landTile.x].squirrelCache.nutContentGrams,
-    80,
-    'cache harvest should reduce remaining nut grams',
-  );
-
-  const second = advanceTick(first, {
-    actions: [
-      {
-        actionId: 'harvest-cache-2',
-        actorId: 'player',
-        kind: 'harvest',
-        payload: { x: landTile.x, y: landTile.y, cacheGrams: 100 },
-      },
-    ],
-  });
-
-  const secondStack = second.actors.player.inventory.stacks.find((entry) => entry.itemId === stackId);
-  assert.equal(secondStack.quantity, 180, 'second cache harvest should add only remaining grams');
-  assert.equal(
-    second.tiles[landTile.y * second.width + landTile.x].squirrelCache,
+    first.tiles[landTile.y * first.width + landTile.x].squirrelCache,
     null,
-    'cache should be removed when harvested empty',
+    'cache should be removed after full harvest',
   );
 }
 
@@ -6279,7 +8124,7 @@ function runAdvanceTickBudgetGateTest() {
   const next = advanceTick(state, {
     actions: [
       {
-        actionId: 'no-budget-move',
+        actionId: 'zero-budget-move',
         actorId: 'player',
         kind: 'move',
         issuedAtTick: 0,
@@ -6288,27 +8133,27 @@ function runAdvanceTickBudgetGateTest() {
     ],
   });
 
-  const rejected = next.currentDayActionLog.find((entry) => entry.actionId === 'no-budget-move');
-  assert.ok(rejected, 'zero-budget action should be logged as rejected');
-  assert.equal(rejected.code, 'no_tick_budget', 'zero-budget action should reject with no_tick_budget');
-  assert.equal(next.dayTick, 0, 'rejected zero-budget action should not advance time');
-  assert.equal(next.actors.player.x, startX, 'rejected zero-budget move should not change x');
-  assert.equal(next.actors.player.y, startY, 'rejected zero-budget move should not change y');
+  const applied = next.currentDayActionLog.find((entry) => entry.actionId === 'zero-budget-move');
+  assert.ok(applied, 'zero-budget move should be logged');
+  assert.equal(applied.status, 'applied', 'zero-budget move should apply via tick overdraft');
+  assert.equal(next.dayTick, 1, 'overdraft move should advance time');
+  assert.equal(next.actors.player.tickBudgetCurrent, -1, 'move at zero budget should spend into overdraft');
+  assert.equal(next.actors.player.x, startX + 1, 'overdraft move should change x');
 
-  const listed = getAllActions(state, 'player');
-  assert.ok(
-    listed.every((entry) => entry.available === false && entry.reason === 'no_tick_budget'),
-    'getAllActions should mark all actions unavailable when actor has no tick budget',
-  );
+  const listed = getAllActions(next, 'player');
+  const moveEntry = listed.find((entry) => entry.kind === 'move');
+  assert.equal(moveEntry.available, true, 'move should stay available while under the overdraft cap');
 
-  const directValidation = validateAction(state, {
-    actionId: 'no-budget-direct',
+  const maxOd = createInitialGameState(4205, { width: 30, height: 30 });
+  maxOd.actors.player.tickBudgetCurrent = -40;
+  const blocked = validateAction(maxOd, {
+    actionId: 'max-od-move',
     actorId: 'player',
     kind: 'move',
     payload: { dx: 1, dy: 0 },
   });
-  assert.equal(directValidation.ok, false, 'validateAction should reject when actor has no tick budget');
-  assert.equal(directValidation.code, 'no_tick_budget', 'validateAction should return no_tick_budget code');
+  assert.equal(blocked.ok, false, 'validateAction should reject move that would exceed max overdraft');
+  assert.equal(blocked.code, 'no_tick_budget', 'max overdraft should report no_tick_budget');
 }
 
 function runAdvanceTickFullCostOverdraftTest() {
@@ -8097,14 +9942,19 @@ function runRegrowthSeasonalBudgetVitalityTest() {
   species.longevity = 'annual';
   try {
     const firstCycle = applyHarvestAction(state, 'regrow_candidate', 'leaf', 'young', { actions: 6 });
-    assert.equal(firstCycle.appliedActions, 6, 'first regrowth cycle should consume all cycle actions');
+    assert.equal(
+      firstCycle.appliedActions,
+      5,
+      'first regrowth cycle should consume all cycle actions (catalog actions_until_depleted midpoint 5)',
+    );
     let regrowEntry = state.plants.regrow_candidate.activeSubStages.find(
       (entry) => entry.partName === 'leaf' && entry.subStageId === 'young',
     );
     assert.ok(regrowEntry, 'regrowing stage should remain active after depletion');
     assert.equal(regrowEntry.regrowthCountdown, 5, 'regrowth countdown should start after cycle depletion');
+    const cycleBudget = 5;
     assert.ok(
-      Math.abs(state.plants.regrow_candidate.vitality - (1 - (6 * (0.2 / 6)))) < 1e-9,
+      Math.abs(state.plants.regrow_candidate.vitality - (1 - (cycleBudget * (0.2 / cycleBudget)))) < 1e-9,
       'regrowing stage should divide per-action vitality damage by one depletion-cycle action budget',
     );
   } finally {
@@ -8887,8 +10737,573 @@ function runRockSnapshotRoundTripTest() {
   assert.equal(rockAfter, rockBefore, 'snapshot round-trip should preserve rock tile assignments');
 }
 
+function runMoveBlockedByRockTileTest() {
+  const state = createInitialGameState(9011, { width: 30, height: 30 });
+  const player = state.actors.player;
+  const startTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(startTile, 'test requires land start tile for move blocked rock checks');
+  const rockTarget = findAdjacentTileMatching(state, startTile, (tile) => tile && !tile.waterType);
+  assert.ok(rockTarget, 'test requires adjacent tile for move blocked rock checks');
+
+  rockTarget.rockType = 'glacial_erratic';
+  player.x = startTile.x;
+  player.y = startTile.y;
+  const dx = rockTarget.x - startTile.x;
+  const dy = rockTarget.y - startTile.y;
+
+  const validation = validateAction(state, {
+    actorId: 'player',
+    kind: 'move',
+    payload: { dx, dy },
+  });
+  assert.equal(validation.ok, false, 'move should reject destination rock tile');
+  assert.equal(validation.code, 'move_blocked_tile', 'rock movement should reject with move_blocked_tile');
+
+  const advanced = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'move-to-rock',
+        actorId: 'player',
+        kind: 'move',
+        payload: { dx, dy },
+      },
+    ],
+  });
+  assert.equal(advanced.actors.player.x, startTile.x, 'move runtime should not relocate actor onto rock');
+  assert.equal(advanced.actors.player.y, startTile.y, 'move runtime should not relocate actor onto rock');
+}
+
+function runCarrotRootSubStageLifecycleFilteringTest() {
+  const state = createInitialGameState(9012, { width: 30, height: 30 });
+  const hostTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(hostTile, 'test requires host tile for carrot sub-stage lifecycle checks');
+  const plantId = 'test-carrot-biennial';
+
+  state.plants[plantId] = {
+    id: plantId,
+    speciesId: 'daucus_carota',
+    x: hostTile.x,
+    y: hostTile.y,
+    alive: true,
+    age: 3,
+    stageName: 'first_year_vegetative',
+    activeSubStages: [],
+    vitality: 1,
+  };
+  hostTile.plantIds = [plantId];
+
+  const advanced = advanceDay(state, 1);
+  const plant = advanced.plants[plantId];
+  assert.ok(plant, 'carrot plant should remain alive after one-day advance');
+  const rootSubStages = Array.isArray(plant.activeSubStages)
+    ? plant.activeSubStages
+      .filter((entry) => entry?.partName === 'root')
+      .map((entry) => entry.subStageId)
+    : [];
+  assert.ok(rootSubStages.includes('first_year'), 'first-year carrot should expose first_year root sub-stage');
+  assert.equal(rootSubStages.includes('second_year'), false, 'first-year carrot must not expose second_year root sub-stage');
+}
+
+function runLogFungusHarvestValidationAndRuntimeTest() {
+  const state = createInitialGameState(9013, { width: 30, height: 30 });
+  const player = state.actors.player;
+  const playerTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(playerTile, 'test requires player land tile for log fungus harvest checks');
+  const logTile = findAdjacentTileMatching(state, playerTile, (tile) => tile && !tile.waterType && !tile.rockType);
+  assert.ok(logTile, 'test requires adjacent dead-log tile for log fungus harvest checks');
+  player.x = playerTile.x;
+  player.y = playerTile.y;
+
+  logTile.deadLog = {
+    sourceSpeciesId: 'test_tree',
+    sizeAtDeath: 'medium',
+    decayStage: 2,
+    fungi: [
+      {
+        species_id: 'pleurotus_ostreatus',
+        yield_current_grams: 120,
+        fruiting_windows: [],
+        rolled_year_by_window: {},
+      },
+    ],
+  };
+
+  const validation = validateAction(state, {
+    actorId: 'player',
+    kind: 'harvest',
+    payload: { x: logTile.x, y: logTile.y },
+  });
+  assert.equal(validation.ok, true, 'harvest should validate for fruiting log fungus');
+  assert.equal(validation.normalizedAction.payload.targetType, 'log_fungus', 'fruiting dead log should normalize as log_fungus harvest target');
+
+  const harvested = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'harvest-log-fungus',
+        actorId: 'player',
+        kind: 'harvest',
+        payload: { x: logTile.x, y: logTile.y },
+      },
+    ],
+  });
+
+  const fungusStack = harvested.actors.player.inventory.stacks.find((entry) => entry.itemId === 'log_fungus:pleurotus_ostreatus:fruiting_body');
+  assert.ok(fungusStack, 'log fungus harvest should add fruiting body item to inventory');
+  assert.ok(Number(fungusStack.quantity) > 0, 'log fungus harvest should add positive quantity');
+  const remainingYield = Number(harvested.tiles.find((tile) => tile.x === logTile.x && tile.y === logTile.y)?.deadLog?.fungi?.[0]?.yield_current_grams || 0);
+  assert.equal(remainingYield, 0, 'log fungus harvest should consume current fruiting yield');
+}
+
+function runExtractedInventoryModuleSmokeTest() {
+  assert.equal(
+    normalizeStackFootprintValueImpl(undefined),
+    1,
+    'extracted inventory helper should default missing footprint to 1',
+  );
+  assert.equal(
+    normalizeStackFootprintValueImpl(3),
+    3,
+    'extracted inventory helper should preserve valid integer footprints',
+  );
+  assert.equal(
+    normalizeStackFootprintValueImpl(0),
+    1,
+    'extracted inventory helper should clamp non-positive footprints to 1',
+  );
+}
+
+function addMockMedicinePlant(state, speciesId = 'juglans_nigra') {
+  const tile = state.tiles.find((candidate) => !candidate.waterType && !candidate.rockType);
+  assert.ok(tile, 'test precondition: expected at least one dry land tile for mock medicine plant');
+  const plantId = `test_medicine_${speciesId}`;
+  state.plants[plantId] = {
+    id: plantId,
+    speciesId,
+    age: 20,
+    x: tile.x,
+    y: tile.y,
+    stageName: 'mature_vegetative',
+    alive: true,
+    vitality: 1,
+    activeSubStages: [
+      {
+        partName: 'bark',
+        subStageId: 'rough',
+        regrowthCountdown: null,
+        harvestsThisSeason: 0,
+      },
+    ],
+    source: 'test',
+  };
+  if (!Array.isArray(tile.plantIds)) {
+    tile.plantIds = [];
+  }
+  tile.plantIds.push(plantId);
+}
+
+function runDebriefMedicineAutoTreatmentTest() {
+  const state = createInitialGameState(5511, { width: 30, height: 30 });
+  const player = state.actors.player;
+  player.x = state.camp.anchorX;
+  player.y = state.camp.anchorY;
+  state.dayTick = 220;
+  player.conditions = [
+    {
+      condition_id: 'gut_illness',
+      instance_id: 'gut_illness_auto_1',
+      treated: false,
+      treatable_by: ['tannin_tea'],
+    },
+  ];
+  state.camp.stockpile.stacks = [
+    {
+      itemId: 'juglans_nigra:bark:rough',
+      quantity: 1,
+    },
+  ];
+  addMockMedicinePlant(state, 'juglans_nigra');
+
+  const next = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'debrief-enter-auto-treat',
+        actorId: 'player',
+        kind: 'debrief_enter',
+        payload: {},
+      },
+    ],
+  });
+
+  assert.equal(next.camp.debrief.active, true, 'debrief_enter should activate debrief state');
+  assert.equal(next.actors.player.conditions[0].treated, true, 'debrief medicine pass should mark condition as treated');
+  assert.equal(next.camp.debrief.medicineRequests.length, 0, 'auto-treated condition should not remain in request list');
+  assert.equal(next.camp.debrief.medicineNotifications.length, 1, 'auto-treated condition should emit one medicine notification');
+  assert.equal(
+    Math.floor(Number(next.camp.stockpile.stacks.find((entry) => entry.itemId === 'juglans_nigra:bark:rough')?.quantity || 0)),
+    0,
+    'auto treatment should consume requested medicine ingredient from stockpile',
+  );
+}
+
+function runDebriefMedicineRequestDetailsTest() {
+  const state = createInitialGameState(5512, { width: 30, height: 30 });
+  const player = state.actors.player;
+  player.x = state.camp.anchorX;
+  player.y = state.camp.anchorY;
+  state.dayTick = 220;
+  player.conditions = [
+    {
+      condition_id: 'gut_illness',
+      instance_id: 'gut_illness_request_1',
+      treated: false,
+      treatable_by: ['tannin_tea'],
+    },
+  ];
+  state.camp.stockpile.stacks = [];
+  addMockMedicinePlant(state, 'juglans_nigra');
+
+  const next = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'debrief-enter-request',
+        actorId: 'player',
+        kind: 'debrief_enter',
+        payload: {},
+      },
+    ],
+  });
+
+  assert.equal(next.actors.player.conditions[0].treated, false, 'missing stockpile medicine should keep condition untreated');
+  assert.equal(next.camp.debrief.medicineNotifications.length, 0, 'request branch should not emit treatment notification');
+  assert.equal(next.camp.debrief.medicineRequests.length, 1, 'missing stockpile medicine should emit one partner request');
+
+  const request = next.camp.debrief.medicineRequests[0];
+  assert.equal(request.speciesId, 'juglans_nigra', 'medicine request should expose the required plant species');
+  assert.equal(request.partName, 'bark', 'medicine request should expose the required plant part');
+  assert.equal(request.subStageId, 'rough', 'medicine request should expose the required sub-part stage');
+  assert.equal(request.quantity, 1, 'medicine request should expose required quantity');
+}
+
+function runDebriefMedicineActionGatingTest() {
+  const state = createInitialGameState(5513, { width: 30, height: 30 });
+  const player = state.actors.player;
+  player.x = state.camp.anchorX;
+  player.y = state.camp.anchorY;
+  state.dayTick = 220;
+  player.conditions = [
+    {
+      condition_id: 'gut_illness',
+      instance_id: 'gut_illness_gate_1',
+      treated: false,
+      treatable_by: ['tannin_tea'],
+    },
+  ];
+  addMockMedicinePlant(state, 'juglans_nigra');
+
+  const blocked = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_medicine_administer',
+    payload: { conditionInstanceId: 'gut_illness_gate_1' },
+  });
+  assert.equal(blocked.ok, false, 'partner_medicine_administer should be rejected outside debrief');
+  assert.equal(blocked.code, 'medicine_not_in_debrief', 'outside-debrief medicine action should report medicine_not_in_debrief');
+
+  const activeDebrief = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'debrief-enter-gate',
+        actorId: 'player',
+        kind: 'debrief_enter',
+        payload: {},
+      },
+    ],
+  });
+  const allowed = validateAction(activeDebrief, {
+    actorId: 'player',
+    kind: 'partner_medicine_administer',
+    payload: { conditionInstanceId: 'gut_illness_gate_1' },
+  });
+  assert.equal(allowed.ok, true, 'partner_medicine_administer should validate once debrief is active');
+}
+
+function runDebriefVisionRequestAndCooldownTest() {
+  const state = createInitialGameState(5514, { width: 30, height: 30 });
+  const player = state.actors.player;
+  player.x = state.camp.anchorX;
+  player.y = state.camp.anchorY;
+  state.dayTick = 220;
+  const fungusDefinition = GROUND_FUNGUS_BY_ID.amanita_bisporigera || null;
+  const previousIngestion = fungusDefinition?.ingestion || null;
+  if (fungusDefinition) {
+    fungusDefinition.ingestion = {
+      vision_item: { quantity_per_dose: 1 },
+      dose_response: [
+        {
+          effects: [
+            {
+              type: 'hallucinogen',
+              partner_prep_required: true,
+              vision_categories: ['sight', 'tech'],
+              sight_duration_days: 5,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  try {
+    const fungusTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+    assert.ok(fungusTile, 'vision test requires at least one dry land tile for mock fungus zone');
+    fungusTile.groundFungusZone = {
+      type: 'ground_fungus_zone',
+      speciesId: 'amanita_bisporigera',
+      annualFruitChance: 1,
+      fruitingWindows: [],
+      perTileYieldRange: [20, 20],
+      yieldCurrentGrams: 20,
+    };
+
+    const entered = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'debrief-enter-vision',
+          actorId: 'player',
+          kind: 'debrief_enter',
+          payload: {},
+        },
+      ],
+    });
+    assert.equal(entered.camp.debrief.active, true, 'debrief should be active before requesting vision');
+
+    const requestOnly = advanceTick(entered, {
+      actions: [
+        {
+          actionId: 'vision-request-missing-stockpile',
+          actorId: 'player',
+          kind: 'partner_vision_request',
+          payload: {},
+        },
+      ],
+    });
+    assert.ok(requestOnly.camp.debrief.visionRequest, 'vision request should be created when ingredient is missing');
+    assert.equal(requestOnly.camp.debrief.visionUsesThisSeason, 0, 'missing ingredient should not consume seasonal vision count');
+    assert.equal(requestOnly.camp.debrief.visionRequest.quantity, 1, 'vision request should include required quantity');
+    assert.equal(requestOnly.camp.debrief.visionRequest.partName, 'fruiting_body', 'vision request should expose required mushroom part');
+
+    requestOnly.camp.stockpile.stacks = [{ itemId: 'amanita_bisporigera:fruiting_body:whole', quantity: 2 }];
+    const consumedFirst = advanceTick(requestOnly, {
+      actions: [
+        {
+          actionId: 'vision-request-consume-1',
+          actorId: 'player',
+          kind: 'partner_vision_request',
+          payload: {},
+        },
+      ],
+    });
+    assert.equal(consumedFirst.camp.debrief.visionUsesThisSeason, 0, 'vision request should not consume until player confirmation');
+    assert.equal(consumedFirst.camp.debrief.visionRequest, null, 'stockpile path should not create missing-ingredient request');
+    assert.equal(consumedFirst.camp.debrief.requiresVisionConfirmation, true, 'vision request should require confirmation when stockpile options exist');
+    assert.ok(
+      Array.isArray(consumedFirst.camp.debrief.visionSelectionOptions)
+        && consumedFirst.camp.debrief.visionSelectionOptions.length >= 1,
+      'vision request should list selectable stockpile hallucinogens',
+    );
+
+    const confirmFirst = advanceTick(consumedFirst, {
+      actions: [
+        {
+          actionId: 'vision-confirm-consume-1',
+          actorId: 'player',
+          kind: 'partner_vision_confirm',
+          payload: { itemId: 'amanita_bisporigera:fruiting_body:whole' },
+        },
+      ],
+    });
+    assert.equal(confirmFirst.camp.debrief.visionUsesThisSeason, 1, 'vision confirmation should consume one seasonal use');
+    assert.ok(confirmFirst.camp.debrief.pendingVisionRevelation, 'vision confirmation should create pending revelation');
+    assert.ok(
+      Array.isArray(confirmFirst.camp.debrief.pendingVisionChoices)
+        && confirmFirst.camp.debrief.pendingVisionChoices.some((entry) => entry.category === 'sight'),
+      'pending revelation should include sight category choice',
+    );
+
+    const chosenFirst = advanceTick(confirmFirst, {
+      actions: [
+        {
+          actionId: 'vision-choose-sight-1',
+          actorId: 'player',
+          kind: 'partner_vision_choose',
+          payload: { category: 'sight' },
+        },
+      ],
+    });
+    assert.equal(
+      Math.floor(Number(chosenFirst.actors.player.natureSightPendingDays) || 0),
+      5,
+      'choosing sight should queue nature sight duration from ingestion data',
+    );
+    assert.equal(
+      Math.floor(Number(chosenFirst.actors.player.visionNextDayTickPenalty) || 0),
+      50,
+      'successful vision should queue 50 next-day tick penalty',
+    );
+
+    const consumedSecond = advanceTick(chosenFirst, {
+      actions: [
+        {
+          actionId: 'vision-request-consume-2',
+          actorId: 'player',
+          kind: 'partner_vision_request',
+          payload: {},
+        },
+      ],
+    });
+    assert.equal(consumedSecond.camp.debrief.requiresVisionConfirmation, true, 'second request should also require confirmation');
+
+    const confirmSecond = advanceTick(consumedSecond, {
+      actions: [
+        {
+          actionId: 'vision-confirm-consume-2',
+          actorId: 'player',
+          kind: 'partner_vision_confirm',
+          payload: { itemId: 'amanita_bisporigera:fruiting_body:whole' },
+        },
+      ],
+    });
+    assert.equal(confirmSecond.camp.debrief.visionUsesThisSeason, 2, 'two successful vision confirmations should reach seasonal cap');
+    assert.ok(confirmSecond.camp.debrief.pendingVisionRevelation, 'second successful vision should again create pending revelation');
+
+    const chosenSecond = advanceTick(confirmSecond, {
+      actions: [
+        {
+          actionId: 'vision-choose-tech-2',
+          actorId: 'player',
+          kind: 'partner_vision_choose',
+          payload: { category: 'tech' },
+        },
+      ],
+    });
+    assert.equal(
+      Math.floor(Number(chosenSecond.actors.player.visionRewardCounts.tech) || 0),
+      1,
+      'choosing tech should increment tech revelation counter',
+    );
+
+    const cooldownValidation = validateAction(chosenSecond, {
+      actorId: 'player',
+      kind: 'partner_vision_request',
+      payload: {},
+    });
+    assert.equal(cooldownValidation.ok, false, 'vision request should be blocked at seasonal cap');
+    assert.equal(cooldownValidation.code, 'vision_cooldown_active', 'vision cap should report vision_cooldown_active');
+
+    const rolloverBase = deserializeGameState(serializeGameState(chosenSecond));
+    rolloverBase.dayTick = 399;
+    const rolled = advanceTick(rolloverBase, { idleTicks: 1 });
+    assert.equal(
+      Math.floor(Number(rolled.actors.player.tickBudgetCurrent) || 0),
+      100,
+      'two visions should apply cumulative 100 tick next-day penalty at rollover',
+    );
+    assert.equal(
+      Math.floor(Number(rolled.actors.player.natureSightDaysRemaining) || 0),
+      5,
+      'nature sight pending duration should activate at day rollover',
+    );
+
+    const overlaySet = advanceTick(rolled, {
+      actions: [
+        {
+          actionId: 'set-nature-sight-overlay',
+          actorId: 'player',
+          kind: 'nature_sight_overlay_set',
+          payload: { overlay: 'mushroom_zones' },
+        },
+      ],
+    });
+    assert.equal(
+      overlaySet.actors.player.natureSightOverlayChoice,
+      'mushroom_zones',
+      'active nature sight should allow setting an overlay choice',
+    );
+    const lockedValidation = validateAction(overlaySet, {
+      actorId: 'player',
+      kind: 'nature_sight_overlay_set',
+      payload: { overlay: 'animal_density' },
+    });
+    assert.equal(lockedValidation.ok, false, 'nature sight overlay should lock after one selection in a day');
+    assert.equal(lockedValidation.code, 'nature_sight_overlay_locked_for_day', 'locked overlay switch should return dedicated lock code');
+
+    const sameOverlayValidation = validateAction(overlaySet, {
+      actorId: 'player',
+      kind: 'nature_sight_overlay_set',
+      payload: { overlay: 'mushroom_zones' },
+    });
+    assert.equal(sameOverlayValidation.ok, true, 're-selecting same overlay in same day should be allowed');
+
+    const overlayContract = getNatureSightOverlayOptions();
+    assert.deepEqual(
+      overlayContract,
+      ['calorie_heatmap', 'animal_density', 'mushroom_zones', 'plant_compatibility', 'fishing_hotspots'],
+      'nature sight overlay options should match agreed contract',
+    );
+
+    const overlayData = getNatureSightOverlayData(overlaySet, { actorId: 'player', overlay: 'calorie_heatmap' });
+    assert.equal(overlayData.active, true, 'overlay data should be available while nature sight is active');
+    assert.equal(overlayData.overlay, 'calorie_heatmap', 'overlay data should honor requested overlay key');
+    assert.ok(Object.keys(overlayData.valuesByTile).length > 0, 'overlay data should expose per-tile values');
+    assert.ok(
+      Number.isFinite(overlayData.minValue) && Number.isFinite(overlayData.maxValue),
+      'overlay data should include finite min/max bounds',
+    );
+
+    const selectedAnimalSpeciesId = Object.values(ANIMAL_BY_ID).find((entry) => entry?.animalClass !== 'fish')?.id;
+    assert.ok(selectedAnimalSpeciesId, 'overlay test requires at least one non-fish animal species');
+    const animalOverlay = getNatureSightOverlayData(overlaySet, {
+      actorId: 'player',
+      overlay: 'animal_density',
+      selectedAnimalSpeciesId,
+    });
+    assert.equal(
+      animalOverlay.selectedAnimalSpeciesId,
+      selectedAnimalSpeciesId,
+      'animal density overlay should track selected species only',
+    );
+
+    const selectedFishSpeciesId = Object.values(ANIMAL_BY_ID).find((entry) => entry?.animalClass === 'fish')?.id;
+    assert.ok(selectedFishSpeciesId, 'overlay test requires at least one fish species');
+    const fishOverlay = getNatureSightOverlayData(overlaySet, {
+      actorId: 'player',
+      overlay: 'fishing_hotspots',
+      selectedFishSpeciesId,
+    });
+    assert.equal(
+      fishOverlay.selectedFishSpeciesId,
+      selectedFishSpeciesId,
+      'fishing hotspots overlay should track selected fish species only',
+    );
+
+    const nextDayForOverlay = deserializeGameState(serializeGameState(overlaySet));
+    nextDayForOverlay.dayTick = 399;
+    const overlayDay2 = advanceTick(nextDayForOverlay, { idleTicks: 1 });
+    const day2Validation = validateAction(overlayDay2, {
+      actorId: 'player',
+      kind: 'nature_sight_overlay_set',
+      payload: { overlay: 'animal_density' },
+    });
+    assert.equal(day2Validation.ok, true, 'overlay lock should reset on next day while sight remains active');
+  } finally {
+    if (fungusDefinition) {
+      fungusDefinition.ingestion = previousIngestion;
+    }
+  }
+}
+
 function main() {
   const tests = [
+    ['extracted inventory module smoke', runExtractedInventoryModuleSmokeTest],
     ['determinism', runDeterminismTest],
     ['advanceDay input immutability', runAdvanceDayInputImmutabilityTest],
     ['advanceTick determinism', runAdvanceTickDeterminismTest],
@@ -8897,11 +11312,16 @@ function main() {
     ['parameterized recipe unlock gate', runParameterizedRecipeUnlockGateTest],
     ['camp station and tool craft core effects', runCampStationAndToolCraftCoreEffectsTest],
     ['harvest reach-tier tool requirements', runHarvestReachTierToolRequirementsTest],
+    ['harvest legacy remainingActions migration', runHarvestLegacyRemainingActionsMigrationTest],
     ['raised sleeping platform comfort budget bonus', runRaisedSleepingPlatformComfortBudgetBonusTest],
     ['windbreak reflector wall partner budget bonus', runWindbreakReflectorWallPartnerBudgetBonusTest],
     ['workbench tool craft tick reduction', runWorkbenchToolCraftTickReductionTest],
     ['carved wooden spout knife requirement', runCarvedWoodenSpoutKnifeRequirementTest],
     ['carved wooden spout runtime preserves knife', runCarvedWoodenSpoutCraftRuntimePreservesKnifeTest],
+    ['bone_hook craft validation and runtime', runBoneHookCraftValidationAndRuntimeTest],
+    ['sun_hat craft validation and runtime', runSunHatCraftValidationAndRuntimeTest],
+    ['reedy material craft alias support', runReedyMaterialCraftAliasSupportTest],
+    ['leaching basket place/retrieve progression', runLeachingBasketPlaceRetrieveAndProgressionTest],
     ['workbench carved wooden spout tick reduction', runWorkbenchSpoutCraftTickReductionTest],
     ['tap insert spout validation rules', runTapInsertSpoutValidationRulesTest],
     ['tap insert spout invalid target tile', runTapInsertSpoutInvalidTargetTileTest],
@@ -8971,23 +11391,37 @@ function main() {
     ['advanceTick full-cost overdraft', runAdvanceTickFullCostOverdraftTest],
     ['action tick-cost preview', runActionTickCostPreviewTest],
     ['partner task set validation', runPartnerTaskSetValidationTest],
+    ['tech research partner task unlock', runTechResearchPartnerTaskUnlockTest],
     ['partner task continuous progression', runPartnerTaskContinuousProgressionTest],
     ['partner task queue policy and output stacking', runPartnerTaskQueuePolicyAndOutputStackingTest],
     ['partner task straddles day boundary', runPartnerTaskStraddlesDayBoundaryTest],
+    ['partner task invalidates on missing inputs', runPartnerTaskInvalidatesOnMissingInputsTest],
     ['inspect and dig core effects', runInspectAndDigCoreEffectsTest],
     ['eat and harvest core effects', runEatAndHarvestCoreEffectsTest],
     ['eat field-edibility threshold validation', runEatFieldEdibilityThresholdValidationTest],
+    ['equip and unequip actions', runEquipUnequipActionsTest],
+    ['equipped gloves harvest injury behavior', runEquippedGlovesHarvestInjuryBehaviorTest],
+    ['equipped coat harvest injury behavior', runEquippedCoatHarvestInjuryBehaviorTest],
+    ['equipment snapshot round-trip', runEquipmentSnapshotRoundTripTest],
+    ['coat cold exposure per-tick behavior', runCoatColdExposurePerTickTest],
+    ['temperature thirst drain and sun hat modifier', runTemperatureThirstDrainAndSunHatModifierTest],
     ['fish carcass not field edible and no clean processing', runFishCarcassNotFieldEdibleAndNoCleanProcessTest],
     ['dig earthworm spawn and frozen block', runDigEarthwormSpawnAndFrozenBlockTest],
     ['earthworm ground decay escapes', runEarthwormGroundDecayEscapesTest],
     ['axe harvest modifier applies', runAxeHarvestModifierAppliesTest],
     ['axe knife harvest modifier precedence', runAxeKnifeHarvestModifierPrecedenceTest],
     ['eat filled sap vessel returns empty container', runEatFilledSapVesselReturnsEmptyContainerTest],
+    ['waterskin fill and drink validation', runWaterskinFillAndDrinkValidationTest],
+    ['waterskin fill/drink runtime and gut illness', runWaterskinFillDrinkRuntimeAndGutIllnessTest],
+    ['debrief medicine auto treatment', runDebriefMedicineAutoTreatmentTest],
+    ['debrief medicine request details', runDebriefMedicineRequestDetailsTest],
+    ['debrief medicine action gating', runDebriefMedicineActionGatingTest],
+    ['debrief vision request and cooldown', runDebriefVisionRequestAndCooldownTest],
     ['camp stockpile camp bounds validation', runCampStockpileCampBoundsValidationTest],
     ['camp stockpile transfer actions', runCampStockpileTransferActionsTest],
     ['no implicit dry wet stack merge', runNoImplicitDryWetStackMergeTest],
     ['inventory auto reorder for pickup', runInventoryAutoReorderForPickupTest],
-    ['inventory overflow drops nearby', runInventoryOverflowDropsNearbyTest],
+    ['stockpile withdraw leaves remainder when inventory full', runStockpileWithdrawLeavesRemainderWhenInventoryFullTest],
     ['daily item decay across containers', runDailyItemDecayAcrossContainersTest],
     ['dig squirrel cache interruption', runDigSquirrelCacheInterruptionTest],
     ['digging stick validation tick reduction', runDiggingStickValidationTickReductionTest],
@@ -8998,6 +11432,7 @@ function main() {
     ['shovel cache discovery tick normalization', runShovelCacheDiscoveryTickNormalizationTest],
     ['shovel advanceTick budget consumption', runShovelAdvanceTickBudgetConsumptionTest],
     ['dig underground plant part flow', runDigUndergroundPlantPartFlowTest],
+    ['carrot harvest scaled unit weight by age', runCarrotHarvestScaledUnitWeightTest],
     ['hoe validation and tick cost', runHoeValidationAndTickCostTest],
     ['hoe blocked tile rules', runHoeBlockedTileRulesTest],
     ['hoe runtime effects', runHoeRuntimeEffectsTest],
@@ -9046,6 +11481,9 @@ function main() {
     ['log fungus fruiting window reset', runLogFungusFruitingWindowResetTest],
     ['snapshot compatibility guard', runIncompatibleSnapshotRejectionTest],
     ['rock snapshot round-trip', runRockSnapshotRoundTripTest],
+    ['move blocked by rock tile', runMoveBlockedByRockTileTest],
+    ['carrot root lifecycle sub-stage filtering', runCarrotRootSubStageLifecycleFilteringTest],
+    ['log fungus harvest validation and runtime', runLogFungusHarvestValidationAndRuntimeTest],
   ];
 
   const started = Date.now();

@@ -2,6 +2,28 @@ export const DEFAULT_MAP_WIDTH = 80;
 export const DEFAULT_MAP_HEIGHT = 80;
 export const MAX_PLANTS_PER_TILE = 1;
 export const TICKS_PER_DAY = 400;
+/** First global tick index where night / debrief phase starts (GDD: half-day model at 400 ticks/day). */
+export const NIGHTLY_DEBRIEF_START_TICK = Math.floor(TICKS_PER_DAY / 2);
+/** Daylight ticks per calendar day for drying (and sun exposure during the active half-day). */
+export const DAYLIGHT_TICK_COUNT = NIGHTLY_DEBRIEF_START_TICK;
+
+/** GDD §4.5 — total dryness progress on rack over one clear mild day (scaled by sun 0–1 and temperature). */
+export const DRYING_RACK_DRYNESS_PER_DAY = 0.5;
+/** GDD §4.5 — ground exposure; rain (sun ~0) resets ground dryness at day start. */
+export const WORLD_GROUND_DRYNESS_PER_DAY = 0.3;
+
+/** GDD §4.5 temperature multipliers on decay (multiplies daily decay rate). */
+export const TEMPERATURE_DECAY_MULTIPLIER_BY_BAND = Object.freeze({
+  freezing: 0,
+  cold: 0.3,
+  cool: 0.6,
+  mild: 1,
+  warm: 1.8,
+  hot: 3,
+});
+
+/** Below this daily sun exposure, treat as rainy / no effective sun for drying. */
+export const DAILY_SUN_DRYING_EPSILON = 0.02;
 export const WINTER_DAYS_PER_YEAR = 10;
 export const PERENNIAL_ANNUAL_OLD_AGE_DEATH_RATE = 0.05;
 export const PERENNIAL_WINTER_DAILY_DEATH_RATE = 1 - Math.pow(
@@ -45,6 +67,15 @@ export const WATERSKIN_GUT_ILLNESS_CHANCE_POND = 0.35;
 export const COLD_EXPOSURE_HEALTH_DRAIN_PER_DAY = 1 / 3;
 export const COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK = COLD_EXPOSURE_HEALTH_DRAIN_PER_DAY / TICKS_PER_DAY;
 export const THIRST_ACTIVITY_DRAIN_PER_TICK = 1 / 600;
+/**
+ * Hunger bar calibration:
+ * - 1.0 hunger bar = 8000 calories
+ * - one full day costs 2000 calories (= 0.25 bar)
+ */
+export const HUNGER_BAR_CALORIES = 8000;
+export const HUNGER_DAILY_CALORIES = 2000;
+/** All living actors, independent of location. */
+export const HUNGER_DRAIN_PER_TICK = (HUNGER_DAILY_CALORIES / HUNGER_BAR_CALORIES) / TICKS_PER_DAY;
 export const THIRST_TEMPERATURE_MODIFIER_BY_BAND = Object.freeze({
   freezing: -0.2,
   warm: 0.25,
@@ -93,6 +124,9 @@ export const EQUIPPABLE_ITEM_TO_SLOT = {
 export const HARVEST_TOOL_INVENTORY_ALIASES = {
   knife: ['tool:flint_knife'],
 };
+
+/** When per-item mass is unknown, assume this many kg per unit so carry limits still apply (50 g / unit). */
+export const UNKNOWN_ITEM_CARRY_UNIT_WEIGHT_KG = 0.05;
 
 export const ITEM_FOOTPRINT_OVERRIDES = {
   'tool:gloves': { w: 1, h: 1 },

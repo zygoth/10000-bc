@@ -115,9 +115,42 @@ function applyDailyWeatherState(state, weatherState) {
   state.dailyTemperatureF = weatherState.dailyTemperatureF;
   state.dailyTemperatureBand = weatherState.dailyTemperatureBand;
   state.dailyWindVector = weatherState.dailyWindVector;
+  state.dailySunExposure = weatherState.dailySunExposure;
 }
 
-function buildWeatherForDay(dayOfYear, varianceOffsetF, windAngleRadians, windStrength) {
+/**
+ * GDD §4.5 — 0 = heavy rain / no drying sun; 1 = clear. Rolled once per calendar day with weather.
+ */
+function rollDailySunExposure(dayOfYear, temperatureBand, rng) {
+  const season = getSeason(normalizeDayOfYear(dayOfYear));
+  let rainChance = 0.22;
+  if (season === 'spring') {
+    rainChance = 0.3;
+  } else if (season === 'summer') {
+    rainChance = 0.16;
+  } else if (season === 'fall') {
+    rainChance = 0.28;
+  } else if (season === 'winter') {
+    rainChance = 0.34;
+  }
+  const band = typeof temperatureBand === 'string' ? temperatureBand.toLowerCase() : 'mild';
+  if (band === 'freezing') {
+    rainChance *= 0.65;
+  }
+  if (rng() < rainChance) {
+    return 0;
+  }
+  let clear = 0.45 + rng() * 0.55;
+  if (band === 'hot') {
+    clear *= 0.9;
+  }
+  if (band === 'warm') {
+    clear *= 0.96;
+  }
+  return clamp01(clear);
+}
+
+function buildWeatherForDay(dayOfYear, varianceOffsetF, windAngleRadians, windStrength, rng) {
   const normalizedVariance = Math.max(
     TEMPERATURE_VARIANCE_MIN_F,
     Math.min(TEMPERATURE_VARIANCE_MAX_F, Number(varianceOffsetF) || 0),
@@ -125,13 +158,17 @@ function buildWeatherForDay(dayOfYear, varianceOffsetF, windAngleRadians, windSt
   const baseline = seasonalTemperatureBaselineF(dayOfYear);
   const dailyTemperatureF = baseline + normalizedVariance;
   const roundedDailyTemperatureF = Number(dailyTemperatureF.toFixed(1));
+  const dailyTemperatureBand = temperatureBandFromFahrenheit(roundedDailyTemperatureF);
+  const sunRng = typeof rng === 'function' ? rng : () => 0.6;
+  const dailySunExposure = rollDailySunExposure(dayOfYear, dailyTemperatureBand, sunRng);
   return {
     weatherTemperatureVarianceF: Number(normalizedVariance.toFixed(2)),
     weatherWindAngleRadians: Number(normalizeAngleRadians(windAngleRadians).toFixed(4)),
     weatherWindStrength: Number(clamp01(Number(windStrength) || 0).toFixed(4)),
     dailyTemperatureF: roundedDailyTemperatureF,
-    dailyTemperatureBand: temperatureBandFromFahrenheit(roundedDailyTemperatureF),
+    dailyTemperatureBand,
     dailyWindVector: buildWindVector(windAngleRadians, windStrength),
+    dailySunExposure: Number(dailySunExposure.toFixed(4)),
   };
 }
 
@@ -141,7 +178,7 @@ export function initializeDailyWeatherState(state) {
   const varianceOffsetF = (rng() - 0.5) * 4;
   const windAngleRadians = rng() * Math.PI * 2;
   const windStrength = clamp01(baselineStrength + ((rng() - 0.5) * 0.2));
-  const weather = buildWeatherForDay(state.dayOfYear, varianceOffsetF, windAngleRadians, windStrength);
+  const weather = buildWeatherForDay(state.dayOfYear, varianceOffsetF, windAngleRadians, windStrength, rng);
   applyDailyWeatherState(state, weather);
 }
 
@@ -166,7 +203,7 @@ export function rollDailyWeatherForCurrentDay(state, rng) {
     : baselineStrength;
   const nextStrength = clamp01((currentStrength * 0.55) + (baselineStrength * 0.45) + ((rng() - 0.5) * 0.24));
 
-  const weather = buildWeatherForDay(state.dayOfYear, nextVariance, nextAngle, nextStrength);
+  const weather = buildWeatherForDay(state.dayOfYear, nextVariance, nextAngle, nextStrength, rng);
   applyDailyWeatherState(state, weather);
 }
 
@@ -175,6 +212,7 @@ export function ensureDailyWeatherState(state) {
     Number.isFinite(Number(state?.dailyTemperatureF))
     && typeof state?.dailyTemperatureBand === 'string'
     && state?.dailyWindVector
+    && Number.isFinite(Number(state?.dailySunExposure))
   ) {
     return;
   }

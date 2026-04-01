@@ -1,3 +1,5 @@
+import { coerceOptionalMetaNumber } from '../coerceOptionalMetaNumber.mjs';
+
 export function ensureActorInventoryImpl(actor, deps) {
   const { ensureInventoryEquipment } = deps;
   if (!actor.inventory || typeof actor.inventory !== 'object') {
@@ -35,6 +37,7 @@ export function addActorInventoryItemImpl(actor, itemId, quantity, options = nul
   const {
     ensureActorInventory,
     getStackUnitWeightKg,
+    getCatalogUnitWeightKgForItem,
     maxQuantityByCarryWeight,
     normalizeStackFootprintValue,
     findCompatibleStackForAutoMerge,
@@ -52,17 +55,20 @@ export function addActorInventoryItemImpl(actor, itemId, quantity, options = nul
 
   ensureActorInventory(actor);
   const qtyRequested = Math.max(1, Math.floor(quantity));
-  const unitWeightKg = getStackUnitWeightKg(options, 0);
+  const catalogFallbackKg = typeof getCatalogUnitWeightKgForItem === 'function'
+    ? getCatalogUnitWeightKgForItem(itemId)
+    : 0;
+  const unitWeightKg = getStackUnitWeightKg(options, catalogFallbackKg);
   const maxByWeight = maxQuantityByCarryWeight(actor.inventory, unitWeightKg);
   const qty = Math.min(qtyRequested, Number.isFinite(maxByWeight) ? maxByWeight : qtyRequested);
   if (qty <= 0) {
     return { addedQuantity: 0, overflowQuantity: qtyRequested };
   }
 
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingDryness = Number(options?.dryness);
-  const incomingTanninRemaining = Number(options?.tanninRemaining);
+  const incomingFreshness = coerceOptionalMetaNumber(options?.freshness);
+  const incomingDecayDaysRemaining = coerceOptionalMetaNumber(options?.decayDaysRemaining);
+  const incomingDryness = coerceOptionalMetaNumber(options?.dryness);
+  const incomingTanninRemaining = coerceOptionalMetaNumber(options?.tanninRemaining);
   const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
   const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
   const existing = findCompatibleStackForAutoMerge(actor.inventory.stacks, itemId, incomingDryness);

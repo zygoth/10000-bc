@@ -196,9 +196,6 @@ The context menu is a vertically stacked list of available actions. Each item sh
 
 - Action name
 - Tick cost (small, greyed)
-- Availability — unavailable actions are shown greyed with a one-word reason ("No knife", "No stool", "Budget gone")
-
-**Showing unavailable actions** is a deliberate choice. The player needs to learn what tools unlock what. Hiding actions entirely prevents this learning. Greyed actions with reasons are tutorial and reminder in one.
 
 **Action ordering within the context menu:**
 
@@ -440,12 +437,11 @@ When the player enters the 3×3 camp tiles, the camera centers on the camp area.
 
 The stockpile opens when the player right-clicks the wigwam tile (or from the debrief). When open, the player's inventory and the stockpile are shown side by side. Items are transferred by clicking the item in either panel and choosing "Move to Stockpile" or "Move to Inventory" — or by holding a modifier key and clicking to quick-transfer. The player can also move partial stacks using a quantity input that appears when transferring stackable items. Weight and slot limits are enforced live; the button is greyed if a transfer would exceed capacity.
 
-The stockpile panel is also the full-screen view in the debrief. It shows:
+The stockpile panel is also surfaced in the debrief via the same inventory side panel (elevated above the debrief layer). It shows:
 
-- All items grouped by category (Food, Materials, Tools)
-- Sort options: by spoilage (default at debrief), by weight, by category
-- Items flagged for spoilage (will hit decay 1.0 before next debrief) have a red clock icon
-- Drag to rearrange (at debrief); click-to-interact (in field)
+- All items in grid layout; **sort toggles** at debrief: by spoilage (default), by weight, by category
+- Items flagged for spoilage (will hit decay 1.0 before next debrief) have a **red clock** marker on the slot
+- Drag to rearrange inventory stacks in-grid where supported; click-to-interact for actions (in field, debrief uses the raised panel)
 
 ---
 
@@ -485,7 +481,9 @@ The Begin Day button is visible in the bottom-right corner of the debrief screen
 
 **Meal tab gate:** The Begin Day button is inactive until the player has visited the Meal tab at least once that night. If the player tries to click it before visiting Meal, the button is greyed with a brief note: "Review tonight's stew first."
 
-**Ticks-remaining confirmation:** If the player still has tick budget remaining when they open the debrief, clicking Begin Day shows a single confirmation: "You have [N] ticks remaining. End the day?" Accept or Cancel. This only fires once — if they dismiss and spend more ticks before pressing Begin Day again, the dialog reflects the updated remaining amount.
+**Begin Day:** Clicking Begin Day ends the nightly debrief and returns to the world on **morning of the next day** (the sim fast-forwards global time to the next calendar day; debrief requires no extra confirmation dialogs).
+
+**Stockpile at debrief:** While the debrief is open, the camp stockpile panel (same inventory side panel as in play) is available above the debrief overlay. Stockpile rows can be sorted **by spoilage** (default at debrief), **by weight**, or **by category**. Items projected to **fully spoil before the next debrief** show a **red clock** badge on the slot, consistent with the spoilage list on the Summary tab.
 
 ---
 
@@ -529,8 +527,8 @@ This is the Queue tab of the debrief. It is the player's primary lever for manag
 
 Clicking "+ Add Task" opens a grouped picker:
 
-- **Research** — lists all plants in stockpile that can be researched (have 3+ samples). Shows estimated tick cost. Research tasks are marked "[Partner only]." Below the list of queueable plants is a "View Tech Forest" button — this opens the Tech Forest as a full-screen overlay from which the player can browse and queue tech research tasks. Tech research tasks also appear in the queue labeled "[Partner only]" with an estimated tick cost.
-- **Crafting** — lists all craftable tools and stations given current stockpile contents. Unavailable recipes are shown greyed with missing materials listed. Clicking a greyed recipe does nothing but hover shows what's missing.
+- **Research** — lists all plants in stockpile that can be researched (have 3+ samples). Shows estimated tick cost. Research tasks are marked "[Partner only]." Below the list of queueable plants is a "View Tech Forest" button — same overlay as the **Tech Forest** button on the day HUD (§13.1). Tech research tasks also appear in the queue labeled "[Partner only]" with an estimated tick cost.
+- **Crafting** — lists all craftable tools and stations given current stockpile contents. 
 - **Processing** — lists current stockpile items that have processing options (fiber extraction, hide scraping, bone crushing, etc.). Batch size is configurable.
 - **Build Station** — lists researchable and already-unlocked stations the player hasn't built, with material requirements.
 
@@ -647,7 +645,12 @@ The library is read-only. Since plant data is surfaced whenever the player inspe
 
 ### 13.1 Access
 
-The Tech Forest is accessible only from the Queue tab's "+ Add Task → Research → View Tech Forest" flow (see §10.2). It is a full-screen overlay that opens over the debrief and returns to the debrief on dismiss.
+The Tech Forest is a full-screen overlay. The player can open it from:
+
+1. **Day / foraging HUD** — the **Tech Forest** button on the top status bar (next to calendar and tick budget). This allows browsing the forest and planning while in the field; closing the overlay returns to normal play.
+2. **Nightly debrief** — the Queue tab’s **View Tech Forest** button (see §10.2), intended as the primary flow alongside "+ Add Task → Research." Closing the overlay returns to the debrief.
+
+Both entry points use the same overlay and the same partner-queue actions (e.g. "Add to partner queue" for tech research).
 
 ### 13.2 Layout
 
@@ -671,13 +674,12 @@ Active filter highlights matched nodes with a ring. Unmatched nodes remain visib
 
 ### 13.4 Queuing Research from the Tech Forest
 
-Clicking a node opens a small info card:
-- Full description of the tech's effect
-- Prerequisites (linked; clickable to scroll to them)
-- Estimated research ticks
-- "Add to Queue" button — adds the tech research task to the partner queue and returns focus to the queue
+Selecting a node shows a detail strip:
+- Prerequisites (named; roots have none)
+- Exact research ticks for this run (from seed)
+- **Add to partner queue** — enqueues a partner-only tech research task and closes the overlay (whether opened from the HUD or from debrief)
 
-Nodes already queued show a "Queued" badge. Researched nodes show a "Complete ✓" badge.
+Nodes already queued show a **Queued** badge. Completed research shows a **Complete** badge. Locked nodes remain readable at reduced contrast when a category filter is active.
 
 ---
 

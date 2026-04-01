@@ -1,3 +1,5 @@
+import { coerceOptionalMetaNumber } from '../coerceOptionalMetaNumber.mjs';
+
 export function addCampStockpileItemImpl(camp, itemId, quantity, options = null, deps) {
   const {
     normalizeStackFootprintValue,
@@ -14,11 +16,11 @@ export function addCampStockpileItemImpl(camp, itemId, quantity, options = null,
   }
 
   const qty = Math.max(1, Math.floor(quantity));
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingDryness = Number(options?.dryness);
-  const incomingTanninRemaining = Number(options?.tanninRemaining);
-  const incomingUnitWeightKg = Number(options?.unitWeightKg);
+  const incomingFreshness = coerceOptionalMetaNumber(options?.freshness);
+  const incomingDecayDaysRemaining = coerceOptionalMetaNumber(options?.decayDaysRemaining);
+  const incomingDryness = coerceOptionalMetaNumber(options?.dryness);
+  const incomingTanninRemaining = coerceOptionalMetaNumber(options?.tanninRemaining);
+  const incomingUnitWeightKg = coerceOptionalMetaNumber(options?.unitWeightKg);
   const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
   const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
   const existing = findCompatibleStackForAutoMerge(camp.stockpile.stacks, itemId, incomingDryness);

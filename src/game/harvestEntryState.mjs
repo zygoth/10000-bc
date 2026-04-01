@@ -40,6 +40,22 @@ function resolveHarvestCyclePoolDefaults(subStage, fallbackActions, effectiveRea
       return { ground: fallback, elevated: 0, canopy: 0 };
     }
     if (reachTier === 'canopy') {
+      const gafRaw = Number(hy?.ground_action_fraction);
+      const eafRaw = Number(hy?.elevated_action_fraction);
+      const gaf = Number.isFinite(gafRaw) ? Math.max(0, Math.min(1, gafRaw)) : 0;
+      const eaf = Number.isFinite(eafRaw) ? Math.max(0, Math.min(1, eafRaw)) : 0;
+      if (gaf > 0 || eaf > 0) {
+        let ground = Math.max(0, Math.floor(fallback * gaf));
+        let elevated = Math.max(0, Math.floor(fallback * eaf));
+        const sumFracPools = ground + elevated;
+        if (sumFracPools > fallback) {
+          const scale = fallback / Math.max(1, sumFracPools);
+          ground = Math.max(0, Math.floor(ground * scale));
+          elevated = Math.max(0, Math.floor(elevated * scale));
+        }
+        const canopy = Math.max(0, fallback - ground - elevated);
+        return { ground, elevated, canopy };
+      }
       return { ground: 0, elevated: 0, canopy: fallback };
     }
     return { ground: 0, elevated: fallback, canopy: 0 };

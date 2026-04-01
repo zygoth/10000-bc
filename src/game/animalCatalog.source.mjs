@@ -45,6 +45,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 605,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 740,
           "protein": 102,
@@ -116,6 +118,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 1885,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 1980,
           "protein": 255,
@@ -188,6 +192,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 1530,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 1910,
           "protein": 260,
@@ -259,6 +265,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 175,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 200,
           "protein": 33,
@@ -330,6 +338,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 1140,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 1480,
           "protein": 210,
@@ -428,6 +438,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 360,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 390,
           "protein": 45,
@@ -555,6 +567,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 80,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 85,
           "protein": 13,
@@ -653,6 +667,8 @@ const ANIMAL_CATALOG_SOURCE = [
         "id": "meat",
         "yield_grams": 520,
         "unit_weight_g": 1,
+        "cooked_edibility_score": 0.85,
+        "cooked_harshness": 0.05,
         "nutrition": {
           "calories": 520,
           "protein": 59,

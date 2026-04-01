@@ -2,6 +2,14 @@ import PLANT_SPRITE_CATALOG_SOURCE from './plantSpriteCatalog.source.mjs';
 
 export const PLANT_SPRITE_CATALOG = PLANT_SPRITE_CATALOG_SOURCE;
 
+function logPlantPartSpriteCatalogMiss(payload) {
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.log('[plantPartSprite]', payload);
+}
+
 const DEAD_LOG_SPRITE = {
   imagePath: '/plant_sprites/dead_tree.png',
   atlasWidth: 64,
@@ -94,6 +102,38 @@ export function getPlantSpriteFrame(speciesId, stageName) {
 
   const frame = species.lifeStageFrames?.[stageName];
   if (!frame) {
+    return null;
+  }
+
+  return {
+    imagePath: species.imagePath,
+    atlasWidth: species.atlasWidth,
+    atlasHeight: species.atlasHeight,
+    frame,
+  };
+}
+
+export function getPlantPartSpriteFrame(speciesId, partName, subStageId) {
+  const species = PLANT_SPRITE_CATALOG[speciesId];
+  if (!species || typeof partName !== 'string' || typeof subStageId !== 'string') {
+    return null;
+  }
+
+  const partMap = species.partSubStageFrames?.[partName];
+  const frame = partMap?.[subStageId];
+  if (!frame) {
+    const partNames = species.partSubStageFrames
+      ? Object.keys(species.partSubStageFrames)
+      : [];
+    const subIdsForPart = partMap && typeof partMap === 'object' ? Object.keys(partMap) : [];
+    logPlantPartSpriteCatalogMiss({
+      event: 'catalogPartLookupMiss',
+      speciesId,
+      partName,
+      subStageId,
+      catalogPartNames: partNames,
+      subStageIdsForThisPart: subIdsForPart,
+    });
     return null;
   }
 

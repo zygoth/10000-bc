@@ -6,6 +6,8 @@ export function advanceOneTickImpl(state, hooks) {
     processAutoRodTickResolution,
     applyColdExposureTick,
     applyTemperatureThirstTick,
+    applyGlobalHungerTick,
+    applyItemDecayAndDryingTick,
     TICKS_PER_DAY,
     advanceDay,
     ensureTickSystems,
@@ -16,12 +18,16 @@ export function advanceOneTickImpl(state, hooks) {
   processAutoRodTickResolution(state);
   applyColdExposureTick(state);
   applyTemperatureThirstTick(state);
+  applyGlobalHungerTick(state);
+  if (typeof applyItemDecayAndDryingTick === 'function') {
+    applyItemDecayAndDryingTick(state);
+  }
   state.dayTick += 1;
   if (state.dayTick < TICKS_PER_DAY) {
     return state;
   }
 
-  const rolled = advanceDay(state, 1);
+  const rolled = advanceDay(state, 1, { skipBatchItemProgress: true });
   ensureTickSystems(rolled);
   rolled.dayTick = 0;
   rolled.currentDayActionLog = [];

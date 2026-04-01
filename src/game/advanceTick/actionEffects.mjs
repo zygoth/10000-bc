@@ -11,6 +11,7 @@ import {
   harvestYieldScaleFactor,
   scaledUnitsPerHarvestActionMidpoint,
 } from '../harvestYieldResolve.mjs';
+import { HUNGER_BAR_CALORIES } from '../simCore.constants.mjs';
 
 export function applyActionEffectImpl(state, action, deps) {
   const {
@@ -42,6 +43,7 @@ export function applyActionEffectImpl(state, action, deps) {
     EQUIPPABLE_ITEM_TO_SLOT,
     ensureActorInventory,
     ensureInventoryEquipment,
+    applyActorInventoryRelocation,
     resolveItemFootprint,
     maybeCreateDeadLog,
     applyHarvestAction,
@@ -49,6 +51,8 @@ export function applyActionEffectImpl(state, action, deps) {
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
     addActorInventoryItem,
+    maxQuantityActorInventoryCanAccept,
+    pickupAddOptionsFromWorldStack,
   } = deps;
 
   const isActorAtCampAnchor = (candidate) => {
@@ -233,12 +237,26 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
 
-    const extracted = removeWorldItemAtTile(state, targetX, targetY, itemId, requestedQty);
+    const tileKey = `${targetX},${targetY}`;
+    const worldStacks = Array.isArray(state.worldItemsByTile?.[tileKey]) ? state.worldItemsByTile[tileKey] : [];
+    const worldStack = findPreferredStackByItem(worldStacks, itemId, requestedQty);
+    const availableWorld = Math.max(0, Math.floor(Number(worldStack?.quantity) || 0));
+    if (availableWorld <= 0) {
+      return;
+    }
+    const wantQty = Math.min(requestedQty, availableWorld);
+    const previewOpts = pickupAddOptionsFromWorldStack(worldStack);
+    const takeQty = maxQuantityActorInventoryCanAccept(actor, itemId, wantQty, previewOpts);
+    if (takeQty <= 0) {
+      return;
+    }
+
+    const extracted = removeWorldItemAtTile(state, targetX, targetY, itemId, takeQty);
     if (extracted.consumed <= 0) {
       return;
     }
 
-    addActorInventoryItemWithOverflowDrop(state, actor, itemId, extracted.consumed, {
+    const pickupOpts = {
       freshness: extracted.freshness,
       decayDaysRemaining: extracted.decayDaysRemaining,
       dryness: extracted.dryness,
@@ -246,7 +264,8 @@ export function applyActionEffectImpl(state, action, deps) {
       unitWeightKg: extracted.unitWeightKg,
       footprintW: extracted.footprintW,
       footprintH: extracted.footprintH,
-    });
+    };
+    addActorInventoryItem(actor, itemId, extracted.consumed, pickupOpts);
 
     actor.lastPickup = {
       x: targetX,
@@ -495,6 +514,56 @@ export function applyActionEffectImpl(state, action, deps) {
       type: 'drink',
       fromItemId: itemId,
       toItemId,
+      sourceType,
+      day: Number(state.totalDaysSimulated) || 0,
+      dayTick: Number(state.dayTick) || 0,
+      gutIllness: illness,
+    };
+    return;
+  }
+
+  if (action.kind === 'water_drink') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+
+    const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
+
+    if (sourceType === 'safe') {
+      const campX = Number.isInteger(state?.camp?.anchorX) ? state.camp.anchorX : null;
+      const campY = Number.isInteger(state?.camp?.anchorY) ? state.camp.anchorY : null;
+      if (campX !== targetX || campY !== targetY) {
+        return;
+      }
+      actor.thirst = 1;
+      const illness = maybeApplyGutIllnessFromWaterskin(state, actor, action, sourceType);
+      actor.lastWaterDrink = {
+        x: targetX,
+        y: targetY,
+        sourceType,
+        day: Number(state.totalDaysSimulated) || 0,
+        dayTick: Number(state.dayTick) || 0,
+        gutIllness: illness,
+      };
+      return;
+    }
+
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile || !tile.waterType || tile.waterFrozen === true) {
+      return;
+    }
+
+    if (sourceType !== 'pond' && sourceType !== 'river') {
+      return;
+    }
+
+    actor.thirst = 1;
+    const illness = maybeApplyGutIllnessFromWaterskin(state, actor, action, sourceType);
+    actor.lastWaterDrink = {
+      x: targetX,
+      y: targetY,
       sourceType,
       day: Number(state.totalDaysSimulated) || 0,
       dayTick: Number(state.dayTick) || 0,
@@ -852,10 +921,10 @@ export function applyActionEffectImpl(state, action, deps) {
 
     const ingredients = Array.isArray(action.payload?.ingredients)
       ? action.payload.ingredients
-      : [];
+      : (Array.isArray(state?.camp?.mealPlan?.ingredients) ? state.camp.mealPlan.ingredients : []);
     const preview = action.payload?.mealPlanPreview && typeof action.payload.mealPlanPreview === 'object'
       ? action.payload.mealPlanPreview
-      : null;
+      : (state?.camp?.mealPlan?.preview && typeof state.camp.mealPlan.preview === 'object' ? state.camp.mealPlan.preview : null);
 
     for (const ingredient of ingredients) {
       const itemId = typeof ingredient?.itemId === 'string' ? ingredient.itemId : '';
@@ -875,12 +944,11 @@ export function applyActionEffectImpl(state, action, deps) {
       if (!targetActor) {
         continue;
       }
-      const dailyCalories = Number(allocation?.dailyCalories);
       const effectiveCalories = Number(allocation?.effectiveCalories);
-      if (!Number.isFinite(dailyCalories) || dailyCalories <= 0 || !Number.isFinite(effectiveCalories) || effectiveCalories <= 0) {
+      if (!Number.isFinite(effectiveCalories) || effectiveCalories <= 0) {
         continue;
       }
-      targetActor.hunger = clamp01((Number(targetActor.hunger) || 0) + (effectiveCalories / dailyCalories));
+      targetActor.hunger = clamp01((Number(targetActor.hunger) || 0) + (effectiveCalories / HUNGER_BAR_CALORIES));
       targetActor.lastMeal = {
         calories: effectiveCalories,
         day: Number(state.totalDaysSimulated) || 0,
@@ -938,12 +1006,25 @@ export function applyActionEffectImpl(state, action, deps) {
     const requestedQty = Number.isInteger(action.payload?.quantity)
       ? action.payload.quantity
       : Math.floor(Number(action.payload?.quantity || 1));
-    const extracted = removeCampStockpileItem(state.camp, itemId, requestedQty);
+    const stockStacks = Array.isArray(state.camp?.stockpile?.stacks) ? state.camp.stockpile.stacks : [];
+    const stockStack = findPreferredStackByItem(stockStacks, itemId, requestedQty);
+    const availableStock = Math.max(0, Math.floor(Number(stockStack?.quantity) || 0));
+    if (availableStock <= 0) {
+      return;
+    }
+    const wantQty = Math.min(requestedQty, availableStock);
+    const previewOpts = pickupAddOptionsFromWorldStack(stockStack);
+    const takeQty = maxQuantityActorInventoryCanAccept(actor, itemId, wantQty, previewOpts);
+    if (takeQty <= 0) {
+      return;
+    }
+
+    const extracted = removeCampStockpileItem(state.camp, itemId, takeQty);
     if (extracted.consumed <= 0) {
       return;
     }
 
-    addActorInventoryItemWithOverflowDrop(state, actor, itemId, extracted.consumed, {
+    addActorInventoryItem(actor, itemId, extracted.consumed, {
       freshness: extracted.freshness,
       decayDaysRemaining: extracted.decayDaysRemaining,
       dryness: extracted.dryness,
@@ -957,6 +1038,8 @@ export function applyActionEffectImpl(state, action, deps) {
 
   if (action.kind === 'camp_station_build') {
     const stationId = typeof action.payload?.stationId === 'string' ? action.payload.stationId : '';
+    const placementX = Number.isInteger(action.payload?.x) ? action.payload.x : null;
+    const placementY = Number.isInteger(action.payload?.y) ? action.payload.y : null;
     if (!stationId) {
       return;
     }
@@ -967,8 +1050,14 @@ export function applyActionEffectImpl(state, action, deps) {
     if (!Array.isArray(state.camp.stationsUnlocked)) {
       state.camp.stationsUnlocked = [];
     }
+    if (!state.camp.stationPlacements || typeof state.camp.stationPlacements !== 'object') {
+      state.camp.stationPlacements = {};
+    }
     if (!state.camp.stationsUnlocked.includes(stationId)) {
       state.camp.stationsUnlocked.push(stationId);
+    }
+    if (Number.isInteger(placementX) && Number.isInteger(placementY)) {
+      state.camp.stationPlacements[stationId] = { x: placementX, y: placementY };
     }
 
     if (CAMP_COMFORT_STATION_IDS.has(stationId)) {
@@ -1047,6 +1136,7 @@ export function applyActionEffectImpl(state, action, deps) {
       poached: false,
       sprung: false,
       reliability: 1,
+      baitItemId: null,
       rabbitDensity: getAnimalDensityAtTile(state, 'sylvilagus_floridanus', targetX, targetY),
       placedYear: Number(state.year) || 1,
       placedDay: Number(state.dayOfYear) || 1,
@@ -1100,6 +1190,7 @@ export function applyActionEffectImpl(state, action, deps) {
       poached: false,
       sprung: false,
       reliability: 1,
+      baitItemId: null,
       lastDensity: 0,
       caughtSpeciesId: null,
       placedYear: Number(state.year) || 1,
@@ -1391,6 +1482,75 @@ export function applyActionEffectImpl(state, action, deps) {
     return;
   }
 
+  if (action.kind === 'trap_bait') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile) {
+      return;
+    }
+    const baitItemId = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : null;
+    if (!baitItemId) {
+      return;
+    }
+
+    const activeSnare = tile?.simpleSnare?.active === true ? tile.simpleSnare : null;
+    const activeDeadfall = tile?.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+    if (!activeSnare && !activeDeadfall) {
+      return;
+    }
+
+    const consumed = removeActorInventoryItem(actor, baitItemId, 1);
+    if (consumed <= 0) {
+      return;
+    }
+
+    if (activeSnare && !activeSnare.baitItemId) {
+      tile.simpleSnare = { ...activeSnare, baitItemId };
+    }
+    if (activeDeadfall && !activeDeadfall.baitItemId) {
+      tile.deadfallTrap = { ...activeDeadfall, baitItemId };
+    }
+    return;
+  }
+
+  if (action.kind === 'marker_place') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile || tile.markerStick === true) {
+      return;
+    }
+    const consumed = removeActorInventoryItem(actor, 'tool:marker_stick', 1);
+    if (consumed <= 0) {
+      return;
+    }
+    tile.markerStick = true;
+    return;
+  }
+
+  if (action.kind === 'marker_remove') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile || tile.markerStick !== true) {
+      return;
+    }
+    tile.markerStick = false;
+    addActorInventoryItemWithOverflowDrop(state, actor, 'tool:marker_stick', 1);
+    return;
+  }
+
   if (action.kind === 'tap_remove_spout') {
     const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
     const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
@@ -1503,6 +1663,27 @@ export function applyActionEffectImpl(state, action, deps) {
       footprintH: normalizeStackFootprintValue(action.payload?.outputFootprintH),
       unitWeightKg: Number(action.payload?.outputUnitWeightKg),
     });
+    return;
+  }
+
+  if (action.kind === 'inventory_relocate_stack') {
+    const stackIndex = Number.isInteger(action.payload?.stackIndex)
+      ? action.payload.stackIndex
+      : Math.floor(Number(action.payload?.stackIndex));
+    const slotX = Number.isInteger(action.payload?.slotX)
+      ? action.payload.slotX
+      : Math.floor(Number(action.payload?.slotX));
+    const slotY = Number.isInteger(action.payload?.slotY)
+      ? action.payload.slotY
+      : Math.floor(Number(action.payload?.slotY));
+    if (
+      !Number.isInteger(stackIndex)
+      || !Number.isInteger(slotX)
+      || !Number.isInteger(slotY)
+    ) {
+      return;
+    }
+    applyActorInventoryRelocation(actor, stackIndex, slotX, slotY);
     return;
   }
 
@@ -1788,6 +1969,17 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
     debrief.active = true;
+    // Entering debrief snaps the player to the camp anchor so camp-only maintenance
+    // assumptions (safe water, no field thirst drain) hold even if they ended the day
+    // from a different camp tile within the footprint.
+    if (actor && actor.id === 'player') {
+      const ax = Number(state?.camp?.anchorX);
+      const ay = Number(state?.camp?.anchorY);
+      if (Number.isInteger(ax) && Number.isInteger(ay)) {
+        actor.x = ax;
+        actor.y = ay;
+      }
+    }
     debrief.openedAtDay = Number.isInteger(state?.totalDaysSimulated) ? state.totalDaysSimulated : null;
     const seasonKey = resolveCurrentSeasonKey(state);
     if (debrief.visionSeasonKey !== seasonKey) {

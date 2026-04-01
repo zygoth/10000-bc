@@ -1,3 +1,5 @@
+import { coerceOptionalMetaNumber } from '../coerceOptionalMetaNumber.mjs';
+
 function nearbyDropPositions(originX, originY, maxRadius = 3) {
   const positions = [];
   for (let radius = 0; radius <= maxRadius; radius += 1) {
@@ -84,11 +86,11 @@ export function addWorldItemNearbyImpl(state, originX, originY, itemId, quantity
   }
 
   const qty = Math.max(1, Math.floor(quantity));
-  const incomingFreshness = Number(options?.freshness);
-  const incomingDecayDaysRemaining = Number(options?.decayDaysRemaining);
-  const incomingUnitWeightKg = Number(options?.unitWeightKg);
-  const incomingDryness = Number(options?.dryness);
-  const incomingTanninRemaining = Number(options?.tanninRemaining);
+  const incomingFreshness = coerceOptionalMetaNumber(options?.freshness);
+  const incomingDecayDaysRemaining = coerceOptionalMetaNumber(options?.decayDaysRemaining);
+  const incomingUnitWeightKg = coerceOptionalMetaNumber(options?.unitWeightKg);
+  const incomingDryness = coerceOptionalMetaNumber(options?.dryness);
+  const incomingTanninRemaining = coerceOptionalMetaNumber(options?.tanninRemaining);
   const incomingFootprintW = normalizeStackFootprintValue(options?.footprintW);
   const incomingFootprintH = normalizeStackFootprintValue(options?.footprintH);
   const positions = nearbyDropPositions(originX, originY, 3);

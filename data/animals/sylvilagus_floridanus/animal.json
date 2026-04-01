@@ -59,6 +59,8 @@
       "id": "meat",
       "yield_grams": 520,
       "unit_weight_g": 1,
+      "cooked_edibility_score": 0.85,
+      "cooked_harshness": 0.05,
       "nutrition": { "calories": 520, "protein": 59, "carbs": 0, "fat": 20 },
       "processing_options": [
         { "id": "butcher", "ticks": 10, "location": "hand", "outputs": [] }

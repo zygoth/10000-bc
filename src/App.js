@@ -10,6 +10,7 @@ import {
   canGenerateSquirrelCaches,
   createInitialGameState,
   deserializeGameState,
+  previewCampDryingRackAdd,
   generateAnimalZones,
   generateBeehives,
   generateFishPopulations,
@@ -20,21 +21,44 @@ import {
   getActionTickCost,
   getGroundFungusById,
   getMetrics,
+  getCampStockpileStackForWithdrawPreview,
+  getItemPickupInventoryBlockReason,
   getTileAt,
+  pickupAddOptionsFromWorldStack,
   serializeGameState,
   validateAction,
+  previewTickBudgetImpact,
 } from './game/simCore.mjs';
+import { TECH_RESEARCH_TASK_KIND } from './game/techResearchCatalog.mjs';
 import {
   getDeadLogSpriteFrame,
   getPlantSpriteFrame,
   getRockSpriteFrame,
   getTerrainSpriteFrame,
 } from './game/plantSpriteCatalog.mjs';
-import { parsePlantPartItemId } from './game/plantPartDescriptors.mjs';
+import {
+  buildPlayerInventoryGridEntry,
+  buildStockpileGridEntry,
+  buildWorldGroundItemsGridEntry,
+} from './game/inventoryPanelEntries.mjs';
+import {
+  applyManualTestBootstrap,
+  defaultManualTestBootstrapOptions,
+} from './game/manualTestBootstrap.mjs';
 import { ANIMAL_CATALOG } from './game/animalCatalog.mjs';
 import { ITEM_BY_ID } from './game/itemCatalog.mjs';
+import { SAP_FILLED_VESSEL_ITEM_ID, TICKS_PER_DAY as SIM_TICKS_PER_DAY } from './game/simCore.constants.mjs';
+import { isActorWithinCampFootprint } from './game/campFootprint.mjs';
+import { advanceStateToNextMorning } from './game/debriefDayTransition.mjs';
 import { getSeason, PLANT_CATALOG, PLANT_BY_ID } from './game/plantCatalog.mjs';
-import GameModeChrome from './ui/GameModeChrome.jsx';
+import GameModeChrome from './ui/gameModeChrome/GameModeChromePanel.jsx';
+import {
+  annotateContextEntryTickBudget,
+  CONTEXT_MENU_PASS_OUT_TICK_REASON,
+} from './ui/gameModeChrome/GameModeChromeDisplayLogic.js';
+import { getTileContextMenuEntries } from './ui/gameModeChrome/TileContextMenuDisplayLogic.js';
+import DryingRackGrid from './ui/gameModeChrome/components/DryingRackGrid.jsx';
+import CarrotPartSpriteProbe from './ui/CarrotPartSpriteProbe.jsx';
 import {
   computeOccupantAnchorYFromTileTop,
   computeTileTopCenterYFromGroundAnchor,
@@ -68,7 +92,7 @@ const ISO_PLAY_VERTICAL_NUDGE_EXTRA_TILE_HEIGHTS = 1;
 const ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX = (ISO_HALF_CUBE_FRAME_HEIGHT * ISO_BASE_SCALE) * 0.38;
 const ISO_ELEVATION_LEVELS = 6;
 const ISO_MAX_ELEVATION_OFFSET_PX = ISO_ELEVATION_LEVELS * ISO_TILE_HALF_HEIGHT_PX;
-const TICKS_PER_DAY = 400;
+const TICKS_PER_DAY = SIM_TICKS_PER_DAY;
 const NIGHT_TICK_THRESHOLD = Math.floor(TICKS_PER_DAY / 2);
 
 const FISH_SPECIES = ANIMAL_CATALOG.filter((animal) => animal.animalClass === 'fish');
@@ -113,6 +137,81 @@ const PARTNER_VITAL_KEYS = [
   { key: 'thirst', label: 'Thirst' },
   { key: 'health', label: 'Health' },
 ];
+
+function pickPreferredStackByItem(stacks, itemId, requestedQuantity) {
+  if (!Array.isArray(stacks)) {
+    return null;
+  }
+  const requested = Math.max(1, Math.floor(Number(requestedQuantity) || 1));
+  let fallback = null;
+  for (const stack of stacks) {
+    if (stack?.itemId !== itemId) {
+      continue;
+    }
+    const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+    if (available <= 0) {
+      continue;
+    }
+    if (!fallback) {
+      fallback = stack;
+    }
+    if (available >= requested) {
+      return stack;
+    }
+  }
+  return fallback;
+}
+
+function buildDryingRackAddOptionsFromStack(stack) {
+  if (!stack || typeof stack !== 'object') {
+    return null;
+  }
+  const footprintW = Number.isInteger(stack.footprintW) ? stack.footprintW : 1;
+  const footprintH = Number.isInteger(stack.footprintH) ? stack.footprintH : 1;
+  const options = {
+    footprintW,
+    footprintH,
+  };
+  if (Number.isFinite(Number(stack.freshness))) {
+    options.freshness = Number(stack.freshness);
+  }
+  if (Number.isFinite(Number(stack.decayDaysRemaining)) && stack.decayDaysRemaining >= 0) {
+    options.decayDaysRemaining = Number(stack.decayDaysRemaining);
+  }
+  if (Number.isFinite(Number(stack.dryness))) {
+    options.dryness = Number(stack.dryness);
+  }
+  if (Number.isFinite(Number(stack.tanninRemaining))) {
+    options.tanninRemaining = Number(stack.tanninRemaining);
+  }
+  if (Number.isFinite(Number(stack.unitWeightKg)) && stack.unitWeightKg >= 0) {
+    options.unitWeightKg = Number(stack.unitWeightKg);
+  }
+  return options;
+}
+
+function collectDryingRackOccupiedCellKeys(slots) {
+  const keys = new Set();
+  if (!Array.isArray(slots)) {
+    return keys;
+  }
+  for (const s of slots) {
+    if (!s || (Number(s.quantity) || 0) <= 0) {
+      continue;
+    }
+    const sx = Number.isInteger(s.slotX) ? s.slotX : 0;
+    const sy = Number.isInteger(s.slotY) ? s.slotY : 0;
+    const w = Number.isInteger(s.footprintW) ? s.footprintW : 1;
+    const h = Number.isInteger(s.footprintH) ? s.footprintH : 1;
+    for (let dy = 0; dy < h; dy += 1) {
+      for (let dx = 0; dx < w; dx += 1) {
+        keys.add(`${sx + dx},${sy + dy}`);
+      }
+    }
+  }
+  return keys;
+}
+
 const NATURE_SIGHT_OVERLAY_OPTIONS = [
   'calorie_heatmap',
   'animal_density',
@@ -128,6 +227,7 @@ const CAMP_STATION_OPTIONS = [
   'thread_spinner',
 ];
 const EQUIPMENT_SLOTS = ['gloves', 'coat', 'head'];
+const DEFAULT_MANUAL_TEST_BOOTSTRAP = defaultManualTestBootstrapOptions();
 
 function tileKey(x, y) {
   if (!Number.isInteger(x) || !Number.isInteger(y)) {
@@ -141,7 +241,7 @@ function inferTileContextActions(tile) {
     return ['inspect', 'move'];
   }
 
-  const actions = ['inspect', 'move', 'item_drop', 'item_pickup'];
+  const actions = ['inspect', 'move', 'item_drop', 'item_pickup', 'marker_place', 'marker_remove'];
   if (tile.plantIds?.length > 0 || tile.rockType || tile.squirrelCache) {
     actions.push('harvest');
   }
@@ -149,7 +249,7 @@ function inferTileContextActions(tile) {
     actions.push('fell_tree');
   }
   if (tile.waterType) {
-    actions.push('waterskin_fill', 'fish_rod_cast', 'trap_place_fish_weir');
+    actions.push('water_drink', 'waterskin_fill', 'fish_rod_cast', 'trap_place_fish_weir');
   } else {
     actions.push(
       'dig',
@@ -166,6 +266,162 @@ function inferTileContextActions(tile) {
     );
   }
   return actions;
+}
+
+function resolveCraftTagsForItemInApp(itemId) {
+  const item = ITEM_BY_ID[itemId];
+  if (item && Array.isArray(item.craft_tags)) {
+    return item.craft_tags;
+  }
+
+  if (typeof itemId === 'string' && itemId.includes(':')) {
+    const parts = itemId.split(':');
+    if (parts.length === 3) {
+      const [speciesId, partName, subStageId] = parts;
+      const species = PLANT_BY_ID[speciesId];
+      const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+      const subStage = (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+      if (Array.isArray(subStage?.craft_tags)) {
+        return subStage.craft_tags;
+      }
+    }
+    if (parts.length >= 2) {
+      const [speciesId, partId] = parts;
+      const species = ANIMAL_CATALOG.find((entry) => entry?.id === speciesId) || null;
+      const animalPart = (species?.parts || []).find((entry) => entry?.id === partId) || null;
+      if (Array.isArray(animalPart?.craft_tags)) {
+        return animalPart.craft_tags;
+      }
+    }
+  }
+
+  return [];
+}
+
+function resolveProcessOptionsForItemInApp(itemId) {
+  const options = [];
+  if (typeof itemId !== 'string' || !itemId) {
+    return options;
+  }
+
+  if (itemId.includes(':')) {
+    const [speciesId, partName, subStageId] = itemId.split(':');
+    if (speciesId && partName && subStageId) {
+      const species = PLANT_BY_ID[speciesId];
+      const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+      const subStage = (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+      for (const option of subStage?.processing_options || []) {
+        if (option?.id) {
+          options.push({
+            processId: option.id,
+            location: option.location || 'hand',
+          });
+        }
+      }
+    } else if (speciesId && partName) {
+      const animal = ANIMAL_CATALOG.find((entry) => entry?.id === speciesId) || null;
+      const animalPart = (animal?.parts || []).find((entry) => entry?.id === partName) || null;
+      for (const option of animalPart?.processing_options || []) {
+        if (option?.id) {
+          options.push({
+            processId: option.id,
+            location: option.location || 'hand',
+          });
+        }
+      }
+      if (partName === 'carcass' || partName === 'fish_carcass') {
+        options.push({ processId: 'butcher', location: 'hand' });
+      }
+    }
+  }
+
+  const craftTags = resolveCraftTagsForItemInApp(itemId);
+  if (craftTags.includes('cordage_fiber')) {
+    options.push({ processId: 'spin_cordage', location: 'thread_spinner' });
+    options.push({ processId: 'spin_cordage', location: 'hand' });
+  }
+  if (craftTags.includes('inner_bark_cloth')) {
+    options.push({ processId: 'make_barkcloth', location: 'hand' });
+    options.push({ processId: 'pound_barkcloth', location: 'hand' });
+  }
+  if (itemId === SAP_FILLED_VESSEL_ITEM_ID || itemId === 'hide_pitch_vessel:sap_filled') {
+    options.push({ processId: 'boil_sap', location: 'sugar_boiling_station' });
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const option of options) {
+    const key = `${option.processId}:${option.location}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(option);
+  }
+  return deduped;
+}
+
+function canDryItemInApp(itemId) {
+  if (typeof itemId !== 'string' || !itemId) {
+    return false;
+  }
+  const item = ITEM_BY_ID[itemId];
+  if (item && item.can_dry === true) {
+    return true;
+  }
+  if (!itemId.includes(':')) {
+    return false;
+  }
+  const parts = itemId.split(':');
+  if (parts.length === 3) {
+    const [speciesId, partName, subStageId] = parts;
+    const species = PLANT_BY_ID[speciesId];
+    const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+    const subStage = (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+    return subStage?.can_dry === true;
+  }
+  if (parts.length >= 2) {
+    const [speciesId, partId] = parts;
+    const species = ANIMAL_CATALOG.find((entry) => entry?.id === speciesId) || null;
+    const part = (species?.parts || []).find((entry) => entry?.id === partId) || null;
+    return part?.can_dry === true;
+  }
+  return false;
+}
+
+function getStationIdAtTile(camp, x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !camp?.stationPlacements || typeof camp.stationPlacements !== 'object') {
+    return null;
+  }
+  for (const [stationId, placement] of Object.entries(camp.stationPlacements)) {
+    if (Number.isInteger(placement?.x) && Number.isInteger(placement?.y) && placement.x === x && placement.y === y) {
+      return stationId;
+    }
+  }
+  return null;
+}
+
+function isPlayerAdjacentToStation(camp, player, stationId) {
+  if (!stationId || !camp?.stationPlacements || typeof camp.stationPlacements !== 'object') {
+    return false;
+  }
+  const placement = camp.stationPlacements[stationId];
+  const px = Number(player?.x);
+  const py = Number(player?.y);
+  if (!Number.isInteger(placement?.x) || !Number.isInteger(placement?.y) || !Number.isInteger(px) || !Number.isInteger(py)) {
+    return false;
+  }
+  return Math.abs(px - placement.x) <= 1 && Math.abs(py - placement.y) <= 1;
+}
+
+function stationActionLabel(stationId) {
+  if (stationId === 'thread_spinner') return 'Spin Thread...';
+  if (stationId === 'mortar_pestle') return 'Grind Item...';
+  if (stationId === 'sugar_boiling_station') return 'Boil Sap...';
+  if (stationId === 'hide_frame') return 'Scrape/Dry Item...';
+  if (stationId === 'workbench') return 'Workbench Process...';
+  if (stationId === 'drying_rack') return 'Dry Item...';
+  return `Use ${formatTokenLabel(stationId)}...`;
 }
 
 function buildDefaultPayload(kind, context) {
@@ -213,6 +469,8 @@ function buildDefaultPayload(kind, context) {
     case 'trap_place_fish_weir':
     case 'auto_rod_place':
     case 'trap_check':
+    case 'marker_place':
+    case 'marker_remove':
     case 'tap_insert_spout':
     case 'tap_remove_spout':
     case 'tap_place_vessel':
@@ -239,6 +497,8 @@ function buildDefaultPayload(kind, context) {
     case 'waterskin_fill':
     case 'waterskin_drink':
       return {};
+    case 'water_drink':
+      return sharedTilePayload;
     case 'leaching_basket_place':
       return {
         ...sharedTilePayload,
@@ -251,7 +511,24 @@ function buildDefaultPayload(kind, context) {
         itemId: selectedWorldItemId,
         quantity: selectedWorldItemQuantity,
       };
-    case 'item_drop':
+    case 'item_drop': {
+      const playerDropX = Number.isInteger(player?.x) ? player.x : null;
+      const playerDropY = Number.isInteger(player?.y) ? player.y : null;
+      const selectedAdjacent = Number.isInteger(selectedX) && Number.isInteger(selectedY)
+        && Number.isInteger(playerDropX) && Number.isInteger(playerDropY)
+        && Math.abs(selectedX - playerDropX) <= 1
+        && Math.abs(selectedY - playerDropY) <= 1;
+      const dropTile = selectedAdjacent
+        ? { x: selectedX, y: selectedY }
+        : (Number.isInteger(playerDropX) && Number.isInteger(playerDropY)
+          ? { x: playerDropX, y: playerDropY }
+          : {});
+      return {
+        itemId: selectedInventoryItemId,
+        quantity: selectedInventoryQuantity,
+        ...dropTile,
+      };
+    }
     case 'camp_stockpile_add':
     case 'camp_drying_rack_add_inventory':
       return {
@@ -328,6 +605,12 @@ function buildDefaultPayload(kind, context) {
       return selectedVisionCategory ? { category: selectedVisionCategory } : {};
     case 'nature_sight_overlay_set':
       return { overlay: selectedOverlay };
+    case 'inventory_relocate_stack':
+      return {
+        stackIndex: Number.isInteger(context?.stackIndex) ? context.stackIndex : -1,
+        slotX: Number.isInteger(context?.slotX) ? context.slotX : 0,
+        slotY: Number.isInteger(context?.slotY) ? context.slotY : 0,
+      };
     default:
       return {};
   }
@@ -367,6 +650,7 @@ function buildTileEntityTokens(tile, context = {}) {
   const {
     isPlayerTile = false,
     isCampTile = false,
+    stationAtTile = null,
     worldItems = [],
     camp = null,
   } = context;
@@ -379,9 +663,9 @@ function buildTileEntityTokens(tile, context = {}) {
     if (camp?.dryingRackUnlocked) {
       tokens.push('[drying rack]');
     }
-    if (Array.isArray(camp?.stationsUnlocked) && camp.stationsUnlocked.length > 0) {
-      tokens.push('[camp station]');
-    }
+  }
+  if (typeof stationAtTile === 'string' && stationAtTile) {
+    tokens.push(`[${formatTokenLabel(stationAtTile)}]`);
   }
 
   if (tile?.simpleSnare?.active) {
@@ -836,32 +1120,6 @@ function playTileTooltip(tile, plant = null) {
   return parts.join(' | ');
 }
 
-function resolvePlantPartSpriteFrame(itemId) {
-  const descriptor = parsePlantPartItemId(itemId);
-  if (!descriptor) {
-    return null;
-  }
-  const species = descriptor.species;
-  const lifeStageKeys = Object.keys(species?.lifeStages?.reduce((acc, entry) => ({ ...acc, [entry.stage]: true }), {}) || {});
-  const subStageId = descriptor.subStageId || '';
-  let preferredStage = null;
-  if (subStageId.startsWith('first_year')) {
-    preferredStage = 'first_year_vegetative';
-  } else if (subStageId.startsWith('second_year')) {
-    preferredStage = 'second_year_vegetative';
-  } else if (subStageId === 'green') {
-    preferredStage = 'first_year_vegetative';
-  } else if (subStageId === 'fresh') {
-    preferredStage = 'second_year_flowering';
-  } else if (subStageId === 'dry') {
-    preferredStage = 'second_year_seed_set';
-  }
-  if (!preferredStage || !lifeStageKeys.includes(preferredStage)) {
-    preferredStage = lifeStageKeys[0] || null;
-  }
-  return preferredStage ? getPlantSpriteFrame(descriptor.speciesId, preferredStage) : null;
-}
-
 function spriteStyle(sprite, tilePx, scaleMode = 'fit') {
   const atlasScale = scaleMode === 'native' ? 1 : tilePx / sprite.frame.w;
   const x = sprite.frame.x * atlasScale;
@@ -921,6 +1179,57 @@ function elevationToIsoOffsetPx(elevation) {
   return normalized * ISO_MAX_ELEVATION_OFFSET_PX;
 }
 
+function resolveStationProcessTickCost(gameState, entry, quantity) {
+  if (!entry) {
+    return null;
+  }
+  const qty = Math.max(1, Math.min(Number(entry.maxQuantity) || 1, Math.floor(Number(quantity) || 1)));
+  if (entry.actionKind === 'camp_drying_rack_add' || entry.actionKind === 'camp_drying_rack_add_inventory') {
+    const payload = { itemId: entry.itemId, quantity: qty };
+    const validation = validateAction(gameState, { actorId: 'player', kind: entry.actionKind, payload });
+    if (!validation.ok) {
+      return null;
+    }
+    return Number(validation.normalizedAction?.tickCost) || getActionTickCost(entry.actionKind, payload);
+  }
+  if (entry.source === 'stockpile') {
+    const fakeInventoryState = {
+      ...gameState,
+      actors: {
+        ...(gameState?.actors || {}),
+        player: {
+          ...(gameState?.actors?.player || {}),
+          inventory: {
+            ...(gameState?.actors?.player?.inventory || {}),
+            stacks: [
+              ...(gameState?.actors?.player?.inventory?.stacks || []),
+              { itemId: entry.itemId, quantity: qty },
+            ],
+          },
+        },
+      },
+    };
+    const processValidation = validateAction(fakeInventoryState, {
+      actorId: 'player',
+      kind: 'process_item',
+      payload: { itemId: entry.itemId, processId: entry.processId, quantity: qty },
+    });
+    if (!processValidation.ok) {
+      return null;
+    }
+    return Number(processValidation.normalizedAction?.tickCost) || getActionTickCost('process_item', processValidation.normalizedAction?.payload || {});
+  }
+  const processValidation = validateAction(gameState, {
+    actorId: 'player',
+    kind: 'process_item',
+    payload: { itemId: entry.itemId, processId: entry.processId, quantity: qty },
+  });
+  if (!processValidation.ok) {
+    return null;
+  }
+  return Number(processValidation.normalizedAction?.tickCost) || getActionTickCost('process_item', processValidation.normalizedAction?.payload || {});
+}
+
 function applyAutoUnlockGenerations(state) {
   let nextState = state;
 
@@ -947,7 +1256,13 @@ function App() {
   const [seedInput, setSeedInput] = useState('10000');
   const [mapWidthInput, setMapWidthInput] = useState('80');
   const [mapHeightInput, setMapHeightInput] = useState('80');
-  const [preSimDaysInput, setPreSimDaysInput] = useState('0');
+  const [preSimDaysInput, setPreSimDaysInput] = useState('400');
+  const [enableManualTestBootstrap, setEnableManualTestBootstrap] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.enabled);
+  const [seedAllResearch, setSeedAllResearch] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedAllResearch);
+  const [seedAllStations, setSeedAllStations] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedAllStations);
+  const [seedToolSet, setSeedToolSet] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedToolSet);
+  const [seedStationBuildMaterials, setSeedStationBuildMaterials] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedStationBuildMaterials);
+  const [seedCraftingProcessInputs, setSeedCraftingProcessInputs] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedCraftingProcessInputs);
   const [gameState, setGameState] = useState(() => applyAutoUnlockGenerations(createInitialGameState(10000, { width: 80, height: 80 })));
   const [cameraX, setCameraX] = useState(32);
   const [cameraY, setCameraY] = useState(35);
@@ -979,13 +1294,17 @@ function App() {
   const [dismissedWarningIds, setDismissedWarningIds] = useState([]);
   const [actionComposerStatus, setActionComposerStatus] = useState('');
   const [playActionFeed, setPlayActionFeed] = useState([]);
-  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
+  const [selectedInventoryStackIndex, setSelectedInventoryStackIndex] = useState(null);
   const [selectedStockpileItemId, setSelectedStockpileItemId] = useState('');
   const [selectedWorldItemId, setSelectedWorldItemId] = useState('');
   const [selectedConditionInstanceId, setSelectedConditionInstanceId] = useState('');
   const [selectedVisionItemId, setSelectedVisionItemId] = useState('');
   const [selectedVisionCategory, setSelectedVisionCategory] = useState('');
   const [selectedNatureOverlay, setSelectedNatureOverlay] = useState(NATURE_SIGHT_OVERLAY_OPTIONS[0]);
+  const [stationProcessPanel, setStationProcessPanel] = useState(null);
+  const [stationProcessQuantity, setStationProcessQuantity] = useState(1);
+  const [dryingRackInspectOpen, setDryingRackInspectOpen] = useState(false);
+  const [techForestOverlayOpen, setTechForestOverlayOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1071,9 +1390,7 @@ function App() {
   const visionUsesThisSeason = Number.isInteger(debriefState?.visionUsesThisSeason) ? debriefState.visionUsesThisSeason : 0;
   const isDebriefActive = debriefState.active === true;
   const playerActor = gameState?.actors?.player || null;
-  const playerAtCamp = playerActor
-    && Number(playerActor.x) === Number(gameState?.camp?.anchorX)
-    && Number(playerActor.y) === Number(gameState?.camp?.anchorY);
+  const playerAtCamp = isActorWithinCampFootprint(gameState, playerActor);
   const playerNatureSightDays = Number.isInteger(playerActor?.natureSightDaysRemaining)
     ? playerActor.natureSightDaysRemaining
     : Math.max(0, Math.floor(Number(playerActor?.natureSightDaysRemaining) || 0));
@@ -1084,32 +1401,21 @@ function App() {
     () => (Array.isArray(playerActor?.inventory?.stacks) ? playerActor.inventory.stacks : []),
     [playerActor?.inventory?.stacks],
   );
+  const playerInventoryForGrid = useMemo(() => ({
+    gridWidth: Number.isInteger(playerActor?.inventory?.gridWidth)
+      ? playerActor.inventory.gridWidth
+      : 6,
+    gridHeight: Number.isInteger(playerActor?.inventory?.gridHeight)
+      ? playerActor.inventory.gridHeight
+      : 4,
+    stacks: playerInventoryStacks,
+  }), [
+    playerActor?.inventory?.gridWidth,
+    playerActor?.inventory?.gridHeight,
+    playerInventoryStacks,
+  ]);
   const playerInventoryEntries = useMemo(
-    () => playerInventoryStacks.map((entry, idx) => {
-      const item = ITEM_BY_ID[entry.itemId] || null;
-      const plantPartDescriptor = parsePlantPartItemId(entry.itemId);
-      const quantity = Math.max(0, Number(entry.quantity) || 0);
-      const unitWeightKg = Number.isFinite(Number(entry?.unitWeightKg))
-        ? Number(entry.unitWeightKg)
-        : Number.isFinite(Number(item?.unit_weight_g))
-          ? (Number(item.unit_weight_g) / 1000)
-          : Number.isFinite(Number(plantPartDescriptor?.subStage?.unit_weight_g))
-            ? (Number(plantPartDescriptor.subStage.unit_weight_g) / 1000)
-            : 0;
-      const totalWeightKg = unitWeightKg * quantity;
-      const sprite = resolvePlantPartSpriteFrame(entry.itemId);
-      return {
-        key: `${entry.itemId}-${idx}`,
-        itemId: entry.itemId,
-        name: item?.name
-          || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : entry.itemId),
-        quantity,
-        unitWeightKg,
-        totalWeightKg,
-        decayDays: Number.isFinite(Number(item?.decay_days)) ? Number(item.decay_days) : null,
-        spriteStyle: sprite ? spriteStyle(sprite, 22, 'native') : null,
-      };
-    }),
+    () => playerInventoryStacks.map((entry, idx) => buildPlayerInventoryGridEntry(entry, idx)),
     [playerInventoryStacks],
   );
   const playerCarryWeightKg = useMemo(
@@ -1124,27 +1430,93 @@ function App() {
     [gameState?.camp?.stockpile?.stacks],
   );
   const campStockpileEntries = useMemo(
-    () => campStockpileStacks.map((entry, idx) => {
-      const item = ITEM_BY_ID[entry.itemId] || null;
-      const plantPartDescriptor = parsePlantPartItemId(entry.itemId);
-      const sprite = resolvePlantPartSpriteFrame(entry.itemId);
-      return {
-        key: `${entry.itemId}-${idx}`,
-        itemId: entry.itemId,
-        name: item?.name
-          || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : entry.itemId),
-        quantity: Math.max(0, Number(entry.quantity) || 0),
-        decayDaysRemaining: Number.isFinite(Number(entry?.decayDaysRemaining))
-          ? Number(entry.decayDaysRemaining)
-          : null,
-        freshness: Number.isFinite(Number(entry?.freshness))
-          ? Number(entry.freshness)
-          : null,
-        spriteStyle: sprite ? spriteStyle(sprite, 22, 'native') : null,
-      };
-    }),
+    () => campStockpileStacks.map((entry, idx) => buildStockpileGridEntry(entry, idx)),
     [campStockpileStacks],
   );
+
+  const mealCandidatesInventoryEntries = playerInventoryEntries;
+  const mealCandidatesStockpileEntries = campStockpileEntries;
+
+  const setMealPlanIngredients = useCallback((nextIngredients) => {
+    const ingredients = Array.isArray(nextIngredients) ? nextIngredients : [];
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+      actions: [
+        {
+          actionId: `ui-meal-plan-set-${Date.now()}`,
+          actorId: 'player',
+          kind: 'meal_plan_set',
+          payload: { ingredients },
+        },
+      ],
+    })));
+  }, []);
+
+  const addMealIngredientFromStockpile = useCallback((itemId, quantity = 1) => {
+    const id = typeof itemId === 'string' ? itemId : '';
+    if (!id) return;
+    const addQty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const current = Array.isArray(gameState?.camp?.mealPlan?.ingredients) ? gameState.camp.mealPlan.ingredients : [];
+    const map = new Map();
+    for (const entry of current) {
+      const k = typeof entry?.itemId === 'string' ? entry.itemId : '';
+      const q = Math.max(0, Math.floor(Number(entry?.quantity) || 0));
+      if (!k || q <= 0) continue;
+      map.set(k, (map.get(k) || 0) + q);
+    }
+    map.set(id, (map.get(id) || 0) + addQty);
+    setMealPlanIngredients(Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q })));
+  }, [gameState?.camp?.mealPlan?.ingredients, setMealPlanIngredients]);
+
+  const removeMealIngredient = useCallback((itemId, quantity = 1) => {
+    const id = typeof itemId === 'string' ? itemId : '';
+    if (!id) return;
+    const remQty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const current = Array.isArray(gameState?.camp?.mealPlan?.ingredients) ? gameState.camp.mealPlan.ingredients : [];
+    const map = new Map();
+    for (const entry of current) {
+      const k = typeof entry?.itemId === 'string' ? entry.itemId : '';
+      const q = Math.max(0, Math.floor(Number(entry?.quantity) || 0));
+      if (!k || q <= 0) continue;
+      map.set(k, (map.get(k) || 0) + q);
+    }
+    const next = Math.max(0, (map.get(id) || 0) - remQty);
+    if (next <= 0) map.delete(id);
+    else map.set(id, next);
+    setMealPlanIngredients(Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q })));
+  }, [gameState?.camp?.mealPlan?.ingredients, setMealPlanIngredients]);
+
+  const addMealIngredientFromInventory = useCallback((itemId, quantity = 1) => {
+    const id = typeof itemId === 'string' ? itemId : '';
+    if (!id) return;
+    const addQty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const current = Array.isArray(gameState?.camp?.mealPlan?.ingredients) ? gameState.camp.mealPlan.ingredients : [];
+    const map = new Map();
+    for (const entry of current) {
+      const k = typeof entry?.itemId === 'string' ? entry.itemId : '';
+      const q = Math.max(0, Math.floor(Number(entry?.quantity) || 0));
+      if (!k || q <= 0) continue;
+      map.set(k, (map.get(k) || 0) + q);
+    }
+    map.set(id, (map.get(id) || 0) + addQty);
+    const nextIngredients = Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q }));
+
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+      actions: [
+        {
+          actionId: `a-ui-stockpile-add-${Date.now()}`,
+          actorId: 'player',
+          kind: 'camp_stockpile_add',
+          payload: { itemId: id, quantity: addQty },
+        },
+        {
+          actionId: `b-ui-meal-plan-set-${Date.now()}`,
+          actorId: 'player',
+          kind: 'meal_plan_set',
+          payload: { ingredients: nextIngredients },
+        },
+      ],
+    })));
+  }, [gameState?.camp?.mealPlan?.ingredients]);
   const debriefSpoilageEntries = useMemo(
     () => campStockpileEntries
       .filter((entry) => Number.isFinite(entry.decayDaysRemaining) && entry.decayDaysRemaining <= 1.5)
@@ -1178,6 +1550,8 @@ function App() {
     () => (Array.isArray(gameState?.camp?.dryingRack?.slots) ? gameState.camp.dryingRack.slots : []),
     [gameState?.camp?.dryingRack?.slots],
   );
+  const campHasDryingRackStation = Array.isArray(gameState?.camp?.stationsUnlocked)
+    && gameState.camp.stationsUnlocked.includes('drying_rack');
   const visionSelectionOptions = useMemo(
     () => (Array.isArray(debriefState?.visionSelectionOptions) ? debriefState.visionSelectionOptions : []),
     [debriefState?.visionSelectionOptions],
@@ -1197,25 +1571,31 @@ function App() {
     return key && Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
   }, [gameState, selectedTileX, selectedTileY]);
   const selectedTileWorldItemEntries = useMemo(
-    () => selectedTileWorldItems.map((entry, idx) => {
-      const item = ITEM_BY_ID[entry.itemId] || null;
-      const plantPartDescriptor = parsePlantPartItemId(entry.itemId);
-      const sprite = resolvePlantPartSpriteFrame(entry.itemId);
-      return {
-        key: `${entry.itemId}-${idx}`,
-        itemId: entry.itemId,
-        name: item?.name
-          || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : entry.itemId),
-        quantity: Math.max(0, Number(entry.quantity) || 0),
-        spriteStyle: sprite ? spriteStyle(sprite, 22, 'native') : null,
-      };
-    }),
+    () => selectedTileWorldItems.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
     [selectedTileWorldItems],
   );
+  const selectedInventoryItemId = useMemo(() => {
+    if (!Number.isInteger(selectedInventoryStackIndex) || selectedInventoryStackIndex < 0) {
+      return '';
+    }
+    const s = playerInventoryStacks[selectedInventoryStackIndex];
+    return typeof s?.itemId === 'string' ? s.itemId : '';
+  }, [playerInventoryStacks, selectedInventoryStackIndex]);
+
   const selectedInventoryQuantity = useMemo(() => {
-    const selectedEntry = playerInventoryEntries.find((entry) => entry.itemId === selectedInventoryItemId);
-    return selectedEntry ? Math.max(1, Number(selectedEntry.quantity) || 1) : 1;
-  }, [playerInventoryEntries, selectedInventoryItemId]);
+    if (!Number.isInteger(selectedInventoryStackIndex) || selectedInventoryStackIndex < 0) {
+      return 1;
+    }
+    const s = playerInventoryStacks[selectedInventoryStackIndex];
+    return Math.max(1, Math.floor(Number(s?.quantity) || 1));
+  }, [playerInventoryStacks, selectedInventoryStackIndex]);
+
+  const selectedInventoryEntry = useMemo(() => {
+    if (!Number.isInteger(selectedInventoryStackIndex) || selectedInventoryStackIndex < 0) {
+      return null;
+    }
+    return playerInventoryEntries[selectedInventoryStackIndex] || null;
+  }, [playerInventoryEntries, selectedInventoryStackIndex]);
   const selectedStockpileQuantity = useMemo(() => {
     const selectedEntry = campStockpileEntries.find((entry) => entry.itemId === selectedStockpileItemId);
     return selectedEntry ? Math.max(1, Number(selectedEntry.quantity) || 1) : 1;
@@ -1224,7 +1604,64 @@ function App() {
     const selectedEntry = selectedTileWorldItemEntries.find((entry) => entry.itemId === selectedWorldItemId);
     return selectedEntry ? Math.max(1, Number(selectedEntry.quantity) || 1) : 1;
   }, [selectedTileWorldItemEntries, selectedWorldItemId]);
-  const inventoryQuickActionsByItemId = useMemo(() => {
+
+  const selectedStockpileWithdrawUi = useMemo(() => {
+    if (!playerActor || !selectedStockpileItemId) {
+      return { disabled: false, reason: null };
+    }
+    const pq = Math.max(1, selectedStockpileQuantity);
+    const raw = getCampStockpileStackForWithdrawPreview(gameState, selectedStockpileItemId, pq);
+    if (!raw) {
+      return { disabled: false, reason: null };
+    }
+    const available = Math.max(0, Math.floor(Number(raw.quantity) || 0));
+    const qty = Math.min(pq, Math.max(1, available));
+    const options = pickupAddOptionsFromWorldStack(raw);
+    const reason = getItemPickupInventoryBlockReason(playerActor, selectedStockpileItemId, qty, options);
+    return {
+      disabled: reason != null,
+      reason,
+    };
+  }, [
+    gameState,
+    playerActor,
+    selectedStockpileItemId,
+    selectedStockpileQuantity,
+  ]);
+
+  const selectedWorldItemPickupUi = useMemo(() => {
+    if (
+      !playerActor
+      || !selectedWorldItemId
+      || !Number.isInteger(selectedTileX)
+      || !Number.isInteger(selectedTileY)
+    ) {
+      return { disabled: false, reason: null };
+    }
+    const key = tileKey(selectedTileX, selectedTileY);
+    const stacks = Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
+    const raw = stacks.find((s) => s?.itemId === selectedWorldItemId) || null;
+    if (!raw) {
+      return { disabled: false, reason: null };
+    }
+    const available = Math.max(0, Math.floor(Number(raw.quantity) || 0));
+    const qty = Math.min(Math.max(1, selectedWorldItemQuantity), Math.max(1, available));
+    const options = pickupAddOptionsFromWorldStack(raw);
+    const reason = getItemPickupInventoryBlockReason(playerActor, selectedWorldItemId, qty, options);
+    return {
+      disabled: reason != null,
+      reason,
+    };
+  }, [
+    gameState,
+    playerActor,
+    selectedTileX,
+    selectedTileY,
+    selectedWorldItemId,
+    selectedWorldItemQuantity,
+  ]);
+
+  const inventoryQuickActionsByStackIndex = useMemo(() => {
     const actionKinds = ['eat', 'item_drop', 'equip_item', 'camp_stockpile_add', 'camp_drying_rack_add_inventory'];
     const labelByKind = {
       eat: 'Eat',
@@ -1233,7 +1670,7 @@ function App() {
       camp_stockpile_add: 'Move to Stockpile',
       camp_drying_rack_add_inventory: 'Move to Drying Rack',
     };
-    return playerInventoryEntries.reduce((acc, itemEntry) => {
+    return playerInventoryEntries.map((itemEntry, stackIndex) => {
       const baseContext = {
         selectedX: selectedTileX,
         selectedY: selectedTileY,
@@ -1250,24 +1687,78 @@ function App() {
         selectedVisionCategory,
         selectedNatureOverlay,
       };
-      acc[itemEntry.itemId] = actionKinds
+      const actions = actionKinds
         .map((kind) => {
+          if (kind === 'camp_drying_rack_add_inventory' && !canDryItemInApp(itemEntry.itemId)) {
+            return null;
+          }
           const payload = buildDefaultPayload(kind, baseContext);
           const validation = validateAction(gameState, { actorId: 'player', kind, payload });
           if (!validation.ok) {
             return null;
           }
-          return {
+          const tickCost = Number(validation.normalizedAction?.tickCost) || getActionTickCost(kind, payload);
+          return annotateContextEntryTickBudget({
             kind,
             label: labelByKind[kind] || kind.replace(/_/g, ' '),
             payload,
-          };
+            tickCost,
+          }, playerActor);
         })
         .filter(Boolean);
-      return acc;
-    }, {});
+      const processOptions = resolveProcessOptionsForItemInApp(itemEntry.itemId);
+      const stationsAdded = new Set();
+      for (const option of processOptions) {
+        const stationId = option.location;
+        if (!stationId || stationId === 'hand' || stationId === 'camp' || stationsAdded.has(stationId)) {
+          continue;
+        }
+        const stationBuilt = Array.isArray(gameState?.camp?.stationsUnlocked)
+          && gameState.camp.stationsUnlocked.includes(stationId);
+        if (!stationBuilt || !isPlayerAdjacentToStation(gameState?.camp, playerActor, stationId)) {
+          continue;
+        }
+        stationsAdded.add(stationId);
+        actions.push(annotateContextEntryTickBudget({
+          kind: 'open_station_process_quantity',
+          label: stationActionLabel(stationId),
+          payload: {
+            stationId,
+            itemId: itemEntry.itemId,
+            source: 'inventory',
+          },
+          tickCost: 0,
+        }, playerActor));
+      }
+      const handProcessAdded = new Set();
+      for (const option of processOptions) {
+        if (option.location !== 'hand' || !option.processId) {
+          continue;
+        }
+        const handKey = `${option.processId}:${option.location}`;
+        if (handProcessAdded.has(handKey)) {
+          continue;
+        }
+        const payload = { itemId: itemEntry.itemId, quantity: 1, processId: option.processId };
+        if (option.processId === 'spin_cordage' && option.location === 'hand') {
+          payload.processLocation = 'hand';
+        }
+        const validation = validateAction(gameState, { actorId: 'player', kind: 'process_item', payload });
+        if (!validation.ok) {
+          continue;
+        }
+        handProcessAdded.add(handKey);
+        const tickCost = Number(validation.normalizedAction?.tickCost) || getActionTickCost('process_item', payload);
+        actions.push(annotateContextEntryTickBudget({
+          kind: 'process_item',
+          label: formatTokenLabel(option.processId),
+          payload,
+          tickCost,
+        }, playerActor));
+      }
+      return actions;
+    });
   }, [
-    campStockpileEntries,
     gameState,
     playerActor,
     playerInventoryEntries,
@@ -1289,7 +1780,8 @@ function App() {
       camp_stockpile_remove: 'Withdraw',
       camp_drying_rack_add: 'Move to Drying Rack',
     };
-    return campStockpileEntries.reduce((acc, itemEntry) => {
+    return campStockpileEntries.reduce((acc, itemEntry, entryIdx) => {
+      const rawStack = campStockpileStacks[entryIdx] || null;
       const baseContext = {
         selectedX: selectedTileX,
         selectedY: selectedTileY,
@@ -1308,22 +1800,45 @@ function App() {
       };
       acc[itemEntry.itemId] = actionKinds
         .map((kind) => {
+          if (kind === 'camp_drying_rack_add' && !canDryItemInApp(itemEntry.itemId)) {
+            return null;
+          }
           const payload = buildDefaultPayload(kind, baseContext);
           const validation = validateAction(gameState, { actorId: 'player', kind, payload });
           if (!validation.ok) {
             return null;
           }
-          return {
+          let disabled = false;
+          let disabledReason = null;
+          if (kind === 'camp_stockpile_remove' && rawStack) {
+            const withdrawQty = Math.max(
+              1,
+              Math.floor(Number(validation.normalizedAction?.payload?.quantity) || 1),
+            );
+            const options = pickupAddOptionsFromWorldStack(rawStack);
+            disabledReason = getItemPickupInventoryBlockReason(
+              playerActor,
+              itemEntry.itemId,
+              withdrawQty,
+              options,
+            );
+            disabled = disabledReason != null;
+          }
+          const tickCost = Number(validation.normalizedAction?.tickCost) || getActionTickCost(kind, payload);
+          return annotateContextEntryTickBudget({
             kind,
             label: labelByKind[kind] || kind.replace(/_/g, ' '),
             payload,
-          };
+            tickCost,
+            ...(disabled ? { disabled: true, disabledReason } : {}),
+          }, playerActor);
         })
         .filter(Boolean);
       return acc;
     }, {});
   }, [
     campStockpileEntries,
+    campStockpileStacks,
     gameState,
     playerActor,
     selectedConditionInstanceId,
@@ -1339,139 +1854,280 @@ function App() {
     selectedWorldItemQuantity,
   ]);
   const availableContextActionEntries = useMemo(() => {
-    if (!selectedTileEntity || selectedTileX === null || selectedTileY === null) {
-      return [];
-    }
-    const entries = [];
-    const baseContext = {
-      selectedX: selectedTileX,
-      selectedY: selectedTileY,
-      tile: selectedTileEntity,
-      player: playerActor,
-      selectedInventoryItemId,
-      selectedInventoryQuantity,
-      selectedStockpileItemId,
-      selectedStockpileQuantity,
-      selectedWorldItemId,
-      selectedWorldItemQuantity,
-      selectedConditionInstanceId,
-      selectedVisionItemId,
-      selectedVisionCategory,
-      selectedNatureOverlay,
-    };
-
-    // Expand harvest: one entry per activeSubStage per plant on the tile
-    for (const plantId of (selectedTileEntity.plantIds || [])) {
-      const plant = gameState.plants?.[plantId];
-      if (!plant?.alive || !Array.isArray(plant.activeSubStages)) continue;
-      for (const sub of plant.activeSubStages) {
-        const payload = {
-          plantId,
-          partName: sub.partName,
-          subStageId: sub.subStageId,
-          actions: 1,
-          x: selectedTileX,
-          y: selectedTileY,
-        };
-        const v = validateAction(gameState, { actorId: 'player', kind: 'harvest', payload });
-        if (v.ok) {
-          entries.push({
-            kind: 'harvest',
-            label: `Harvest ${sub.partName} (${sub.subStageId})`,
-            tickCost: Number(v?.normalizedAction?.tickCost) || getActionTickCost('harvest', payload),
-            payload,
-          });
-        }
-      }
-    }
-
-    // Add tile-based harvest entries for non-plant harvest targets (cache/rock).
-    const tileHarvestPayload = { x: selectedTileX, y: selectedTileY };
-    const tileHarvestValidation = validateAction(gameState, { actorId: 'player', kind: 'harvest', payload: tileHarvestPayload });
-    if (tileHarvestValidation.ok) {
-      const targetType = tileHarvestValidation?.normalizedAction?.payload?.targetType;
-      if (targetType === 'squirrel_cache' || targetType === 'rock' || targetType === 'log_fungus') {
-        const fungusSpeciesId = tileHarvestValidation?.normalizedAction?.payload?.speciesId;
-        entries.push({
-          kind: 'harvest',
-          label: targetType === 'squirrel_cache'
-            ? 'Harvest squirrel cache'
-            : targetType === 'log_fungus'
-              ? `Harvest ${formatTokenLabel(fungusSpeciesId || 'log fungus')}`
-              : 'Harvest rock',
-          tickCost: Number(tileHarvestValidation?.normalizedAction?.tickCost) || getActionTickCost('harvest', tileHarvestPayload),
-          payload: tileHarvestPayload,
-        });
-      }
-    }
-
-    // Expand item_pickup: one entry per world item on tile
-    for (const item of selectedTileWorldItemEntries) {
-      const payload = { x: selectedTileX, y: selectedTileY, itemId: item.itemId, quantity: 1 };
-      const v = validateAction(gameState, { actorId: 'player', kind: 'item_pickup', payload });
-      if (v.ok) {
-        entries.push({
-          kind: 'item_pickup',
-          label: `Pick Up ${item.name}`,
-          tickCost: getActionTickCost('item_pickup', payload),
-          payload,
-        });
-      }
-    }
-
-    // All other context actions (not move, not harvest, not item_pickup — those are handled above)
-    const hasInspectablePlant = Array.isArray(selectedTileEntity?.plantIds) && selectedTileEntity.plantIds.some((plantId) => {
-      const plant = gameState?.plants?.[plantId];
-      if (!plant || plant.alive !== true || !Array.isArray(plant.activeSubStages)) {
-        return false;
-      }
-      const species = PLANT_BY_ID[plant.speciesId] || null;
-      return plant.activeSubStages.some((entry) => {
-        const partName = typeof entry?.partName === 'string' ? entry.partName : '';
-        const subStageId = typeof entry?.subStageId === 'string' ? entry.subStageId : '';
-        if (!partName || !subStageId) {
-          return false;
-        }
-        const partDef = (species?.parts || []).find((candidate) => candidate?.name === partName) || null;
-        const subStageDef = (partDef?.subStages || []).find((candidate) => candidate?.id === subStageId) || null;
-        const digTicksToDiscover = Number(subStageDef?.dig_ticks_to_discover);
-        return !(Number.isFinite(digTicksToDiscover) && digTicksToDiscover > 0);
-      });
+    return getTileContextMenuEntries({
+      gameState,
+      playerActor,
+      selectedTileX,
+      selectedTileY,
+      selectedTileEntity,
+      selectedTileWorldItems,
+      selectedTileWorldItemEntries,
+      selectedContext: {
+        selectedInventoryItemId,
+        selectedInventoryQuantity,
+        selectedStockpileItemId,
+        selectedStockpileQuantity,
+        selectedWorldItemId,
+        selectedWorldItemQuantity,
+        selectedConditionInstanceId,
+        selectedVisionItemId,
+        selectedVisionCategory,
+        selectedNatureOverlay,
+      },
+      inferTileContextActions,
+      buildDefaultPayload,
+      formatTokenLabel,
+      getStationIdAtTile,
+      stationActionLabel,
     });
-    const otherKinds = inferTileContextActions(selectedTileEntity).filter(
-      (k) => k !== 'move' && k !== 'harvest' && k !== 'item_pickup',
-    );
-    for (const kind of otherKinds) {
-      if (kind === 'inspect' && !hasInspectablePlant) {
-        continue;
-      }
-      const payload = buildDefaultPayload(kind, baseContext);
-      const v = validateAction(gameState, { actorId: 'player', kind, payload });
-      if (v.ok) {
-        entries.push({
-          kind,
-          label: kind.replace(/_/g, ' '),
-          tickCost: getActionTickCost(kind, payload),
-          payload,
-        });
-      }
-    }
-    return entries;
   }, [
     gameState,
     playerActor,
     selectedConditionInstanceId,
     selectedInventoryItemId,
+    selectedInventoryQuantity,
     selectedNatureOverlay,
     selectedStockpileItemId,
+    selectedStockpileQuantity,
     selectedTileEntity,
     selectedTileWorldItemEntries,
+    selectedTileWorldItems,
     selectedTileX,
     selectedTileY,
     selectedVisionCategory,
     selectedVisionItemId,
     selectedWorldItemId,
   ]);
+  const stationProcessCandidateEntries = useMemo(() => {
+    if (!stationProcessPanel?.stationId) {
+      return [];
+    }
+    const stationId = stationProcessPanel.stationId;
+    const results = [];
+    const pushInventoryCandidate = (itemEntry) => {
+      const itemId = itemEntry?.itemId;
+      if (!itemId) {
+        return;
+      }
+      if (stationId === 'drying_rack') {
+        if (!canDryItemInApp(itemId)) {
+          return;
+        }
+        const payload = { itemId, quantity: 1 };
+        const validation = validateAction(gameState, { actorId: 'player', kind: 'camp_drying_rack_add_inventory', payload });
+        if (!validation.ok) {
+          return;
+        }
+        results.push({
+          source: 'inventory',
+          stationId,
+          itemId,
+          processId: 'dry_item',
+          actionKind: 'camp_drying_rack_add_inventory',
+          maxQuantity: Math.max(1, Number(itemEntry.quantity) || 1),
+          label: `${formatTokenLabel(itemId)} (dry on rack)`,
+        });
+        return;
+      }
+      const options = resolveProcessOptionsForItemInApp(itemId)
+        .filter((option) => option.location === stationId);
+      for (const option of options) {
+        const payload = { itemId, quantity: 1, processId: option.processId };
+        const validation = validateAction(gameState, { actorId: 'player', kind: 'process_item', payload });
+        if (!validation.ok) {
+          continue;
+        }
+        results.push({
+          source: 'inventory',
+          stationId,
+          itemId,
+          processId: option.processId,
+          actionKind: 'process_item',
+          maxQuantity: Math.max(1, Number(itemEntry.quantity) || 1),
+          label: `${formatTokenLabel(itemId)} (${formatTokenLabel(option.processId)})`,
+        });
+      }
+    };
+    const pushStockpileCandidate = (itemEntry) => {
+      const itemId = itemEntry?.itemId;
+      if (!itemId) {
+        return;
+      }
+      if (stationId === 'drying_rack') {
+        if (!canDryItemInApp(itemId)) {
+          return;
+        }
+        const payload = { itemId, quantity: 1 };
+        const validation = validateAction(gameState, { actorId: 'player', kind: 'camp_drying_rack_add', payload });
+        if (!validation.ok) {
+          return;
+        }
+        results.push({
+          source: 'stockpile',
+          stationId,
+          itemId,
+          processId: 'dry_item',
+          actionKind: 'camp_drying_rack_add',
+          maxQuantity: Math.max(1, Number(itemEntry.quantity) || 1),
+          label: `${formatTokenLabel(itemId)} (dry on rack)`,
+        });
+        return;
+      }
+      const options = resolveProcessOptionsForItemInApp(itemId)
+        .filter((option) => option.location === stationId);
+      for (const option of options) {
+        const withdrawPayload = { itemId, quantity: 1 };
+        const withdrawValidation = validateAction(gameState, { actorId: 'player', kind: 'camp_stockpile_remove', payload: withdrawPayload });
+        if (!withdrawValidation.ok) {
+          continue;
+        }
+        const fakeInventoryState = {
+          ...gameState,
+          actors: {
+            ...(gameState?.actors || {}),
+            player: {
+              ...(gameState?.actors?.player || {}),
+              inventory: {
+                ...(gameState?.actors?.player?.inventory || {}),
+                stacks: [
+                  ...(gameState?.actors?.player?.inventory?.stacks || []),
+                  { itemId, quantity: 1 },
+                ],
+              },
+            },
+          },
+        };
+        const processPayload = { itemId, quantity: 1, processId: option.processId };
+        const processValidation = validateAction(fakeInventoryState, { actorId: 'player', kind: 'process_item', payload: processPayload });
+        if (!processValidation.ok) {
+          continue;
+        }
+        results.push({
+          source: 'stockpile',
+          stationId,
+          itemId,
+          processId: option.processId,
+          actionKind: 'process_item',
+          maxQuantity: Math.max(1, Number(itemEntry.quantity) || 1),
+          label: `${formatTokenLabel(itemId)} (${formatTokenLabel(option.processId)})`,
+        });
+      }
+    };
+
+    if (stationProcessPanel.mode === 'pick_quantity' && stationProcessPanel.itemId && stationProcessPanel.processId) {
+      return [{
+        source: stationProcessPanel.source || 'inventory',
+        stationId,
+        itemId: stationProcessPanel.itemId,
+        processId: stationProcessPanel.processId,
+        actionKind: stationProcessPanel.actionKind || 'process_item',
+        maxQuantity: Math.max(1, Number(stationProcessPanel.maxQuantity) || 1),
+        label: `${formatTokenLabel(stationProcessPanel.itemId)} (${formatTokenLabel(stationProcessPanel.processId)})`,
+      }];
+    }
+
+    if (stationProcessPanel.source === 'inventory' && stationProcessPanel.itemId) {
+      const inventoryItem = playerInventoryEntries.find((entry) => entry.itemId === stationProcessPanel.itemId);
+      if (inventoryItem) {
+        pushInventoryCandidate(inventoryItem);
+      }
+      return results;
+    }
+
+    for (const itemEntry of playerInventoryEntries) {
+      pushInventoryCandidate(itemEntry);
+    }
+    for (const itemEntry of campStockpileEntries) {
+      pushStockpileCandidate(itemEntry);
+    }
+    return results;
+  }, [campStockpileEntries, gameState, playerInventoryEntries, stationProcessPanel]);
+
+  const stationProcessTickPreview = useMemo(() => {
+    const entry = stationProcessCandidateEntries[0];
+    if (!entry) {
+      return null;
+    }
+    const quantity = Math.max(1, Math.min(Number(entry.maxQuantity) || 1, Math.floor(Number(stationProcessQuantity) || 1)));
+    return resolveStationProcessTickCost(gameState, entry, quantity);
+  }, [gameState, stationProcessCandidateEntries, stationProcessQuantity]);
+
+  const stationProcessEnergyUi = useMemo(() => {
+    const tc = Number(stationProcessTickPreview);
+    if (!Number.isFinite(tc) || tc < 1) {
+      return { wouldOverdraft: false, exceedsDailyOverdraftLimit: false, tickCost: null };
+    }
+    const cur = Number.isFinite(Number(playerActor?.tickBudgetCurrent))
+      ? Number(playerActor.tickBudgetCurrent)
+      : Number(playerActor?.tickBudgetBase) || 0;
+    return { ...previewTickBudgetImpact(cur, tc), tickCost: tc };
+  }, [playerActor, stationProcessTickPreview]);
+
+  const stationDryingRackPlacementPreview = useMemo(() => {
+    const entry = stationProcessCandidateEntries[0];
+    if (!entry || !stationProcessPanel || stationProcessPanel.mode !== 'pick_quantity') {
+      return null;
+    }
+    if (stationProcessPanel.stationId !== 'drying_rack') {
+      return null;
+    }
+    if (entry.actionKind !== 'camp_drying_rack_add' && entry.actionKind !== 'camp_drying_rack_add_inventory') {
+      return null;
+    }
+    const quantity = Math.max(1, Math.min(Number(entry.maxQuantity) || 1, Math.floor(Number(stationProcessQuantity) || 1)));
+    const slots = Array.isArray(gameState?.camp?.dryingRack?.slots) ? gameState.camp.dryingRack.slots : [];
+    const sourceStacks = entry.source === 'stockpile' ? campStockpileStacks : playerInventoryStacks;
+    const sourceStack = pickPreferredStackByItem(sourceStacks, entry.itemId, quantity);
+    const options = buildDryingRackAddOptionsFromStack(sourceStack);
+    const validation = validateAction(gameState, {
+      actorId: 'player',
+      kind: entry.actionKind,
+      payload: { itemId: entry.itemId, quantity },
+    });
+    if (!validation.ok) {
+      return {
+        ok: false,
+        message: typeof validation.message === 'string' ? validation.message : 'Cannot add to rack.',
+        currentSlots: slots,
+        nextSlots: null,
+        newCellKeys: null,
+      };
+    }
+    const preview = previewCampDryingRackAdd(slots, entry.itemId, quantity, options);
+    const beforeKeys = collectDryingRackOccupiedCellKeys(slots);
+    const afterKeys = collectDryingRackOccupiedCellKeys(preview.nextSlots);
+    const newCellKeys = new Set([...afterKeys].filter((k) => !beforeKeys.has(k)));
+    return {
+      ok: true,
+      currentSlots: slots,
+      nextSlots: preview.nextSlots,
+      newCellKeys,
+      overflowQuantity: preview.overflowQuantity,
+      addedQuantity: preview.addedQuantity,
+    };
+  }, [
+    campStockpileStacks,
+    gameState,
+    playerInventoryStacks,
+    stationProcessCandidateEntries,
+    stationProcessPanel,
+    stationProcessQuantity,
+  ]);
+
+  useEffect(() => {
+    if (!stationProcessPanel || stationProcessPanel.mode !== 'pick_item') {
+      return undefined;
+    }
+    if (stationProcessCandidateEntries.length > 0) {
+      return undefined;
+    }
+    setActionComposerStatus('No compatible items for this station.');
+    const timer = setTimeout(() => {
+      setStationProcessPanel(null);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [stationProcessCandidateEntries.length, stationProcessPanel]);
+
   const selectedInspectData = useMemo(() => {
     if (!selectedTileEntity) {
       return null;
@@ -1506,6 +2162,21 @@ function App() {
       : [];
     const aboveGroundParts = activeParts.filter((entry) => entry.isUndergroundOnly !== true);
     const identified = isSpeciesIdentifiedInState(gameState, firstPlant.speciesId);
+    const inspectPlantSprite = getPlantSpriteFrame(firstPlant.speciesId, firstPlant.stageName);
+    const stageSize = Number(lifeStage?.size || 0);
+    const inspectPreviewPx = stageSize >= 8 ? 96 : 72;
+    let inspectPlantSpriteStyle = null;
+    if (inspectPlantSprite) {
+      const fw = Math.max(1, inspectPlantSprite.frame.w);
+      const fh = inspectPlantSprite.frame.h;
+      inspectPlantSpriteStyle = {
+        ...spriteStyle(inspectPlantSprite, inspectPreviewPx, 'fit'),
+        width: `${inspectPreviewPx}px`,
+        height: `${Math.max(1, Math.round(inspectPreviewPx * (fh / fw)))}px`,
+        imageRendering: 'pixelated',
+        backgroundRepeat: 'no-repeat',
+      };
+    }
     return {
       canInspect: aboveGroundParts.length > 0,
       identified,
@@ -1517,6 +2188,7 @@ function App() {
         : 'No field notes available.',
       gameDescription: typeof species?.game_description === 'string' ? species.game_description : '',
       activeParts: aboveGroundParts,
+      inspectPlantSpriteStyle,
     };
   }, [gameState, selectedTileEntity]);
   const dayTick = Number(gameState?.dayTick) || 0;
@@ -1580,12 +2252,21 @@ function App() {
     : elevationToIsoOffsetPx(cameraAnchorTile?.elevation);
 
   useEffect(() => {
-    if (!selectedInventoryItemId && playerInventoryStacks.length > 0) {
-      setSelectedInventoryItemId(playerInventoryStacks[0].itemId || '');
-    } else if (selectedInventoryItemId && !playerInventoryStacks.some((entry) => entry.itemId === selectedInventoryItemId)) {
-      setSelectedInventoryItemId(playerInventoryStacks[0]?.itemId || '');
+    const n = playerInventoryStacks.length;
+    if (n === 0) {
+      setSelectedInventoryStackIndex((prev) => (prev !== null ? null : prev));
+      return;
     }
-  }, [playerInventoryStacks, selectedInventoryItemId]);
+    setSelectedInventoryStackIndex((prev) => {
+      if (typeof prev === 'number' && prev >= 0 && prev < n) {
+        const q = Math.max(0, Math.floor(Number(playerInventoryStacks[prev]?.quantity) || 0));
+        if (q > 0) {
+          return prev;
+        }
+      }
+      return 0;
+    });
+  }, [playerInventoryStacks]);
 
   useEffect(() => {
     if (!selectedStockpileItemId && campStockpileStacks.length > 0) {
@@ -1666,6 +2347,12 @@ function App() {
       setHasVisitedMealTab(true);
     }
   }, [debriefTab, isDebriefActive]);
+
+  useEffect(() => {
+    if (isDebriefActive) {
+      setIsInventoryPanelOpen(true);
+    }
+  }, [isDebriefActive]);
 
   useEffect(() => {
     const activeIds = new Set(warningEntries.map((entry) => entry.id));
@@ -1795,8 +2482,28 @@ function App() {
     const parsedPreSimDays = Number.parseInt(preSimDaysInput, 10);
     const preSimDays = Number.isFinite(parsedPreSimDays) ? Math.max(0, parsedPreSimDays) : 0;
     const base = createInitialGameState(safeSeed, { width: safeWidth, height: safeHeight });
-    return applyAutoUnlockGenerations(preSimDays > 0 ? advanceDay(base, preSimDays) : base);
-  }, [mapHeightInput, mapWidthInput, preSimDaysInput, seedInput]);
+    const preSimulated = preSimDays > 0 ? advanceDay(base, preSimDays) : base;
+    const bootstrapped = applyManualTestBootstrap(preSimulated, {
+      enabled: enableManualTestBootstrap,
+      seedAllResearch,
+      seedAllStations,
+      seedToolSet,
+      seedStationBuildMaterials,
+      seedCraftingProcessInputs,
+    });
+    return applyAutoUnlockGenerations(bootstrapped);
+  }, [
+    enableManualTestBootstrap,
+    mapHeightInput,
+    mapWidthInput,
+    preSimDaysInput,
+    seedAllResearch,
+    seedAllStations,
+    seedCraftingProcessInputs,
+    seedStationBuildMaterials,
+    seedToolSet,
+    seedInput,
+  ]);
 
   const initializeFromSeed = useCallback((enterPlayMode = false) => {
     const nextState = buildNewGameState();
@@ -1829,6 +2536,39 @@ function App() {
     })));
   }, []);
 
+  const submitStationProcess = useCallback((entry, quantity) => {
+    const safeQuantity = Math.max(1, Math.min(Number(entry?.maxQuantity) || 1, Math.floor(Number(quantity) || 1)));
+    const tickCost = resolveStationProcessTickCost(gameState, entry, safeQuantity);
+    const tc = Number(tickCost);
+    if (Number.isFinite(tc) && tc >= 1) {
+      const cur = Number.isFinite(Number(playerActor?.tickBudgetCurrent))
+        ? Number(playerActor.tickBudgetCurrent)
+        : Number(playerActor?.tickBudgetBase) || 0;
+      if (previewTickBudgetImpact(cur, tc).exceedsDailyOverdraftLimit) {
+        setActionComposerStatus(CONTEXT_MENU_PASS_OUT_TICK_REASON);
+        return;
+      }
+    }
+    if (entry?.actionKind === 'camp_drying_rack_add' || entry?.actionKind === 'camp_drying_rack_add_inventory') {
+      submitPlayerAction(entry.actionKind, { itemId: entry.itemId, quantity: safeQuantity });
+      setActionComposerStatus(`Submitted: dry ${formatTokenLabel(entry.itemId)} x${safeQuantity}`);
+      setStationProcessPanel(null);
+      setStationProcessQuantity(1);
+      return;
+    }
+    if (entry?.source === 'stockpile') {
+      submitPlayerAction('camp_stockpile_remove', { itemId: entry.itemId, quantity: safeQuantity });
+    }
+    submitPlayerAction('process_item', {
+      itemId: entry.itemId,
+      processId: entry.processId,
+      quantity: safeQuantity,
+    });
+    setActionComposerStatus(`Submitted: ${formatTokenLabel(entry.processId)} x${safeQuantity}`);
+    setStationProcessPanel(null);
+    setStationProcessQuantity(1);
+  }, [gameState, playerActor, submitPlayerAction]);
+
   const appendLocalFeed = useCallback((entry) => {
     setPlayActionFeed((prev) => [
       { stamp: Date.now() + Math.random(), ...entry },
@@ -1837,6 +2577,39 @@ function App() {
   }, []);
 
   const runQuickAction = useCallback((kind, payloadOverrides = null) => {
+    if (kind === 'open_station_process_quantity') {
+      const stationId = typeof payloadOverrides?.stationId === 'string' ? payloadOverrides.stationId : '';
+      const itemId = typeof payloadOverrides?.itemId === 'string' ? payloadOverrides.itemId : '';
+      if (!stationId || !itemId) {
+        setActionComposerStatus('Blocked: station process action missing station/item.');
+        return;
+      }
+      let inventoryEntry = playerInventoryEntries.find((entry) => entry.itemId === itemId);
+      if (
+        Number.isInteger(selectedInventoryStackIndex)
+        && playerInventoryStacks[selectedInventoryStackIndex]?.itemId === itemId
+      ) {
+        inventoryEntry = playerInventoryEntries[selectedInventoryStackIndex];
+      }
+      const maxQuantity = Math.max(1, Number(inventoryEntry?.quantity) || 1);
+      const options = resolveProcessOptionsForItemInApp(itemId).filter((option) => option.location === stationId);
+      const chosen = options[0];
+      if (!chosen) {
+        setActionComposerStatus('Blocked: no compatible station process found for item.');
+        return;
+      }
+      setStationProcessPanel({
+        mode: 'pick_quantity',
+        stationId,
+        source: 'inventory',
+        itemId,
+        processId: chosen.processId,
+        actionKind: 'process_item',
+        maxQuantity,
+      });
+      setStationProcessQuantity(1);
+      return;
+    }
     const basePayload = buildDefaultPayload(kind, {
       selectedX: selectedTileX,
       selectedY: selectedTileY,
@@ -1869,6 +2642,58 @@ function App() {
       });
       return;
     }
+    if (kind === 'item_pickup') {
+      const rawItemId = typeof payload?.itemId === 'string' ? payload.itemId : '';
+      const pq = Math.max(1, Math.floor(Number(payload?.quantity) || 1));
+      if (
+        rawItemId
+        && Number.isInteger(selectedTileX)
+        && Number.isInteger(selectedTileY)
+      ) {
+        const key = tileKey(selectedTileX, selectedTileY);
+        const stacks = Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
+        const raw = stacks.find((s) => s?.itemId === rawItemId) || null;
+        if (raw) {
+          const available = Math.max(0, Math.floor(Number(raw.quantity) || 0));
+          const qty = Math.min(pq, Math.max(1, available));
+          const options = pickupAddOptionsFromWorldStack(raw);
+          const blockReason = getItemPickupInventoryBlockReason(playerActor, rawItemId, qty, options);
+          if (blockReason) {
+            setActionComposerStatus(`Blocked: ${blockReason}`);
+            appendLocalFeed({
+              kind,
+              status: 'blocked',
+              message: blockReason,
+              code: 'inventory_pickup_blocked',
+            });
+            return;
+          }
+        }
+      }
+    }
+    if (kind === 'camp_stockpile_remove') {
+      const rawItemId = typeof payload?.itemId === 'string' ? payload.itemId : '';
+      const pq = Math.max(1, Math.floor(Number(payload?.quantity) || 1));
+      if (rawItemId) {
+        const raw = getCampStockpileStackForWithdrawPreview(gameState, rawItemId, pq);
+        if (raw) {
+          const available = Math.max(0, Math.floor(Number(raw.quantity) || 0));
+          const qty = Math.min(pq, Math.max(1, available));
+          const options = pickupAddOptionsFromWorldStack(raw);
+          const blockReason = getItemPickupInventoryBlockReason(playerActor, rawItemId, qty, options);
+          if (blockReason) {
+            setActionComposerStatus(`Blocked: ${blockReason}`);
+            appendLocalFeed({
+              kind,
+              status: 'blocked',
+              message: blockReason,
+              code: 'inventory_stockpile_withdraw_blocked',
+            });
+            return;
+          }
+        }
+      }
+    }
     submitPlayerAction(kind, payload);
     setActionComposerStatus(`Submitted: ${kind}`);
     appendLocalFeed({
@@ -1894,6 +2719,9 @@ function App() {
     selectedVisionItemId,
     selectedWorldItemId,
     selectedWorldItemQuantity,
+    playerInventoryEntries,
+    playerInventoryStacks,
+    selectedInventoryStackIndex,
     submitPlayerAction,
   ]);
 
@@ -1963,6 +2791,11 @@ function App() {
     }
     const { worldX, worldY } = tileContextMenu;
     const kind = typeof entry === 'string' ? entry : entry.kind;
+    if (entry && typeof entry === 'object' && entry.disabled === true) {
+      setActionComposerStatus(entry.disabledReason || 'Action unavailable');
+      setTileContextMenu(null);
+      return;
+    }
     const bakedPayload = typeof entry === 'object' && entry.payload ? entry.payload : null;
 
     if (kind === 'inspect') {
@@ -1984,6 +2817,33 @@ function App() {
       }
       const requestedTicks = Math.max(1, Math.floor(Number(input) || 1));
       runTileQuickAction(kind, worldX, worldY, getTileAt(gameState, worldX, worldY), { tickCost: requestedTicks });
+      setTileContextMenu(null);
+      return;
+    }
+    if (kind === 'open_drying_rack_inspect') {
+      setDryingRackInspectOpen(true);
+      setTileContextMenu(null);
+      return;
+    }
+    if (kind === 'open_station_process_panel') {
+      const stationId = typeof bakedPayload?.stationId === 'string' ? bakedPayload.stationId : '';
+      if (!stationId) {
+        setActionComposerStatus('Blocked: station action missing station id.');
+        setTileContextMenu(null);
+        return;
+      }
+      setStationProcessPanel({
+        mode: 'pick_item',
+        stationId,
+        source: 'mixed',
+      });
+      setTileContextMenu(null);
+      return;
+    }
+    if (kind === 'process_item_from_stockpile' && bakedPayload && entry?.stockpilePayload) {
+      submitPlayerAction('camp_stockpile_remove', entry.stockpilePayload);
+      submitPlayerAction('process_item', bakedPayload);
+      setActionComposerStatus('Submitted: withdraw + process');
       setTileContextMenu(null);
       return;
     }
@@ -2293,9 +3153,11 @@ function App() {
           : [];
         const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
         const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+        const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
         const tileEntityTokens = buildTileEntityTokens(tile, {
           isPlayerTile,
           isCampTile,
+          stationAtTile,
           worldItems,
           camp: gameState?.camp,
         });
@@ -2428,9 +3290,11 @@ function App() {
               : [];
             const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
             const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+            const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
             const tileEntityTokens = buildTileEntityTokens(tile, {
               isPlayerTile,
               isCampTile,
+              stationAtTile,
               worldItems,
               camp: gameState?.camp,
             });
@@ -2621,11 +3485,23 @@ function App() {
                   <button
                     key={`ctx-${entry.kind}-${idx}`}
                     type="button"
-                    className="iso-context-menu-action"
+                    className={`iso-context-menu-action${entry.tickOverdraftWarning ? ' iso-context-menu-action--overdraft-warn' : ''}`}
+                    disabled={entry.disabled === true}
                     onClick={() => runContextMenuAction(entry)}
-                    title={`${entry.label} (${entry.tickCost}t)`}
+                    title={
+                      entry.disabled === true && entry.disabledReason
+                        ? entry.disabledReason
+                        : entry.tickOverdraftWarning
+                          ? `${entry.label}: uses stored energy tomorrow (overdraft).`
+                          : `${entry.label} (${entry.tickCost}t)`
+                    }
                   >
-                    {entry.label} ({entry.tickCost}t)
+                    <span className="iso-context-menu-action-primary">
+                      {entry.label} ({entry.tickCost}t)
+                    </span>
+                    {entry.tickOverdraftWarning ? (
+                      <span className="iso-context-menu-action-warn">Uses tomorrow&apos;s energy</span>
+                    ) : null}
                   </button>
                 ))
               )}
@@ -2638,11 +3514,12 @@ function App() {
 
   if (rendererMode === 'game') {
     return (
-      <main className="app app-game-mode">
-        <section className="game-stage">
-          {renderIsometricPlayView()}
-        </section>
-        <GameModeChrome
+      <>
+        <main className="app app-game-mode">
+          <section className="game-stage">
+            {renderIsometricPlayView()}
+          </section>
+          <GameModeChrome
           onSwitchToDebug={() => setRendererMode('observer')}
           onNewGameFromSettings={() => initializeFromSeed(true)}
           showAnchorDebug={showAnchorDebug}
@@ -2651,6 +3528,7 @@ function App() {
           gameState={gameState}
           playerActor={playerActor}
           playerAtCamp={playerAtCamp}
+          campHasDryingRackStation={campHasDryingRackStation}
           playerNatureSightDays={playerNatureSightDays}
           dayProgressPercent={dayProgressPercent}
           nightThresholdPercent={nightThresholdPercent}
@@ -2680,10 +3558,12 @@ function App() {
           playActionFeed={playActionFeed}
           playerCarryWeightKg={playerCarryWeightKg}
           playerCarryCapacityKg={playerCarryCapacityKg}
-          selectedInventoryItemId={selectedInventoryItemId}
-          setSelectedInventoryItemId={setSelectedInventoryItemId}
-          playerInventoryStacks={playerInventoryEntries}
-          inventoryQuickActionsByItemId={inventoryQuickActionsByItemId}
+          selectedInventoryStackIndex={selectedInventoryStackIndex}
+          setSelectedInventoryStackIndex={setSelectedInventoryStackIndex}
+          playerInventoryEntries={playerInventoryEntries}
+          playerInventoryForGrid={playerInventoryForGrid}
+          inventoryQuickActionsByStackIndex={inventoryQuickActionsByStackIndex}
+          selectedInventoryEntry={selectedInventoryEntry}
           selectedStockpileItemId={selectedStockpileItemId}
           setSelectedStockpileItemId={setSelectedStockpileItemId}
           campStockpileStacks={campStockpileEntries}
@@ -2697,6 +3577,10 @@ function App() {
           onDryingRackRemove={(slotIndex) => submitPlayerAction('camp_drying_rack_remove', { slotIndex, quantity: 1 })}
           selectedWorldItemId={selectedWorldItemId}
           setSelectedWorldItemId={setSelectedWorldItemId}
+          worldItemPickupDisabled={selectedWorldItemPickupUi.disabled}
+          worldItemPickupDisabledReason={selectedWorldItemPickupUi.reason}
+          stockpileWithdrawDisabled={selectedStockpileWithdrawUi.disabled}
+          stockpileWithdrawDisabledReason={selectedStockpileWithdrawUi.reason}
           isDebriefActive={isDebriefActive}
           onEndDayEnterDebrief={() => {
             if (!playerAtCamp) {
@@ -2741,9 +3625,27 @@ function App() {
           mealPlanIngredients={mealPlanIngredients}
           mealPlanPreview={mealPlanPreview}
           lastMealResult={lastMealResult}
+          mealCandidatesInventoryEntries={mealCandidatesInventoryEntries}
+          mealCandidatesStockpileEntries={mealCandidatesStockpileEntries}
+          onMealAddFromStockpile={addMealIngredientFromStockpile}
+          onMealAddFromInventory={addMealIngredientFromInventory}
+          onMealRemoveIngredient={removeMealIngredient}
           chosenVisionRewards={chosenVisionRewards}
           onBeginDay={() => {
-            runQuickAction('debrief_exit');
+            setGameState((prev) => {
+              // Commit stew now, then let the remaining ticks drain hunger into morning.
+              const committed = advanceTick(prev, {
+                actions: [
+                  {
+                    actionId: `ui-meal-plan-commit-${Date.now()}`,
+                    actorId: 'player',
+                    kind: 'meal_plan_commit',
+                    payload: {},
+                  },
+                ],
+              });
+              return applyAutoUnlockGenerations(advanceStateToNextMorning(committed));
+            });
           }}
           visionUsesThisSeason={visionUsesThisSeason}
           visionSelectionOptions={visionSelectionOptions}
@@ -2767,13 +3669,210 @@ function App() {
             }
             submitPlayerAction('partner_medicine_administer', {});
           }}
+          techForestOverlayOpen={techForestOverlayOpen}
+          onOpenTechForest={() => setTechForestOverlayOpen(true)}
+          onCloseTechForest={() => setTechForestOverlayOpen(false)}
+          techForest={gameState?.techForest || null}
+          techUnlocks={gameState?.techUnlocks || null}
+          onQueueTechResearch={(unlockKey, researchTicks) => {
+            if (!unlockKey || !Number.isInteger(researchTicks)) {
+              return;
+            }
+            submitPlayerAction('partner_task_set', {
+              queuePolicy: 'append',
+              task: {
+                taskId: `tech-${unlockKey}-${Date.now()}`,
+                kind: TECH_RESEARCH_TASK_KIND,
+                ticksRequired: researchTicks,
+                meta: { unlockKey },
+              },
+            });
+            setTechForestOverlayOpen(false);
+          }}
         />
-      </main>
+        {stationProcessPanel ? (
+          <div className="hud-item-context-menu" style={{ left: '50%', top: '56%', transform: 'translate(-50%, -50%)' }}>
+            <p className="iso-context-menu-empty" style={{ marginBottom: '6px' }}>
+              {stationActionLabel(stationProcessPanel.stationId)}
+            </p>
+            {stationProcessPanel.mode === 'pick_item' ? (
+              <>
+                {stationProcessCandidateEntries.length === 0 ? (
+                  <p className="iso-context-menu-empty">No processable items in inventory/stockpile.</p>
+                ) : (
+                  stationProcessCandidateEntries.map((entry, idx) => (
+                    <button
+                      key={`station-candidate-${entry.source}-${entry.itemId}-${entry.processId}-${idx}`}
+                      type="button"
+                      className="iso-context-menu-action"
+                      onClick={() => {
+                        setStationProcessPanel({
+                          mode: 'pick_quantity',
+                          stationId: entry.stationId,
+                          source: entry.source,
+                          itemId: entry.itemId,
+                          processId: entry.processId,
+                          actionKind: entry.actionKind || 'process_item',
+                          maxQuantity: entry.maxQuantity,
+                        });
+                        setStationProcessQuantity(1);
+                      }}
+                    >
+                      {entry.label} [{entry.source}]
+                    </button>
+                  ))
+                )}
+              </>
+            ) : (
+              <>
+                {stationProcessCandidateEntries[0] ? (
+                  <>
+                    <p className="iso-context-menu-empty" style={{ marginBottom: '6px' }}>
+                      {stationProcessCandidateEntries[0].label}
+                    </p>
+                    {stationProcessPanel?.stationId === 'drying_rack' && stationDryingRackPlacementPreview ? (
+                      <div className="station-drying-rack-preview-wrap" style={{ marginBottom: '10px' }}>
+                        {stationDryingRackPlacementPreview.ok ? (
+                          <>
+                            <div className="station-rack-preview-row">
+                              <DryingRackGrid
+                                caption="Now"
+                                slots={stationDryingRackPlacementPreview.currentSlots}
+                                showEmptyHint
+                              />
+                              <DryingRackGrid
+                                caption="After this addition"
+                                slots={stationDryingRackPlacementPreview.nextSlots}
+                                highlightCellKeys={stationDryingRackPlacementPreview.newCellKeys}
+                                showEmptyHint
+                              />
+                            </div>
+                            {stationDryingRackPlacementPreview.overflowQuantity > 0 ? (
+                              <p className="iso-context-menu-empty" style={{ color: '#eab676', marginTop: '6px' }}>
+                                {stationDryingRackPlacementPreview.overflowQuantity} unit(s) would not fit and remain in your{' '}
+                                {stationProcessCandidateEntries[0].source === 'stockpile' ? 'stockpile' : 'inventory'}.
+                              </p>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <DryingRackGrid
+                              caption="Current rack"
+                              slots={stationDryingRackPlacementPreview.currentSlots}
+                              showEmptyHint
+                            />
+                            <p className="iso-context-menu-empty" style={{ color: '#dd8877', marginTop: '6px' }}>
+                              {stationDryingRackPlacementPreview.message}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                    <label htmlFor="station-process-qty" className="iso-context-menu-empty">
+                      Quantity (max {stationProcessCandidateEntries[0].maxQuantity})
+                    </label>
+                    <p className="iso-context-menu-empty">
+                      Tick cost: {stationProcessTickPreview === null ? 'n/a' : `${stationProcessTickPreview}t`}
+                    </p>
+                    {stationProcessEnergyUi.wouldOverdraft && !stationProcessEnergyUi.exceedsDailyOverdraftLimit ? (
+                      <p className="iso-context-menu-empty" style={{ color: '#eab676', marginTop: '4px' }}>
+                        Uses tomorrow&apos;s energy (overdraft).
+                      </p>
+                    ) : null}
+                    {stationProcessEnergyUi.exceedsDailyOverdraftLimit ? (
+                      <p className="iso-context-menu-empty" style={{ color: '#dd8877', marginTop: '4px' }}>
+                        {CONTEXT_MENU_PASS_OUT_TICK_REASON}
+                      </p>
+                    ) : null}
+                    <input
+                      id="station-process-qty"
+                      type="number"
+                      min="1"
+                      max={String(stationProcessCandidateEntries[0].maxQuantity)}
+                      value={stationProcessQuantity}
+                      onChange={(event) => {
+                        const next = Math.max(
+                          1,
+                          Math.min(
+                            Number(stationProcessCandidateEntries[0].maxQuantity) || 1,
+                            Math.floor(Number(event.target.value) || 1),
+                          ),
+                        );
+                        setStationProcessQuantity(next);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') {
+                          return;
+                        }
+                        if (stationProcessEnergyUi.exceedsDailyOverdraftLimit) {
+                          return;
+                        }
+                        submitStationProcess(stationProcessCandidateEntries[0], stationProcessQuantity);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="iso-context-menu-action"
+                      disabled={stationProcessEnergyUi.exceedsDailyOverdraftLimit === true}
+                      title={
+                        stationProcessEnergyUi.exceedsDailyOverdraftLimit
+                          ? CONTEXT_MENU_PASS_OUT_TICK_REASON
+                          : undefined
+                      }
+                      onClick={() => submitStationProcess(stationProcessCandidateEntries[0], stationProcessQuantity)}
+                    >
+                      {stationProcessCandidateEntries[0].actionKind === 'camp_drying_rack_add'
+                      || stationProcessCandidateEntries[0].actionKind === 'camp_drying_rack_add_inventory'
+                        ? 'Add to rack'
+                        : 'Process'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="iso-context-menu-empty">No valid process option.</p>
+                )}
+              </>
+            )}
+            <button
+              type="button"
+              className="iso-context-menu-action"
+              onClick={() => setStationProcessPanel(null)}
+            >
+              Close
+            </button>
+          </div>
+        ) : null}
+        {dryingRackInspectOpen ? (
+          <div
+            className="hud-item-context-menu hud-drying-rack-inspect-modal"
+            style={{ left: '50%', top: '48%', transform: 'translate(-50%, -50%)', maxWidth: 'min(560px, 94vw)' }}
+          >
+            <p className="iso-context-menu-empty" style={{ marginBottom: '8px' }}>Drying Rack</p>
+            <p className="iso-context-menu-empty" style={{ marginBottom: '10px', fontSize: '12px', opacity: 0.9 }}>
+              On a clear, mild day items on the rack dry by up to about 50% toward fully dried (scaled by sun and weather; no drying while freezing or at night). Use Take off to move a stack back into your inventory.
+            </p>
+            <DryingRackGrid
+              slots={campDryingRackSlots}
+              showEmptyHint
+              onRemoveSlot={(slotIndex) => submitPlayerAction('camp_drying_rack_remove', { slotIndex, quantity: 1 })}
+            />
+            <button
+              type="button"
+              className="iso-context-menu-action"
+              onClick={() => setDryingRackInspectOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+        ) : null}
+        </main>
+        <CarrotPartSpriteProbe />
+      </>
     );
   }
 
   return (
-    <main className="app">
+    <>
+      <main className="app">
       <header className="panel controls">
         <h1>10,000 BC — Phase 1 Vertical Slice</h1>
         <p>
@@ -2808,6 +3907,67 @@ function App() {
           />
           <button type="button" onClick={() => initializeFromSeed(false)}>Start New Game</button>
           <button type="button" onClick={() => initializeFromSeed(true)}>Start New Game + Play</button>
+        </div>
+        <div className="control-row">
+          <label htmlFor="manual-test-bootstrap" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-test-bootstrap"
+              type="checkbox"
+              checked={enableManualTestBootstrap}
+              onChange={(event) => setEnableManualTestBootstrap(event.target.checked)}
+            />
+            Camp/Crafting test bootstrap
+          </label>
+          <label htmlFor="manual-seed-research" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-seed-research"
+              type="checkbox"
+              checked={seedAllResearch}
+              disabled={!enableManualTestBootstrap}
+              onChange={(event) => setSeedAllResearch(event.target.checked)}
+            />
+            All research
+          </label>
+          <label htmlFor="manual-seed-stations" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-seed-stations"
+              type="checkbox"
+              checked={seedAllStations}
+              disabled={!enableManualTestBootstrap}
+              onChange={(event) => setSeedAllStations(event.target.checked)}
+            />
+            All stations
+          </label>
+          <label htmlFor="manual-seed-tools" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-seed-tools"
+              type="checkbox"
+              checked={seedToolSet}
+              disabled={!enableManualTestBootstrap}
+              onChange={(event) => setSeedToolSet(event.target.checked)}
+            />
+            Tool set
+          </label>
+          <label htmlFor="manual-seed-materials" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-seed-materials"
+              type="checkbox"
+              checked={seedStationBuildMaterials}
+              disabled={!enableManualTestBootstrap}
+              onChange={(event) => setSeedStationBuildMaterials(event.target.checked)}
+            />
+            Build materials
+          </label>
+          <label htmlFor="manual-seed-process" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              id="manual-seed-process"
+              type="checkbox"
+              checked={seedCraftingProcessInputs}
+              disabled={!enableManualTestBootstrap}
+              onChange={(event) => setSeedCraftingProcessInputs(event.target.checked)}
+            />
+            Process inputs
+          </label>
         </div>
 
         <div className="control-row">
@@ -3073,6 +4233,8 @@ function App() {
         <p className="legend">Drag the observer grid to pan quickly; arrow buttons still support fixed-step movement.</p>
       </section>
     </main>
+    <CarrotPartSpriteProbe />
+    </>
   );
 }
 

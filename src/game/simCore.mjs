@@ -6,6 +6,11 @@ import { GROUND_FUNGUS_CATALOG, GROUND_FUNGUS_BY_ID, isDayInSeasonWindow } from 
 import { LOG_FUNGUS_CATALOG, LOG_FUNGUS_BY_ID, isDayInLogWindow } from './logFungusCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
 import { ITEM_BY_ID } from './itemCatalog.mjs';
+import { applyActorInventoryRelocation } from './inventoryRelocate.mjs';
+import {
+  landCarcassUnitWeightKgFromSpecies,
+  resolveInnerBarkUnitWeightKgForItem,
+} from './stockpileDefaultStackOptions.mjs';
 import { applyEnvironmentalVitality, recalculateDynamicShade } from './advanceDay/ecology.mjs';
 import { clonePlant, cloneTile, createEmptyRecentDispersal } from './simState.mjs';
 import {
@@ -13,7 +18,9 @@ import {
   defaultActors,
   getActionTickCost as getActionTickCostDefinition,
   getAllActions as getAllAvailableActions,
+  listRockHarvestYieldChoices,
   previewAction as previewActionDefinition,
+  previewTickBudgetImpact as previewTickBudgetImpactDefinition,
   sortActionsDeterministically,
   validateAction as validateActionDefinition,
 } from './simActions.mjs';
@@ -31,6 +38,8 @@ import {
   mulberry32,
   tileIndex,
 } from './simWorld.mjs';
+import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
+import { generateTechForest, initialTechUnlocksAllLocked } from './techForestGen.mjs';
 import {
   applyDailyWaterFreezeState,
   ensureDailyWeatherState,
@@ -76,6 +85,8 @@ import {
   BEEHIVE_SPECIES_ID,
   CAMP_COMFORT_STATION_IDS,
   COLD_EXPOSURE_HEALTH_DRAIN_PER_TICK,
+  DAILY_SUN_DRYING_EPSILON,
+  DAYLIGHT_TICK_COUNT,
   DEADFALL_DAILY_RELIABILITY_DECAY,
   DEADFALL_MAX_CATCH_WEIGHT_G,
   DEADFALL_MIN_RELIABILITY,
@@ -84,6 +95,7 @@ import {
   DEAD_LOG_DECAY_FERTILITY_BONUS_CENTER,
   DEFAULT_MAP_HEIGHT,
   DEFAULT_MAP_WIDTH,
+  DRYING_RACK_DRYNESS_PER_DAY,
   EARTHWORM_DECAY_DAYS,
   EARTHWORM_ITEM_ID,
   EQUIPPABLE_ITEM_TO_SLOT,
@@ -119,8 +131,13 @@ import {
   SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
   SUN_HAT_THIRST_MODIFIER_SCALE,
   TICKS_PER_DAY,
+  WORLD_GROUND_DRYNESS_PER_DAY,
   THIRST_ACTIVITY_DRAIN_PER_TICK,
+  HUNGER_DRAIN_PER_TICK,
+  NIGHTLY_DEBRIEF_START_TICK,
+  TEMPERATURE_DECAY_MULTIPLIER_BY_BAND,
   THIRST_TEMPERATURE_MODIFIER_BY_BAND,
+  UNKNOWN_ITEM_CARRY_UNIT_WEIGHT_KG,
   WATERSKIN_DRINK_THIRST_GAIN,
   WATERSKIN_EMPTY_ITEM_ID,
   WATERSKIN_GUT_ILLNESS_CHANCE_POND,
@@ -182,6 +199,10 @@ import {
   rollFishTrapCatchImpl,
   rollSimpleSnareCatchImpl,
 } from './advanceDay/traps.mjs';
+import {
+  landTrapBaitMultiplierForTargetSpecies,
+  SIMPLE_SNARE_TARGET_SPECIES_ID,
+} from './trapBaitLand.mjs';
 import {
   applyBeehiveSeasonalStateImpl,
   generateBeehivesInternalImpl,
@@ -324,6 +345,15 @@ function applyTemperatureThirstTick(state) {
   const drainPerTick = THIRST_ACTIVITY_DRAIN_PER_TICK * effectiveMultiplier;
 
   player.thirst = clamp01((Number(player.thirst) || 0) - drainPerTick);
+}
+
+function applyGlobalHungerTick(state) {
+  for (const actor of Object.values(state?.actors || {})) {
+    if (!actor || (Number(actor.health) || 0) <= 0) {
+      continue;
+    }
+    actor.hunger = clamp01((Number(actor.hunger) || 0) - HUNGER_DRAIN_PER_TICK);
+  }
 }
 
 function hasHarvestInjuryTool(actor, toolKey) {
@@ -1006,6 +1036,7 @@ function rollDeadfallCatch(state, tile, trap) {
     ANIMAL_BY_ID,
     getAnimalDensityAtTile,
     DEADFALL_TRAP_CATCH_MODIFIER,
+    landTrapBaitMultiplierForTargetSpecies,
     mulberry32,
     DEADFALL_MIN_RELIABILITY,
     DEADFALL_DAILY_RELIABILITY_DECAY,
@@ -1095,6 +1126,47 @@ function isTileBlockedForPlantLife(tile) {
     || tile?.deadfallTrap?.active === true;
 }
 
+function getCampFootprintBounds(state) {
+  const anchorX = Number(state?.camp?.anchorX);
+  const anchorY = Number(state?.camp?.anchorY);
+  if (!Number.isInteger(anchorX) || !Number.isInteger(anchorY)) {
+    return null;
+  }
+  return {
+    minX: anchorX - 1,
+    maxX: anchorX + 2,
+    minY: anchorY - 1,
+    maxY: anchorY + 2,
+  };
+}
+
+function isTileWithinCampFootprint(state, x, y) {
+  const bounds = getCampFootprintBounds(state);
+  if (!bounds || !Number.isInteger(x) || !Number.isInteger(y)) {
+    return false;
+  }
+  return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+}
+
+function clearPlantsFromCampFootprint(state) {
+  if (!state || !Array.isArray(state?.tiles) || !state?.plants) {
+    return;
+  }
+  const toRemove = new Set();
+  for (const tile of state.tiles) {
+    if (!isTileWithinCampFootprint(state, tile?.x, tile?.y)) {
+      continue;
+    }
+    for (const plantId of Array.isArray(tile?.plantIds) ? tile.plantIds : []) {
+      toRemove.add(plantId);
+    }
+    tile.plantIds = [];
+  }
+  for (const plantId of toRemove) {
+    delete state.plants[plantId];
+  }
+}
+
 function rangeRollIntRandom(range, rng, fallback = 1) {
   if (!Array.isArray(range) || range.length < 2) {
     return Math.max(1, fallback);
@@ -1156,6 +1228,7 @@ function defaultCampState(width, height) {
     anchorY: Math.max(0, Math.floor(height / 2)),
     stockpile: { stacks: [] },
     stationsUnlocked: [],
+    stationPlacements: {},
     comforts: [],
     partnerTaskQueue: {
       active: null,
@@ -1209,6 +1282,7 @@ function ensureTickSystems(state) {
   state.currentDayActionLog = Array.isArray(state?.currentDayActionLog)
     ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
     : [];
+  clearPlantsFromCampFootprint(state);
 }
 
 function consumeActorTickBudget(actor, ticks) {
@@ -1461,13 +1535,59 @@ function getStackFootprint(stack) {
 }
 
 function getStackUnitWeightKg(stack, fallback = 0) {
-  const value = Number(stack?.unitWeightKg);
-  if (Number.isFinite(value) && value >= 0) {
-    return value;
+  // `Number(null) === 0` — world-item pickup passes `unitWeightKg: null` when unset; must not become 0 kg.
+  if (stack && Object.prototype.hasOwnProperty.call(stack, 'unitWeightKg')) {
+    const raw = stack.unitWeightKg;
+    if (raw !== null && raw !== undefined) {
+      const value = Number(raw);
+      if (Number.isFinite(value) && value >= 0) {
+        return value;
+      }
+    }
   }
 
   const normalizedFallback = Number(fallback);
   return Number.isFinite(normalizedFallback) && normalizedFallback >= 0 ? normalizedFallback : 0;
+}
+
+function getCatalogUnitWeightKgForItem(itemId) {
+  if (typeof itemId !== 'string' || !itemId) {
+    return 0;
+  }
+  const grams = Number(ITEM_BY_ID[itemId]?.unit_weight_g);
+  if (Number.isFinite(grams) && grams > 0) {
+    return grams / 1000;
+  }
+  const segments = itemId.split(':');
+  if (segments.length === 2) {
+    const [speciesId, partId] = segments;
+    if (partId === 'carcass') {
+      const carcassKg = landCarcassUnitWeightKgFromSpecies(ANIMAL_BY_ID[speciesId]);
+      if (carcassKg != null && carcassKg > 0) {
+        return carcassKg;
+      }
+    }
+    const species = ANIMAL_BY_ID[speciesId];
+    const part = (species?.parts || []).find((entry) => entry?.id === partId) || null;
+    const animalGrams = Number(part?.unit_weight_g);
+    if (Number.isFinite(animalGrams) && animalGrams > 0) {
+      return animalGrams / 1000;
+    }
+  }
+  if (segments.length === 3) {
+    const [speciesId, partName, subStageId] = segments;
+    const species = PLANT_BY_ID[speciesId];
+    const part = (species?.parts || []).find((entry) => entry?.name === partName) || null;
+    const subStage = (part?.subStages || []).find((entry) => entry?.id === subStageId) || null;
+    const plantGrams = Number(subStage?.unit_weight_g);
+    if (Number.isFinite(plantGrams) && plantGrams > 0) {
+      return plantGrams / 1000;
+    }
+  }
+  if (itemId === 'bark:inner_bark') {
+    return resolveInnerBarkUnitWeightKgForItem();
+  }
+  return 0;
 }
 
 const FULLY_DRY_EPSILON = 1e-6;
@@ -1698,14 +1818,20 @@ function inventoryCurrentWeightKg(inventory) {
     if (qty <= 0) {
       continue;
     }
-    total += qty * getStackUnitWeightKg(stack, 0);
+    const fallbackKg = getCatalogUnitWeightKgForItem(stack?.itemId);
+    let unitKg = getStackUnitWeightKg(stack, fallbackKg);
+    if (!Number.isFinite(unitKg) || unitKg <= 0) {
+      unitKg = UNKNOWN_ITEM_CARRY_UNIT_WEIGHT_KG;
+    }
+    total += qty * unitKg;
   }
   return total;
 }
 
 function maxQuantityByCarryWeight(inventory, unitWeightKg) {
-  if (!Number.isFinite(unitWeightKg) || unitWeightKg <= 0) {
-    return Number.POSITIVE_INFINITY;
+  let effectiveUnitKg = unitWeightKg;
+  if (!Number.isFinite(effectiveUnitKg) || effectiveUnitKg <= 0) {
+    effectiveUnitKg = UNKNOWN_ITEM_CARRY_UNIT_WEIGHT_KG;
   }
 
   const maxCarry = Number(inventory?.maxCarryWeightKg);
@@ -1718,7 +1844,7 @@ function maxQuantityByCarryWeight(inventory, unitWeightKg) {
     return 0;
   }
 
-  return Math.max(0, Math.floor(available / unitWeightKg));
+  return Math.max(0, Math.floor(available / effectiveUnitKg));
 }
 
 function mergeStackMetadata(
@@ -1760,7 +1886,7 @@ function mergeStackMetadata(
   }
 
   const priorUnitWeightKg = Number(existing.unitWeightKg);
-  if (Number.isFinite(priorUnitWeightKg) && priorUnitWeightKg >= 0) {
+  if (Number.isFinite(priorUnitWeightKg) && priorUnitWeightKg > 0) {
     return;
   }
   if (Number.isFinite(incomingUnitWeightKg) && incomingUnitWeightKg >= 0) {
@@ -1836,47 +1962,66 @@ function canItemStackDry(stack) {
   return false;
 }
 
-function applyDryingToStackArray(stacks, dailyIncrement) {
-  if (!Array.isArray(stacks) || !Number.isFinite(dailyIncrement) || dailyIncrement <= 0) {
-    return Array.isArray(stacks) ? stacks : [];
+function getEffectiveDailySunExposure(state) {
+  const s = Number(state?.dailySunExposure);
+  return Number.isFinite(s) ? clamp01(s) : 1;
+}
+
+function getDecayTemperatureMultiplierForState(state) {
+  const band = typeof state?.dailyTemperatureBand === 'string' ? state.dailyTemperatureBand.toLowerCase() : 'mild';
+  const m = TEMPERATURE_DECAY_MULTIPLIER_BY_BAND[band];
+  return Number.isFinite(Number(m)) ? Number(m) : 1;
+}
+
+function isFreezingBand(state) {
+  return String(state?.dailyTemperatureBand || '').toLowerCase() === 'freezing';
+}
+
+/** GDD §4.5 — dryness reduces decay rate; fully dry ≈ 0.03× fresh (linear in dryness). */
+function baseDecayStepPerLibraryDay(dryness) {
+  const d = clamp01(Number(dryness) || 0);
+  return 1 - (0.97 * d);
+}
+
+function applyDryingIncrementToStack(stack, increment) {
+  if (!stack || typeof stack !== 'object' || !canItemStackDry(stack)) {
+    return stack;
   }
-
-  return stacks.map((stack) => {
-    if (!stack || typeof stack !== 'object' || !canItemStackDry(stack)) {
-      return stack;
-    }
-
-    const priorDryness = clamp01(Number(stack.dryness) || 0);
-    return {
-      ...stack,
-      dryness: clamp01(priorDryness + dailyIncrement),
-    };
-  });
+  if (!Number.isFinite(increment) || increment <= 0) {
+    return stack;
+  }
+  const priorDryness = clamp01(Number(stack.dryness) || 0);
+  return {
+    ...stack,
+    dryness: clamp01(priorDryness + increment),
+  };
 }
 
-function addWorldItemNearby(state, originX, originY, itemId, quantity, options = null) {
-  return addWorldItemNearbyImpl(state, originX, originY, itemId, quantity, options, {
-    normalizeStackFootprintValue,
-    inBounds,
-    tileIndex,
-    isRockTile,
-    mergeStackMetadata,
-    clamp01,
-  });
+function resetGroundDrynessIfRainyDay(stack, sun) {
+  if (!stack || typeof stack !== 'object' || !canItemStackDry(stack)) {
+    return stack;
+  }
+  if (sun >= DAILY_SUN_DRYING_EPSILON) {
+    return stack;
+  }
+  const next = { ...stack };
+  delete next.dryness;
+  return next;
 }
 
-function addActorInventoryItemWithOverflowDrop(state, actor, itemId, quantity, options = null) {
-  return addActorInventoryItemWithOverflowDropImpl(state, actor, itemId, quantity, options, {
-    addActorInventoryItem,
-    addWorldItemNearby,
-  });
-}
-
-function applyDecayToStackArray(stacks, options = null) {
+/**
+ * @param {number} decayDayFraction - 1 = one legacy daily step; 1/TICKS_PER_DAY = one global tick.
+ */
+function applyDecayToStackArrayScaled(stacks, state, decayDayFraction, options = null) {
   if (!Array.isArray(stacks)) {
     return [];
   }
 
+  if (!Number.isFinite(decayDayFraction) || decayDayFraction <= 0) {
+    return stacks.map((entry) => ({ ...(entry || {}) }));
+  }
+
+  const tempMult = getDecayTemperatureMultiplierForState(state);
   const next = [];
   for (const stack of stacks) {
     if (!stack || typeof stack !== 'object') {
@@ -1894,18 +2039,29 @@ function applyDecayToStackArray(stacks, options = null) {
       continue;
     }
 
-    const dryness = clamp01(Number(stack.dryness) || 0);
-    const dailyDecayDelta = 1 - (0.95 * dryness);
-    const nextDecay = decayDaysRemaining - dailyDecayDelta;
-    if (nextDecay <= 0) {
-      if (stack.itemId === EARTHWORM_ITEM_ID && options?.earthwormEscapeOnExpire === true) {
-        continue;
-      }
-
-      if (stack.itemId === ROTTING_ORGANIC_ITEM_ID) {
+    if (stack.itemId === ROTTING_ORGANIC_ITEM_ID) {
+      const stepDecay = decayDayFraction;
+      const nextDecay = decayDaysRemaining - stepDecay;
+      if (nextDecay <= 0) {
         if (typeof options?.onRottingExpired === 'function') {
           options.onRottingExpired(stack);
         }
+        continue;
+      }
+      next.push({
+        ...stack,
+        quantity,
+        decayDaysRemaining: nextDecay,
+      });
+      continue;
+    }
+
+    const dryness = clamp01(Number(stack.dryness) || 0);
+    const dailyDecayDelta = baseDecayStepPerLibraryDay(dryness) * tempMult;
+    const stepDecay = dailyDecayDelta * decayDayFraction;
+    const nextDecay = decayDaysRemaining - stepDecay;
+    if (nextDecay <= 0) {
+      if (stack.itemId === EARTHWORM_ITEM_ID && options?.earthwormEscapeOnExpire === true) {
         continue;
       }
 
@@ -1937,6 +2093,24 @@ function applyDecayToStackArray(stacks, options = null) {
   return next;
 }
 
+function addWorldItemNearby(state, originX, originY, itemId, quantity, options = null) {
+  return addWorldItemNearbyImpl(state, originX, originY, itemId, quantity, options, {
+    normalizeStackFootprintValue,
+    inBounds,
+    tileIndex,
+    isRockTile,
+    mergeStackMetadata,
+    clamp01,
+  });
+}
+
+function addActorInventoryItemWithOverflowDrop(state, actor, itemId, quantity, options = null) {
+  return addActorInventoryItemWithOverflowDropImpl(state, actor, itemId, quantity, options, {
+    addActorInventoryItem,
+    addWorldItemNearby,
+  });
+}
+
 function applyRottingOrganicFertilityBonusAtTile(state, tileKey) {
   if (typeof tileKey !== 'string') {
     return;
@@ -1960,30 +2134,39 @@ function applyRottingOrganicFertilityBonusAtTile(state, tileKey) {
   tile.maxSoilMatch = soilSuitability.maxSoilMatch;
 }
 
-function applyDailyItemDecay(state) {
-  if (state?.camp?.dryingRack && Array.isArray(state.camp.dryingRack.slots)) {
-    state.camp.dryingRack.slots = applyDryingToStackArray(state.camp.dryingRack.slots, 0.2);
-  }
+function applyBatchCalendarDayItemProgress(state) {
+  const sun = getEffectiveDailySunExposure(state);
+  const allowDry = !isFreezingBand(state);
+  const decayFrac = 1;
 
   if (state?.worldItemsByTile && typeof state.worldItemsByTile === 'object') {
     for (const [tileKey, stacks] of Object.entries(state.worldItemsByTile)) {
-      state.worldItemsByTile[tileKey] = applyDryingToStackArray(stacks, 0.1);
+      state.worldItemsByTile[tileKey] = stacks.map((s) => resetGroundDrynessIfRainyDay(s, sun));
     }
+  }
+
+  const rackInc = allowDry ? DRYING_RACK_DRYNESS_PER_DAY * sun : 0;
+  const groundInc = allowDry && sun >= DAILY_SUN_DRYING_EPSILON
+    ? WORLD_GROUND_DRYNESS_PER_DAY * sun
+    : 0;
+
+  if (state?.camp?.dryingRack && Array.isArray(state.camp.dryingRack.slots)) {
+    let slots = state.camp.dryingRack.slots;
+    if (rackInc > 0) {
+      slots = slots.map((s) => applyDryingIncrementToStack(s, rackInc));
+    }
+    state.camp.dryingRack.slots = applyDecayToStackArrayScaled(slots, state, decayFrac, null);
   }
 
   for (const actor of Object.values(state?.actors || {})) {
     if (!actor?.inventory) {
       continue;
     }
-    actor.inventory.stacks = applyDecayToStackArray(actor.inventory.stacks);
+    actor.inventory.stacks = applyDecayToStackArrayScaled(actor.inventory.stacks, state, decayFrac, null);
   }
 
   if (state?.camp?.stockpile) {
-    state.camp.stockpile.stacks = applyDecayToStackArray(state.camp.stockpile.stacks);
-  }
-
-  if (state?.camp?.dryingRack && Array.isArray(state.camp.dryingRack.slots)) {
-    state.camp.dryingRack.slots = applyDecayToStackArray(state.camp.dryingRack.slots);
+    state.camp.stockpile.stacks = applyDecayToStackArrayScaled(state.camp.stockpile.stacks, state, decayFrac, null);
   }
 
   if (!state?.worldItemsByTile || typeof state.worldItemsByTile !== 'object') {
@@ -1993,7 +2176,76 @@ function applyDailyItemDecay(state) {
 
   const nextWorldItemsByTile = {};
   for (const [tileKey, stacks] of Object.entries(state.worldItemsByTile)) {
-    const decayedStacks = applyDecayToStackArray(stacks, {
+    let ws = stacks;
+    if (groundInc > 0) {
+      ws = ws.map((s) => applyDryingIncrementToStack(s, groundInc));
+    }
+    const decayedStacks = applyDecayToStackArrayScaled(ws, state, decayFrac, {
+      earthwormEscapeOnExpire: true,
+      onRottingExpired: (stack) => {
+        if (stack?.itemId === ROTTING_ORGANIC_ITEM_ID) {
+          applyRottingOrganicFertilityBonusAtTile(state, tileKey);
+        }
+      },
+    });
+    if (decayedStacks.length > 0) {
+      nextWorldItemsByTile[tileKey] = decayedStacks;
+    }
+  }
+  state.worldItemsByTile = nextWorldItemsByTile;
+}
+
+function applyItemDecayAndDryingTick(state) {
+  const dayTick = Number(state?.dayTick) || 0;
+  const isDaylight = dayTick < NIGHTLY_DEBRIEF_START_TICK;
+  const sun = getEffectiveDailySunExposure(state);
+  const allowDry = !isFreezingBand(state);
+  const decayFrac = 1 / TICKS_PER_DAY;
+
+  if (isDaylight && dayTick === 0 && sun < DAILY_SUN_DRYING_EPSILON && state?.worldItemsByTile) {
+    for (const [tileKey, stacks] of Object.entries(state.worldItemsByTile)) {
+      state.worldItemsByTile[tileKey] = stacks.map((s) => resetGroundDrynessIfRainyDay(s, sun));
+    }
+  }
+
+  const rackInc = allowDry && isDaylight
+    ? (DRYING_RACK_DRYNESS_PER_DAY * sun) / DAYLIGHT_TICK_COUNT
+    : 0;
+  const groundInc = allowDry && isDaylight && sun >= DAILY_SUN_DRYING_EPSILON
+    ? (WORLD_GROUND_DRYNESS_PER_DAY * sun) / DAYLIGHT_TICK_COUNT
+    : 0;
+
+  if (state?.camp?.dryingRack && Array.isArray(state.camp.dryingRack.slots)) {
+    let slots = state.camp.dryingRack.slots;
+    if (rackInc > 0) {
+      slots = slots.map((s) => applyDryingIncrementToStack(s, rackInc));
+    }
+    state.camp.dryingRack.slots = applyDecayToStackArrayScaled(slots, state, decayFrac, null);
+  }
+
+  for (const actor of Object.values(state?.actors || {})) {
+    if (!actor?.inventory) {
+      continue;
+    }
+    actor.inventory.stacks = applyDecayToStackArrayScaled(actor.inventory.stacks, state, decayFrac, null);
+  }
+
+  if (state?.camp?.stockpile) {
+    state.camp.stockpile.stacks = applyDecayToStackArrayScaled(state.camp.stockpile.stacks, state, decayFrac, null);
+  }
+
+  if (!state?.worldItemsByTile || typeof state.worldItemsByTile !== 'object') {
+    state.worldItemsByTile = {};
+    return;
+  }
+
+  const nextWorldItemsByTile = {};
+  for (const [tileKey, stacks] of Object.entries(state.worldItemsByTile)) {
+    let ws = stacks;
+    if (groundInc > 0) {
+      ws = ws.map((s) => applyDryingIncrementToStack(s, groundInc));
+    }
+    const decayedStacks = applyDecayToStackArrayScaled(ws, state, decayFrac, {
       earthwormEscapeOnExpire: true,
       onRottingExpired: (stack) => {
         if (stack?.itemId === ROTTING_ORGANIC_ITEM_ID) {
@@ -2066,6 +2318,8 @@ function rollSimpleSnareCatch(state, tile, snare) {
     SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
     SIMPLE_SNARE_MIN_RELIABILITY,
     SIMPLE_SNARE_DAILY_RELIABILITY_DECAY,
+    landTrapBaitMultiplierForTargetSpecies,
+    SIMPLE_SNARE_TARGET_SPECIES_ID,
   });
 }
 
@@ -2084,6 +2338,7 @@ function addActorInventoryItem(actor, itemId, quantity, options = null) {
   return addActorInventoryItemImpl(actor, itemId, quantity, options, {
     ensureActorInventory,
     getStackUnitWeightKg,
+    getCatalogUnitWeightKgForItem,
     maxQuantityByCarryWeight,
     normalizeStackFootprintValue,
     findCompatibleStackForAutoMerge,
@@ -2097,6 +2352,115 @@ function addActorInventoryItem(actor, itemId, quantity, options = null) {
   });
 }
 
+function cloneActorInventoryForPreview(actor) {
+  const inv = actor?.inventory;
+  if (!inv || typeof inv !== 'object') {
+    return {
+      gridWidth: 6,
+      gridHeight: 4,
+      maxCarryWeightKg: 15,
+      stacks: [],
+      equipment: { gloves: null, coat: null, head: null },
+    };
+  }
+  return {
+    ...inv,
+    stacks: Array.isArray(inv.stacks) ? inv.stacks.map((s) => ({ ...(s || {}) })) : [],
+    equipment: inv.equipment && typeof inv.equipment === 'object'
+      ? { ...inv.equipment }
+      : { gloves: null, coat: null, head: null },
+  };
+}
+
+/** Build `addActorInventoryItem` options from a ground or stockpile stack (same metadata shape). */
+export function pickupAddOptionsFromWorldStack(stack) {
+  if (!stack || typeof stack !== 'object') {
+    return null;
+  }
+  const opts = {};
+  const uw = Number(stack.unitWeightKg);
+  if (Number.isFinite(uw)) {
+    opts.unitWeightKg = uw;
+  }
+  if (stack.footprintW != null && stack.footprintW !== '') {
+    opts.footprintW = stack.footprintW;
+  }
+  if (stack.footprintH != null && stack.footprintH !== '') {
+    opts.footprintH = stack.footprintH;
+  }
+  if (Number.isFinite(Number(stack.freshness))) {
+    opts.freshness = Number(stack.freshness);
+  }
+  if (Number.isFinite(Number(stack.decayDaysRemaining)) && Number(stack.decayDaysRemaining) >= 0) {
+    opts.decayDaysRemaining = Number(stack.decayDaysRemaining);
+  }
+  if (Number.isFinite(Number(stack.dryness))) {
+    opts.dryness = Number(stack.dryness);
+  }
+  if (Number.isFinite(Number(stack.tanninRemaining))) {
+    opts.tanninRemaining = Number(stack.tanninRemaining);
+  }
+  return Object.keys(opts).length > 0 ? opts : null;
+}
+
+/** Stack the sim would take from when withdrawing `itemId` (same as `removeCampStockpileItem` choice). */
+export function getCampStockpileStackForWithdrawPreview(state, itemId, requestedQty) {
+  const qty = Math.max(1, Math.floor(Number(requestedQty) || 1));
+  const stacks = Array.isArray(state?.camp?.stockpile?.stacks) ? state.camp.stockpile.stacks : [];
+  const stack = findPreferredStackByItem(stacks, itemId, qty);
+  return stack || null;
+}
+
+export function getItemPickupInventoryBlockReason(actor, itemId, quantity, options = null) {
+  if (!actor || typeof itemId !== 'string' || !itemId) {
+    return 'No free inventory space.';
+  }
+  const qty = Math.max(1, Math.floor(Number(quantity) || 0));
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return 'No free inventory space.';
+  }
+  const pseudo = {
+    ...actor,
+    inventory: cloneActorInventoryForPreview(actor),
+  };
+  ensureActorInventory(pseudo);
+  const result = addActorInventoryItem(pseudo, itemId, qty, options);
+  if (result.addedQuantity > 0) {
+    return null;
+  }
+  const pseudoUnlimited = {
+    ...actor,
+    inventory: {
+      ...cloneActorInventoryForPreview(actor),
+      maxCarryWeightKg: Number.POSITIVE_INFINITY,
+    },
+  };
+  ensureActorInventory(pseudoUnlimited);
+  const weightProbe = addActorInventoryItem(pseudoUnlimited, itemId, qty, options);
+  if (weightProbe.addedQuantity > 0) {
+    return 'Exceeds carry weight.';
+  }
+  return 'No free inventory space.';
+}
+
+/**
+ * How many units of `itemId` can be added (up to `quantityCap`) under carry + grid rules.
+ * Does not mutate `actor`.
+ */
+export function maxQuantityActorInventoryCanAccept(actor, itemId, quantityCap, options = null) {
+  const cap = Math.max(0, Math.floor(Number(quantityCap) || 0));
+  if (!actor || typeof itemId !== 'string' || !itemId || cap <= 0) {
+    return 0;
+  }
+  const pseudo = {
+    ...actor,
+    inventory: cloneActorInventoryForPreview(actor),
+  };
+  ensureActorInventory(pseudo);
+  const result = addActorInventoryItem(pseudo, itemId, cap, options);
+  return Math.max(0, Math.floor(Number(result?.addedQuantity) || 0));
+}
+
 function removeActorInventoryItem(actor, itemId, quantity) {
   return removeActorInventoryItemImpl(actor, itemId, quantity, {
     ensureActorInventory,
@@ -2108,6 +2472,20 @@ function addCampDryingRackItem(camp, itemId, quantity, options = null) {
   return addCampDryingRackItemImpl(camp, itemId, quantity, options, {
     addActorInventoryItem,
   });
+}
+
+/** Non-mutating: clone `slots`, simulate add, return resulting rack stacks (2×2 layout) and overflow metadata. */
+export function previewCampDryingRackAdd(slots, itemId, quantity, options = null) {
+  const clonedSlots = Array.isArray(slots)
+    ? slots.map((entry) => ({ ...(entry || {}) }))
+    : [];
+  const fakeCamp = { dryingRack: { capacity: 4, slots: clonedSlots } };
+  const result = addCampDryingRackItem(fakeCamp, itemId, quantity, options);
+  return {
+    nextSlots: fakeCamp.dryingRack.slots.map((entry) => ({ ...(entry || {}) })),
+    addedQuantity: result.addedQuantity,
+    overflowQuantity: result.overflowQuantity,
+  };
 }
 
 function extractActorInventoryItemWithMetadata(actor, itemId, quantity) {
@@ -2182,22 +2560,39 @@ function progressPartnerTaskQueueOneTick(state) {
 
   queue.active.ticksRemaining = Math.max(0, Math.floor(Number(queue.active.ticksRemaining || 0)) - 1);
   if (queue.active.ticksRemaining === 0) {
-    const didConsumeInputs = consumePartnerTaskInputs(state, queue.active);
-    if (didConsumeInputs) {
-      completePartnerTaskOutputs(state, queue.active);
+    const finishing = queue.active;
+    if (finishing.kind === TECH_RESEARCH_TASK_KIND) {
+      const uk = finishing.meta?.unlockKey;
+      if (typeof uk === 'string' && uk) {
+        if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+          state.techUnlocks = {};
+        }
+        state.techUnlocks[uk] = true;
+      }
       appendPartnerTaskHistory(state, {
-        taskId: queue.active.taskId,
-        kind: queue.active.kind,
+        taskId: finishing.taskId,
+        kind: finishing.kind,
         status: 'completed',
         failureReason: null,
       });
     } else {
-      appendPartnerTaskHistory(state, {
-        taskId: queue.active.taskId,
-        kind: queue.active.kind,
-        status: 'failed',
-        failureReason: 'missing_input_at_completion',
-      });
+      const didConsumeInputs = consumePartnerTaskInputs(state, finishing);
+      if (didConsumeInputs) {
+        completePartnerTaskOutputs(state, finishing);
+        appendPartnerTaskHistory(state, {
+          taskId: finishing.taskId,
+          kind: finishing.kind,
+          status: 'completed',
+          failureReason: null,
+        });
+      } else {
+        appendPartnerTaskHistory(state, {
+          taskId: finishing.taskId,
+          kind: finishing.kind,
+          status: 'failed',
+          failureReason: 'missing_input_at_completion',
+        });
+      }
     }
     queue.active = null;
     promoteNextTask();
@@ -2236,6 +2631,7 @@ function applyActionEffect(state, action) {
     EQUIPPABLE_ITEM_TO_SLOT,
     ensureActorInventory,
     ensureInventoryEquipment,
+    applyActorInventoryRelocation,
     resolveItemFootprint,
     maybeCreateDeadLog,
     applyHarvestAction,
@@ -2243,6 +2639,8 @@ function applyActionEffect(state, action) {
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
     addActorInventoryItem,
+    maxQuantityActorInventoryCanAccept,
+    pickupAddOptionsFromWorldStack,
   });
 }
 
@@ -2440,7 +2838,8 @@ export function generateGroundFungusZones(state) {
 
 export function advanceTick(state, options = {}) {
   return advanceTickImpl(state, options, {
-    advanceDay: (innerState, steps) => advanceDay(innerState, steps),
+    advanceDay: (innerState, steps, dayOpts) => advanceDay(innerState, steps, dayOpts || {}),
+    applyItemDecayAndDryingTick,
     ensureTickSystems,
     sortActionsDeterministically,
     isInProgressActionEnvelope,
@@ -2457,6 +2856,7 @@ export function advanceTick(state, options = {}) {
     processAutoRodTickResolution,
     applyColdExposureTick,
     applyTemperatureThirstTick,
+    applyGlobalHungerTick,
     TICKS_PER_DAY,
     getActorDayStartTickBudgetBase,
   });
@@ -2466,12 +2866,18 @@ export function validateAction(state, action, options = {}) {
   return validateActionDefinition(state, action, options);
 }
 
+export { listRockHarvestYieldChoices };
+
 export function getAllActions(state, actorId) {
   return getAllAvailableActions(state, actorId);
 }
 
 export function getActionTickCost(kind, payload = {}) {
   return getActionTickCostDefinition(kind, payload);
+}
+
+export function previewTickBudgetImpact(tickBudgetCurrent, tickCost) {
+  return previewTickBudgetImpactDefinition(tickBudgetCurrent, tickCost);
 }
 
 export function previewAction(state, action, options = {}) {
@@ -2747,6 +3153,9 @@ function findOpenSpot(tiles, width, height, x, y) {
 
 function addPlantInstance(state, speciesId, x, y, age, source = 'founder') {
   const tile = state.tiles[tileIndex(x, y, state.width)];
+  if (isTileWithinCampFootprint(state, x, y)) {
+    return null;
+  }
   if (isTileBlockedForPlantLife(tile) || tile.plantIds.length >= MAX_PLANTS_PER_TILE) {
     return null;
   }
@@ -3218,6 +3627,9 @@ function placeDormantSeed(state, species, x, y, methodLabel = species.dispersal.
     return false;
   }
   const tile = state.tiles[tileIndex(x, y, state.width)];
+  if (isTileWithinCampFootprint(state, x, y)) {
+    return false;
+  }
   if (isTileBlockedForPlantLife(tile)) {
     return false;
   }
@@ -3256,6 +3668,9 @@ function applyRunnerSpread(state, plantInstance, species, rng) {
       break;
     }
     const tile = state.tiles[tileIndex(candidate.x, candidate.y, state.width)];
+    if (isTileWithinCampFootprint(state, candidate.x, candidate.y)) {
+      continue;
+    }
     if (isTileBlockedForPlantLife(tile) || tile.plantIds.length >= MAX_PLANTS_PER_TILE) {
       continue;
     }
@@ -3414,10 +3829,13 @@ export function createInitialGameState(seed = 10000, options = {}) {
   const tiles = generateMap(normalizedSeed, width, height);
   const actors = defaultActors(width, height);
   const camp = defaultCampState(width, height);
+  const techForest = generateTechForest(normalizedSeed);
   const state = {
     seed: normalizedSeed,
     width,
     height,
+    techForest,
+    techUnlocks: initialTechUnlocksAllLocked(techForest),
     dayOfYear: 5,
     year: 1,
     totalDaysSimulated: 0,
@@ -3456,13 +3874,17 @@ export function createInitialGameState(seed = 10000, options = {}) {
 
   placeFounders(state, mulberry32(normalizedSeed * 17 + 9));
   generateInitialDeadTrees(state, mulberry32(normalizedSeed * 29 + 13));
+  clearPlantsFromCampFootprint(state);
   recalculateDynamicShade(state);
   initializeDailyWeatherState(state);
   applyDailyWaterFreezeState(state);
   return state;
 }
 
-export function advanceDay(state, steps = 1) {
+export function advanceDay(state, steps = 1, options = {}) {
+  const applyDailyItemDecayHook = options.skipBatchItemProgress === true
+    ? () => {}
+    : applyBatchCalendarDayItemProgress;
   return advanceDayImpl(state, steps, {
     clonePlant,
     cloneTile,
@@ -3485,7 +3907,7 @@ export function advanceDay(state, steps = 1) {
     applyGroundFungusFruiting,
     applyBeehiveSeasonalState,
     applyFishPopulationRecovery,
-    applyDailyItemDecay,
+    applyDailyItemDecay: applyDailyItemDecayHook,
     applyDailySapTapFill,
     applyDailyLeachingBasketProgress,
     applyDailySimpleSnareResolution,
@@ -3825,12 +4247,14 @@ function resolveDefaultFishSpeciesId() {
 }
 
 export function getMetrics(state) {
+  const sun = Number(state.dailySunExposure);
   return {
     year: state.year,
     dayOfYear: state.dayOfYear,
     totalDaysSimulated: state.totalDaysSimulated,
     dailyTemperatureF: Number(state.dailyTemperatureF) || 0,
     dailyTemperatureBand: typeof state.dailyTemperatureBand === 'string' ? state.dailyTemperatureBand : 'mild',
+    dailySunExposure: Number.isFinite(sun) ? Math.max(0, Math.min(1, sun)) : 1,
     dailyWindVector: state.dailyWindVector
       ? { ...state.dailyWindVector }
       : { x: 0, y: 0, strength: 0, strengthLabel: 'calm', angleRadians: 0 },

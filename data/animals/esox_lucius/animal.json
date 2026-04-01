@@ -30,6 +30,8 @@
       "id": "meat",
       "yield_grams": 1885,
       "unit_weight_g": 1,
+      "cooked_edibility_score": 0.85,
+      "cooked_harshness": 0.05,
       "nutrition": { "calories": 1980, "protein": 255, "carbs": 0, "fat": 62 },
       "processing_options": [
         { "id": "clean", "ticks": 7, "location": "hand", "outputs": [] }

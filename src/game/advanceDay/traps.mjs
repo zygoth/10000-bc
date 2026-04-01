@@ -5,6 +5,7 @@ export function rollDeadfallCatchImpl(state, tile, trap, deps) {
     ANIMAL_BY_ID,
     getAnimalDensityAtTile,
     DEADFALL_TRAP_CATCH_MODIFIER,
+    landTrapBaitMultiplierForTargetSpecies,
     mulberry32,
     DEADFALL_MIN_RELIABILITY,
     DEADFALL_DAILY_RELIABILITY_DECAY,
@@ -31,7 +32,11 @@ export function rollDeadfallCatchImpl(state, tile, trap, deps) {
     const density = clamp01(getAnimalDensityAtTile(state, speciesId, tile.x, tile.y));
     maxDensity = Math.max(maxDensity, density);
     const baseCatchRate = clamp01(Number(species?.base_catch_rate) || 0);
-    const effectiveChance = clamp01(baseCatchRate * density * DEADFALL_TRAP_CATCH_MODIFIER * reliability);
+    const baitItemId = typeof trap?.baitItemId === 'string' && trap.baitItemId ? trap.baitItemId : null;
+    const baitMultiplier = baitItemId
+      ? landTrapBaitMultiplierForTargetSpecies(baitItemId, speciesId)
+      : 1;
+    const effectiveChance = clamp01(baseCatchRate * density * DEADFALL_TRAP_CATCH_MODIFIER * reliability * baitMultiplier);
     const roll = mulberry32((seedBase + (i * 1291)) >>> 0)();
 
     if (roll <= effectiveChance) {
@@ -275,6 +280,8 @@ export function rollSimpleSnareCatchImpl(state, tile, snare, deps) {
     SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT,
     SIMPLE_SNARE_MIN_RELIABILITY,
     SIMPLE_SNARE_DAILY_RELIABILITY_DECAY,
+    landTrapBaitMultiplierForTargetSpecies,
+    SIMPLE_SNARE_TARGET_SPECIES_ID,
   } = deps;
   const seed = (
     ((state.seed + 11) * 4093)
@@ -293,7 +300,11 @@ export function rollSimpleSnareCatchImpl(state, tile, snare, deps) {
     : 1;
 
   const baseChance = clamp01(SIMPLE_SNARE_BASE_CATCH_CHANCE + (rabbitDensity * SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT));
-  const effectiveChance = clamp01(baseChance * reliability);
+  const baitItemId = typeof snare?.baitItemId === 'string' && snare.baitItemId ? snare.baitItemId : null;
+  const baitMultiplier = baitItemId
+    ? landTrapBaitMultiplierForTargetSpecies(baitItemId, SIMPLE_SNARE_TARGET_SPECIES_ID)
+    : 1;
+  const effectiveChance = clamp01(baseChance * reliability * baitMultiplier);
   const roll = rng();
   const hasCatch = roll <= effectiveChance;
   const nextReliability = Math.max(SIMPLE_SNARE_MIN_RELIABILITY, reliability - SIMPLE_SNARE_DAILY_RELIABILITY_DECAY);

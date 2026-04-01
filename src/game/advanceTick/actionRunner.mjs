@@ -132,6 +132,13 @@ export function runActionQueue(nextState, options, hooks) {
         digUnearthedBaseline = countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY);
       }
     }
+    // Single-tick process_item: apply before advanceOneTick so inputs are not consumed by decay
+    // in the same tick (e.g. decayDaysRemaining 0 would rot before removeActorInventoryItem).
+    // Multi-tick process_item must still apply only after work ticks complete (interruption-safe).
+    const singleTickProcessItem = action.kind === 'process_item' && totalTicks === 1;
+    if (singleTickProcessItem) {
+      applyActionEffect(nextState, action);
+    }
     while (ticksExecuted < remainingTicks) {
       const currentActor = nextState.actors?.[action.actorId] || null;
       if (!currentActor || (Number(currentActor.health) || 0) <= 0) {
@@ -234,11 +241,15 @@ export function runActionQueue(nextState, options, hooks) {
     }
 
     if (!isFishRodCast) {
-      if (action.kind === 'dig' && actor && digUnearthedBaseline !== null && Number.isInteger(digTargetX) && Number.isInteger(digTargetY)) {
-        const delta = Math.max(0, countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY) - digUnearthedBaseline);
-        actor.pendingDigUnearthedDelta = delta;
+      if (action.kind === 'process_item' && !singleTickProcessItem) {
+        applyActionEffect(nextState, action);
+      } else if (action.kind !== 'process_item') {
+        if (action.kind === 'dig' && actor && digUnearthedBaseline !== null && Number.isInteger(digTargetX) && Number.isInteger(digTargetY)) {
+          const delta = Math.max(0, countUnearthedUndergroundPartsOnTile(nextState, digTargetX, digTargetY) - digUnearthedBaseline);
+          actor.pendingDigUnearthedDelta = delta;
+        }
+        applyActionEffect(nextState, action);
       }
-      applyActionEffect(nextState, action);
     }
     let completionMessage = fishBiteResolved ? 'ok (bite_resolved_early)' : 'ok';
     if (action.kind === 'dig') {

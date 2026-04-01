@@ -469,7 +469,11 @@ const PLANT_CATALOG_SOURCE = [
           }
         ]
       }
-    ]
+    ],
+    "scent": {
+      "strength": 0.6,
+      "primary_compound": "carotol"
+    }
   },
   {
     "id": "juglans_nigra",
@@ -636,7 +640,9 @@ const PLANT_CATALOG_SOURCE = [
               "actions_until_depleted": [
                 15,
                 30
-              ]
+              ],
+              "ground_action_fraction": 0.1,
+              "elevated_action_fraction": 0.1
             },
             "reach_tier": "canopy",
             "reach_tier_by_life_stage": {
@@ -675,7 +681,9 @@ const PLANT_CATALOG_SOURCE = [
               "actions_until_depleted": [
                 15,
                 30
-              ]
+              ],
+              "ground_action_fraction": 0.1,
+              "elevated_action_fraction": 0.1
             },
             "harvest_damage": 0.05,
             "decay_days": 5,
@@ -724,7 +732,7 @@ const PLANT_CATALOG_SOURCE = [
             ],
             "ingestion": null,
             "potency_multiplier": 0,
-            "harvest_base_ticks": 30,
+            "harvest_base_ticks": 2,
             "harvest_tool_modifiers": {
               "axe": 3,
               "knife": 1.2
@@ -737,7 +745,9 @@ const PLANT_CATALOG_SOURCE = [
               "actions_until_depleted": [
                 5,
                 15
-              ]
+              ],
+              "ground_action_fraction": 0.1,
+              "elevated_action_fraction": 0.1
             },
             "reach_tier": "canopy",
             "harvest_damage": 0.1,
@@ -805,7 +815,7 @@ const PLANT_CATALOG_SOURCE = [
                 10
               ]
             },
-            "reach_tier": "elevated",
+            "reach_tier": "ground",
             "harvest_damage": 0.3,
             "regrowth_days": null,
             "regrowth_max_harvests": null,
@@ -855,7 +865,7 @@ const PLANT_CATALOG_SOURCE = [
             "craft_tags": [],
             "ingestion": null,
             "potency_multiplier": 0.5,
-            "harvest_base_ticks": 15,
+            "harvest_base_ticks": 5,
             "harvest_tool_modifiers": {},
             "harvest_yield": {
               "units_per_action": [
@@ -905,7 +915,7 @@ const PLANT_CATALOG_SOURCE = [
             "processing_options": [
               {
                 "id": "remove_husk",
-                "ticks": 20,
+                "ticks": 5,
                 "location": "hand",
                 "outputs": [
                   {
@@ -1008,7 +1018,7 @@ const PLANT_CATALOG_SOURCE = [
             "processing_options": [
               {
                 "id": "crack_shell",
-                "ticks": 40,
+                "ticks": 10,
                 "location": "mortar_pestle",
                 "outputs": [
                   {
@@ -1187,7 +1197,11 @@ const PLANT_CATALOG_SOURCE = [
           }
         ]
       }
-    ]
+    ],
+    "scent": {
+      "strength": 0.6,
+      "primary_compound": "juglone"
+    }
   },
   {
     "id": "urtica_dioica",
@@ -1688,7 +1702,11 @@ const PLANT_CATALOG_SOURCE = [
           }
         ]
       }
-    ]
+    ],
+    "scent": {
+      "strength": 0.3,
+      "primary_compound": "hexenal"
+    }
   }
 ];
 

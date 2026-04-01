@@ -1,6 +1,6 @@
 import { PLANT_BY_ID } from './plantCatalog.mjs';
 import { ANIMAL_BY_ID } from './animalCatalog.mjs';
-import { ITEM_BY_ID } from './itemCatalog.mjs';
+import { ITEM_BY_ID, resolveCatalogFieldEdibilityScore } from './itemCatalog.mjs';
 import {
   STEW_DAILY_CALORIES_ADULT,
   STEW_DAILY_CALORIES_CHILD_DEFAULT,
@@ -11,10 +11,22 @@ import {
   STEW_NEXT_DAY_TICK_BONUS,
   STEW_PROTEIN_BONUS_THRESHOLD_GRAMS,
   TICKS_PER_DAY,
+  NIGHTLY_DEBRIEF_START_TICK,
+  HUNGER_BAR_CALORIES,
 } from './simCore.constants.mjs';
 import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
 import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
 import { ensureHarvestEntryState } from './harvestEntryState.mjs';
+import { checkActorInventoryRelocation } from './inventoryRelocate.mjs';
+import {
+  parseLandTrapBaitPlantSpeciesId,
+  plantSpeciesEligibleForDeadfallLandBait,
+  plantSpeciesEligibleForSimpleSnareBait,
+} from './trapBaitLand.mjs';
+import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
+import { getTechForestNode } from './techForestGen.mjs';
+import { isActorWithinCampFootprint } from './campFootprint.mjs';
+import { resolveStewIngredientDescriptor as resolveStewIngredientDescriptorShared } from './stewIngredientDescriptor.mjs';
 
 const ACTION_KINDS = [
   'move',
@@ -25,6 +37,9 @@ const ACTION_KINDS = [
   'trap_place_fish_weir',
   'auto_rod_place',
   'trap_check',
+  'trap_bait',
+  'marker_place',
+  'marker_remove',
   'fish_rod_cast',
   'inspect',
   'dig',
@@ -35,6 +50,7 @@ const ACTION_KINDS = [
   'tap_retrieve_vessel',
   'waterskin_fill',
   'waterskin_drink',
+  'water_drink',
   'leaching_basket_place',
   'leaching_basket_retrieve',
   'item_pickup',
@@ -60,6 +76,7 @@ const ACTION_KINDS = [
   'partner_vision_confirm',
   'partner_vision_choose',
   'nature_sight_overlay_set',
+  'inventory_relocate_stack',
 ];
 
 const ACTION_TICK_COST = {
@@ -71,6 +88,9 @@ const ACTION_TICK_COST = {
   trap_place_fish_weir: 4,
   auto_rod_place: 2,
   trap_check: 2,
+  trap_bait: 1,
+  marker_place: 1,
+  marker_remove: 1,
   fish_rod_cast: 5,
   inspect: 1,
   dig: 1,
@@ -81,6 +101,7 @@ const ACTION_TICK_COST = {
   tap_retrieve_vessel: 1,
   waterskin_fill: 2,
   waterskin_drink: 1,
+  water_drink: 1,
   leaching_basket_place: 2,
   leaching_basket_retrieve: 2,
   item_pickup: 1,
@@ -92,20 +113,23 @@ const ACTION_TICK_COST = {
   camp_drying_rack_add: 1,
   camp_drying_rack_add_inventory: 1,
   camp_drying_rack_remove: 1,
-  meal_plan_set: 1,
-  meal_plan_commit: 1,
+  // Debrief UI actions should not advance global time/hunger.
+  // These are planning/confirmation steps that happen during the nightly overlay.
+  meal_plan_set: 0,
+  meal_plan_commit: 0,
   camp_station_build: 1,
   tool_craft: 1,
   equip_item: 1,
   unequip_item: 1,
   partner_task_set: 1,
-  debrief_enter: 1,
-  debrief_exit: 1,
+  debrief_enter: 0,
+  debrief_exit: 0,
   partner_medicine_administer: 1,
   partner_vision_request: 1,
   partner_vision_confirm: 1,
   partner_vision_choose: 1,
   nature_sight_overlay_set: 1,
+  inventory_relocate_stack: 0,
 };
 
 const EQUIPPABLE_ITEM_TO_SLOT = {
@@ -118,7 +142,6 @@ const EQUIPMENT_SLOTS = new Set(['gloves', 'coat', 'head']);
 
 const MIN_FIELD_EDIBILITY_SCORE = 0.85;
 const MIN_FISH_ROD_CAST_TICKS = 5;
-const NIGHTLY_DEBRIEF_START_TICK = Math.floor(TICKS_PER_DAY / 2);
 const NATURE_SIGHT_OVERLAYS = new Set([
   'calorie_heatmap',
   'animal_density',
@@ -133,7 +156,7 @@ const CRAFT_TAG_ALIASES = {
   sun_hat_reed_material: 'reedy_material',
 };
 
-const CAMP_STATION_RECIPES = {
+export const CAMP_STATION_RECIPES = {
   raised_sleeping_platform: {
     stationId: 'raised_sleeping_platform',
     craftTicks: 100,
@@ -176,7 +199,7 @@ const CAMP_STATION_RECIPES = {
   },
 };
 
-const TOOL_RECIPES = {
+export const TOOL_RECIPES = {
   flint_knife: {
     recipeId: 'flint_knife',
     craftTicks: 30,
@@ -317,7 +340,7 @@ const TOOL_RECIPES = {
   leaching_basket: {
     recipeId: 'leaching_basket',
     craftTicks: 30,
-    requiredUnlock: null,
+    requiredUnlock: 'unlock_tool_leaching_basket',
     outputItemId: 'tool:leaching_basket',
     outputQuantity: 1,
     outputFootprintW: 2,
@@ -739,6 +762,73 @@ function validateWaterskinFillAction(state, action, actor) {
   };
 }
 
+function validateWaterDrinkAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'water_drink_out_of_bounds', message: 'water_drink target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'water_drink target must be on current or adjacent tile',
+    };
+  }
+
+  const campX = Number.isInteger(state?.camp?.anchorX) ? state.camp.anchorX : null;
+  const campY = Number.isInteger(state?.camp?.anchorY) ? state.camp.anchorY : null;
+  if (campX !== null && campY !== null && target.x === campX && target.y === campY) {
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: {
+          ...action.payload,
+          x: target.x,
+          y: target.y,
+          sourceType: 'safe',
+        },
+      },
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  if (!tile || !tile.waterType || tile.waterFrozen === true) {
+    return {
+      ok: false,
+      code: 'water_drink_invalid_target',
+      message: 'water_drink requires an unfrozen river or pond tile',
+    };
+  }
+
+  const sourceType = resolveWaterskinSourceTypeFromWaterTile(tile);
+  if (!sourceType) {
+    return {
+      ok: false,
+      code: 'water_drink_invalid_target',
+      message: 'water_drink could not resolve a valid water source type',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        x: target.x,
+        y: target.y,
+        sourceType,
+      },
+    },
+  };
+}
+
 function validateWaterskinDrinkAction(state, action, actor) {
   const requestedItemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : null;
   const drinkableStack = resolveWaterskinDrinkableStack(actor, requestedItemId);
@@ -790,10 +880,11 @@ function validateWaterskinDrinkAction(state, action, actor) {
 
 function normalizeTickCost(kind, payload) {
   const requested = Number(payload?.tickCost);
-  if (Number.isInteger(requested) && requested > 0) {
+  if (Number.isInteger(requested) && requested >= 0) {
     return requested;
   }
-  return ACTION_TICK_COST[kind] || 1;
+  const mapped = ACTION_TICK_COST[kind];
+  return Number.isInteger(mapped) && mapped >= 0 ? mapped : 1;
 }
 
 function collectAdjacentFishableWaterTargets(state, actor) {
@@ -846,13 +937,11 @@ function validateFishRodCastAction(state, action, actor) {
     };
   }
 
-  const actorBudget = getActorBudgetCurrent(actor);
-  if (action.tickCost > actorBudget) {
+  if (!actorCanSpendTickBudget(actor, action.tickCost)) {
     return {
       ok: false,
-      code: 'invalid_tick_cost',
-      message: 'fish_rod_cast tickCost cannot exceed actor current budget',
-      maxTickCost: actorBudget,
+      code: 'no_tick_budget',
+      message: `fish_rod_cast would exceed the daily tick overdraft limit (+${MAX_DAILY_TICK_OVERDRAFT})`,
     };
   }
 
@@ -1409,6 +1498,196 @@ function validateTrapCheckAction(state, action, actor) {
   };
 }
 
+function validateTrapBaitAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'trap_bait_out_of_bounds', message: 'trap_bait target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'trap_bait target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  const hasSimpleSnare = tile?.simpleSnare?.active === true;
+  const hasDeadfallTrap = tile?.deadfallTrap?.active === true;
+  if (!tile || (!hasSimpleSnare && !hasDeadfallTrap)) {
+    return {
+      ok: false,
+      code: 'trap_bait_invalid_target',
+      message: 'trap_bait target must contain an active simple snare or deadfall trap',
+    };
+  }
+
+  if (hasSimpleSnare) {
+    const baitItemId = typeof tile.simpleSnare?.baitItemId === 'string' ? tile.simpleSnare.baitItemId : null;
+    if (baitItemId) {
+      return {
+        ok: false,
+        code: 'trap_bait_already_baited',
+        message: 'trap_bait target already baited',
+      };
+    }
+  }
+  if (hasDeadfallTrap) {
+    const baitItemId = typeof tile.deadfallTrap?.baitItemId === 'string' ? tile.deadfallTrap.baitItemId : null;
+    if (baitItemId) {
+      return {
+        ok: false,
+        code: 'trap_bait_already_baited',
+        message: 'trap_bait target already baited',
+      };
+    }
+  }
+
+  const baitItemIdRaw = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : '';
+  const baitItemId = baitItemIdRaw ? baitItemIdRaw : null;
+  if (!baitItemId) {
+    return {
+      ok: false,
+      code: 'trap_bait_missing_item',
+      message: 'trap_bait requires baitItemId (a harvested plant-part item)',
+    };
+  }
+  if (!hasInventoryItem(actor, baitItemId, 1)) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'trap_bait requires the bait item in inventory',
+      requiredItemId: baitItemId,
+    };
+  }
+
+  const plantSpeciesId = parseLandTrapBaitPlantSpeciesId(baitItemId);
+  if (!plantSpeciesId) {
+    return {
+      ok: false,
+      code: 'trap_bait_invalid_item',
+      message: 'trap_bait requires a harvested plant-part item (species:part:substage)',
+    };
+  }
+
+  if (hasSimpleSnare && !hasDeadfallTrap) {
+    if (!plantSpeciesEligibleForSimpleSnareBait(plantSpeciesId)) {
+      return {
+        ok: false,
+        code: 'trap_bait_not_in_target_diet',
+        message: 'trap_bait plant species is not in this trap target\'s diet',
+      };
+    }
+  } else if (hasDeadfallTrap && !hasSimpleSnare) {
+    if (!plantSpeciesEligibleForDeadfallLandBait(plantSpeciesId)) {
+      return {
+        ok: false,
+        code: 'trap_bait_not_in_target_diet',
+        message: 'trap_bait plant species is not eaten by any animal this deadfall can catch',
+      };
+    }
+  } else {
+    return {
+      ok: false,
+      code: 'trap_bait_invalid_target',
+      message: 'trap_bait requires exactly one active land trap on the tile',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        x: target.x,
+        y: target.y,
+        baitItemId,
+      },
+    },
+  };
+}
+
+function validateMarkerPlaceAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'marker_place_out_of_bounds', message: 'marker_place target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'marker_place target must be on current or adjacent tile',
+    };
+  }
+
+  if (!hasInventoryItem(actor, 'tool:marker_stick', 1)) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'marker_place requires tool:marker_stick in inventory',
+      requiredItemId: 'tool:marker_stick',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  if (!tile) {
+    return { ok: false, code: 'marker_place_invalid_target', message: 'marker_place requires a valid tile' };
+  }
+  if (tile.markerStick === true) {
+    return { ok: false, code: 'marker_place_already_present', message: 'marker_place target already has a marker stick' };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        x: target.x,
+        y: target.y,
+      },
+    },
+  };
+}
+
+function validateMarkerRemoveAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'marker_remove_out_of_bounds', message: 'marker_remove target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'marker_remove target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  if (!tile || tile.markerStick !== true) {
+    return { ok: false, code: 'marker_remove_missing', message: 'marker_remove requires an existing marker stick on the target tile' };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        x: target.x,
+        y: target.y,
+      },
+    },
+  };
+}
+
 function validateTrapPlaceSnareAction(state, action, actor) {
   const target = resolveTargetCoordinates(state, actor, action.payload);
   if (!target || !inBounds(state, target.x, target.y)) {
@@ -1483,10 +1762,8 @@ function isActionUnlocked(state, kind) {
   if (!unlockKey) {
     return { unlocked: true, unlockKey: null };
   }
-
-  const unlockValue = state?.techUnlocks?.[unlockKey];
   return {
-    unlocked: unlockValue !== false,
+    unlocked: isUnlockEnabled(state, unlockKey),
     unlockKey,
   };
 }
@@ -1709,8 +1986,8 @@ function validateHoeAction(state, action, actor) {
 }
 
 function resolveFieldEdibilityScore(itemId) {
-  if (typeof itemId !== 'string' || !itemId.includes(':')) {
-    return null;
+  if (typeof itemId !== 'string' || !itemId) {
+    return 0;
   }
 
   const parts = itemId.split(':');
@@ -1718,13 +1995,17 @@ function resolveFieldEdibilityScore(itemId) {
     const [speciesId, partName, subStageId] = parts;
     const species = PLANT_BY_ID[speciesId];
     if (!species) {
-      return null;
+      return resolveCatalogFieldEdibilityScore(itemId);
     }
 
     const sourcePart = (species.parts || []).find((entry) => entry?.name === partName);
     const sourceSubStage = (sourcePart?.subStages || []).find((entry) => entry?.id === subStageId);
-    const score = Number(sourceSubStage?.edibility_score);
-    return Number.isFinite(score) ? score : null;
+    if (!sourcePart || !sourceSubStage) {
+      return resolveCatalogFieldEdibilityScore(itemId);
+    }
+
+    const score = Number(sourceSubStage.edibility_score);
+    return Number.isFinite(score) ? score : 0;
   }
 
   if (parts.length === 2) {
@@ -1735,24 +2016,19 @@ function resolveFieldEdibilityScore(itemId) {
 
     const species = ANIMAL_BY_ID[speciesId];
     if (!species) {
-      return null;
+      return resolveCatalogFieldEdibilityScore(itemId);
     }
 
     const sourcePart = (species.parts || []).find((entry) => entry?.id === partId);
-    const score = Number(sourcePart?.edibility_score);
-    return Number.isFinite(score) ? score : null;
+    if (!sourcePart) {
+      return resolveCatalogFieldEdibilityScore(itemId);
+    }
+
+    const score = Number(sourcePart.edibility_score);
+    return Number.isFinite(score) ? score : 0;
   }
 
-  return null;
-}
-
-function isActorAtCampAnchor(state, actor) {
-  const campX = Number(state?.camp?.anchorX);
-  const campY = Number(state?.camp?.anchorY);
-  if (!Number.isInteger(campX) || !Number.isInteger(campY) || !actor) {
-    return false;
-  }
-  return Number(actor.x) === campX && Number(actor.y) === campY;
+  return resolveCatalogFieldEdibilityScore(itemId);
 }
 
 function buildCampStockpileQuantityMap(state) {
@@ -1788,102 +2064,7 @@ function normalizeMealIngredients(rawIngredients) {
 }
 
 function resolveStewIngredientDescriptor(itemId) {
-  if (typeof itemId !== 'string' || !itemId) {
-    return null;
-  }
-
-  const item = ITEM_BY_ID[itemId];
-  if (item?.nutrition) {
-    return {
-      itemId,
-      nutrition: {
-        calories: Number(item.nutrition.calories) || 0,
-        protein: Number(item.nutrition.protein) || 0,
-        carbs: Number(item.nutrition.carbs) || 0,
-        fat: Number(item.nutrition.fat) || 0,
-      },
-      extraction: 1,
-      edibilityScore: 1,
-      harshness: 0,
-      familyKey: `item:${item.category || 'misc'}`,
-      flavorKey: `item:${item.category || 'misc'}`,
-    };
-  }
-
-  const parts = itemId.split(':');
-  if (parts.length === 3) {
-    const descriptor = parsePlantPartItemId(itemId);
-    const speciesId = descriptor?.speciesId || '';
-    const species = descriptor?.species || null;
-    const part = descriptor?.part || null;
-    const subStage = descriptor?.subStage || null;
-    const nutrition = subStage?.nutrition || null;
-    if (!nutrition) {
-      return null;
-    }
-    const extraction = Number.isFinite(Number(subStage?.stew_extraction_efficiency))
-      ? Number(subStage.stew_extraction_efficiency)
-      : 1;
-    const edibilityScoreRaw = Number.isFinite(Number(subStage?.cooked_edibility_score))
-      ? Number(subStage.cooked_edibility_score)
-      : Number(subStage?.edibility_score);
-    const harshnessRaw = Number.isFinite(Number(subStage?.cooked_harshness))
-      ? Number(subStage.cooked_harshness)
-      : Number(subStage?.edibility_harshness);
-    const familyRaw = subStage?.plant_family || part?.plant_family || species?.plant_family || speciesId;
-    const flavorRaw = subStage?.flavor_profile || part?.flavor_profile || species?.flavor_profile || familyRaw;
-    return {
-      itemId,
-      nutrition: {
-        calories: Number(nutrition.calories) || 0,
-        protein: Number(nutrition.protein) || 0,
-        carbs: Number(nutrition.carbs) || 0,
-        fat: Number(nutrition.fat) || 0,
-      },
-      extraction: Math.max(0, extraction),
-      edibilityScore: normalizeUnitInterval(edibilityScoreRaw),
-      harshness: normalizeUnitInterval(harshnessRaw),
-      familyKey: `plant:${String(familyRaw)}`,
-      flavorKey: `flavor:${String(flavorRaw)}`,
-    };
-  }
-
-  if (parts.length === 2) {
-    const [speciesId, partId] = parts;
-    const species = ANIMAL_BY_ID[speciesId] || null;
-    const part = (species?.parts || []).find((entry) => entry?.id === partId) || null;
-    const nutrition = part?.nutrition || null;
-    if (!nutrition) {
-      return null;
-    }
-    const extraction = Number.isFinite(Number(part?.stew_extraction_efficiency))
-      ? Number(part.stew_extraction_efficiency)
-      : 1;
-    const edibilityScoreRaw = Number.isFinite(Number(part?.cooked_edibility_score))
-      ? Number(part.cooked_edibility_score)
-      : Number(part?.edibility_score);
-    const harshnessRaw = Number.isFinite(Number(part?.cooked_harshness))
-      ? Number(part.cooked_harshness)
-      : Number(part?.edibility_harshness);
-    const familyRaw = part?.nausea_family || speciesId;
-    const flavorRaw = part?.flavor_profile || familyRaw;
-    return {
-      itemId,
-      nutrition: {
-        calories: Number(nutrition.calories) || 0,
-        protein: Number(nutrition.protein) || 0,
-        carbs: Number(nutrition.carbs) || 0,
-        fat: Number(nutrition.fat) || 0,
-      },
-      extraction: Math.max(0, extraction),
-      edibilityScore: normalizeUnitInterval(edibilityScoreRaw),
-      harshness: normalizeUnitInterval(harshnessRaw),
-      familyKey: `animal:${String(familyRaw)}`,
-      flavorKey: `flavor:${String(flavorRaw)}`,
-    };
-  }
-
-  return null;
+  return resolveStewIngredientDescriptorShared(itemId);
 }
 
 function getActorDailyCalorieRequirement(actor) {
@@ -2025,10 +2206,10 @@ function buildMealPlanPreview(state, normalizedIngredients) {
         quantity: q,
         descriptor,
         totalNutrition: {
-          calories: (Number(descriptor.nutrition.calories) || 0) * q * extraction * massScale,
-          protein: (Number(descriptor.nutrition.protein) || 0) * q * extraction * massScale,
-          carbs: (Number(descriptor.nutrition.carbs) || 0) * q * extraction * massScale,
-          fat: (Number(descriptor.nutrition.fat) || 0) * q * extraction * massScale,
+          calories: (Number(descriptor.nutrition.calories) || 0) * q * extraction * massScale * (Number(descriptor.stewNutritionFactor) || 0),
+          protein: (Number(descriptor.nutrition.protein) || 0) * q * extraction * massScale * (Number(descriptor.stewNutritionFactor) || 0),
+          carbs: (Number(descriptor.nutrition.carbs) || 0) * q * extraction * massScale * (Number(descriptor.stewNutritionFactor) || 0),
+          fat: (Number(descriptor.nutrition.fat) || 0) * q * extraction * massScale * (Number(descriptor.stewNutritionFactor) || 0),
         },
       };
     })
@@ -2068,18 +2249,56 @@ function buildMealPlanPreview(state, normalizedIngredients) {
   const weightedHarshness = weighted.totalCalories > 0
     ? weighted.harshnessNumerator / weighted.totalCalories
     : 0;
+
+  // Edibility model:
+  // - `descriptor.edibilityScore` is interpreted as: "maximum fraction of a (dailyCalories) meal
+  //   that can come from this ingredient" (composition constraint).
+  // - Eating is modeled as consuming a proportional mixture of the stew, so for a target meal size E:
+  //     E * (ingredientCalories / totalCalories) <= ingredientEdibility * dailyCalories
+  //   => E <= ingredientEdibility * dailyCalories * (totalCalories / ingredientCalories)
+  // - We additionally fold in harshness as a small reduction to the ingredient's effective ceiling.
+  function ingredientEffectiveCeiling(descriptor) {
+    const rawEdibility = Number(descriptor?.edibilityScore);
+    const rawHarshness = Number(descriptor?.harshness);
+    const e = Number.isFinite(rawEdibility) ? rawEdibility : 0.5;
+    const h = Number.isFinite(rawHarshness) ? rawHarshness : 0;
+    return Math.max(0, Math.min(1, e - (h * 0.5)));
+  }
+
+  function computeEdibilityIntakeCapCalories(dailyCalories) {
+    const totalCalories = totalNutrition.calories;
+    if (!(totalCalories > 0) || !(dailyCalories > 0)) {
+      return Infinity;
+    }
+    let cap = Infinity;
+    for (const entry of ingredientsWithDescriptor) {
+      const ingredientCalories = Number(entry?.totalNutrition?.calories) || 0;
+      if (!(ingredientCalories > 0)) {
+        continue;
+      }
+      const ceiling = ingredientEffectiveCeiling(entry.descriptor);
+      const ingredientMealCap = ceiling * dailyCalories;
+      const eMax = ingredientMealCap * (totalCalories / ingredientCalories);
+      if (Number.isFinite(eMax)) {
+        cap = Math.min(cap, eMax);
+      }
+    }
+    return cap;
+  }
+
+  // Keep the weighted values for UI/debugging, but edibility limiting now uses the per-ingredient cap above.
   const edibilityCeiling = Math.max(0, Math.min(1, weightedEdibility - (weightedHarshness * 0.5)));
   const monotonyScore = computeMealMonotonyScore(ingredientsWithDescriptor);
   const varietyBand = getMealVarietyBand(monotonyScore);
 
   const participants = Object.values(state?.actors || {})
     .filter((actor) => (Number(actor?.health) || 0) > 0)
-    .filter((actor) => isActorAtCampAnchor(state, actor));
+    .filter((actor) => isActorWithinCampFootprint(state, actor));
 
   const participantRows = participants.map((actor) => {
     const dailyCalories = getActorDailyCalorieRequirement(actor);
     const hunger = normalizeUnitInterval(actor?.hunger);
-    const deficitCalories = Math.max(0, (1 - hunger) * dailyCalories);
+    const deficitCalories = Math.max(0, (1 - hunger) * HUNGER_BAR_CALORIES);
     return {
       actorId: actor.id,
       dailyCalories,
@@ -2094,13 +2313,17 @@ function buildMealPlanPreview(state, normalizedIngredients) {
     const shareCalories = totalRequirement > 0
       ? totalNutrition.calories * (row.dailyCalories / totalRequirement)
       : 0;
-    const intakeFraction = Math.max(0, Math.min(1, edibilityCeiling, weighted.nauseaCeiling, row.nauseaCap));
-    const intakeCaloriesCap = row.dailyCalories * intakeFraction;
-    const effectiveCalories = Math.max(0, Math.min(shareCalories, intakeCaloriesCap, row.deficitCalories));
+    const nauseaFraction = Math.max(0, Math.min(1, weighted.nauseaCeiling, row.nauseaCap));
+    const edibilityIntakeCapCalories = computeEdibilityIntakeCapCalories(row.dailyCalories);
+    // Total meal cap is based on hunger deficit (multi-day) and the stew's composition constraints (dailyCalories baseline).
+    const intakeCaloriesCap = Math.max(0, Math.min(row.deficitCalories, edibilityIntakeCapCalories)) * nauseaFraction;
+    const effectiveCalories = Math.max(0, Math.min(shareCalories, intakeCaloriesCap));
     let limitReason = null;
     if (effectiveCalories < shareCalories) {
-      if (intakeCaloriesCap <= row.deficitCalories) {
-        limitReason = intakeFraction === edibilityCeiling ? 'edibility_limited' : 'nausea_limited';
+      if (effectiveCalories < intakeCaloriesCap - 1e-6) {
+        limitReason = 'share_limited';
+      } else if (intakeCaloriesCap < row.deficitCalories - 1e-6) {
+        limitReason = 'edibility_limited';
       } else {
         limitReason = 'hunger_full';
       }
@@ -2113,8 +2336,12 @@ function buildMealPlanPreview(state, normalizedIngredients) {
       effectiveCalories,
       deficitCalories: row.deficitCalories,
       hungerBefore: row.hunger,
-      hungerGain: row.dailyCalories > 0 ? (effectiveCalories / row.dailyCalories) : 0,
-      intakeFraction,
+      hungerGain: HUNGER_BAR_CALORIES > 0 ? (effectiveCalories / HUNGER_BAR_CALORIES) : 0,
+      intakeFraction: nauseaFraction,
+      edibilityCeiling,
+      nauseaCeiling: weighted.nauseaCeiling,
+      nauseaCap: row.nauseaCap,
+      edibilityIntakeCapCalories: Number.isFinite(edibilityIntakeCapCalories) ? edibilityIntakeCapCalories : null,
       limitReason,
     };
   });
@@ -2189,11 +2416,11 @@ function validateMealPlanIngredientsAgainstCamp(state, normalizedIngredients) {
 }
 
 function validateMealPlanSetAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'meal_plan_set requires actor at camp anchor',
+      message: 'meal_plan_set requires actor within camp',
     };
   }
 
@@ -2221,11 +2448,11 @@ function validateMealPlanSetAction(state, action, actor) {
 }
 
 function validateMealPlanCommitAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'meal_plan_commit requires actor at camp anchor',
+      message: 'meal_plan_commit requires actor within camp',
     };
   }
 
@@ -2268,11 +2495,11 @@ function isDebriefActive(state) {
 }
 
 function validateDebriefEnterAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'debrief_enter requires actor at camp anchor',
+      message: 'debrief_enter requires actor within camp',
     };
   }
   if (isDebriefActive(state)) {
@@ -2301,11 +2528,11 @@ function validateDebriefEnterAction(state, action, actor) {
 }
 
 function validateDebriefExitAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'debrief_exit requires actor at camp anchor',
+      message: 'debrief_exit requires actor within camp',
     };
   }
   if (!isDebriefActive(state)) {
@@ -2327,11 +2554,11 @@ function validateDebriefExitAction(state, action, actor) {
 }
 
 function validatePartnerMedicineAdministerAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'partner_medicine_administer requires actor at camp anchor',
+      message: 'partner_medicine_administer requires actor within camp',
     };
   }
   if (!isDebriefActive(state)) {
@@ -2386,11 +2613,11 @@ function validatePartnerMedicineAdministerAction(state, action, actor) {
 }
 
 function validatePartnerVisionRequestAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'partner_vision_request requires actor at camp anchor',
+      message: 'partner_vision_request requires actor within camp',
     };
   }
   if (!isDebriefActive(state)) {
@@ -2436,11 +2663,11 @@ function validatePartnerVisionRequestAction(state, action, actor) {
 }
 
 function validatePartnerVisionConfirmAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'partner_vision_confirm requires actor at camp anchor',
+      message: 'partner_vision_confirm requires actor within camp',
     };
   }
   if (!isDebriefActive(state)) {
@@ -2492,11 +2719,11 @@ function validatePartnerVisionConfirmAction(state, action, actor) {
 }
 
 function validatePartnerVisionChooseAction(state, action, actor) {
-  if (!isActorAtCampAnchor(state, actor)) {
+  if (!isActorWithinCampFootprint(state, actor)) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'partner_vision_choose requires actor at camp anchor',
+      message: 'partner_vision_choose requires actor within camp',
     };
   }
   if (!isDebriefActive(state)) {
@@ -2642,7 +2869,7 @@ function resolveAnimalProcessingOption(itemId, processId) {
   }
 
   const sourcePart = (species.parts || []).find((entry) => entry?.id === partId);
-  if (partId === 'carcass' && processId === 'butcher') {
+  if ((partId === 'carcass' || partId === 'fish_carcass') && processId === 'butcher') {
     const carcassOutputs = (species.parts || [])
       .filter((entry) => entry?.id && entry.id !== 'dried_hide')
       .map((entry) => {
@@ -2692,8 +2919,20 @@ function resolveAnimalProcessingOption(itemId, processId) {
   };
 }
 
-function resolveSharedProcessingOption(itemId, processId) {
+function resolveSharedProcessingOption(itemId, processId, processLocationHint = null) {
   const itemTags = resolveCraftTagsForItem(itemId);
+  if (processId === 'spin_cordage' && itemTags.includes('cordage_fiber')) {
+    const useHand = processLocationHint === 'hand';
+    return {
+      type: 'shared',
+      processOption: {
+        id: 'spin_cordage',
+        location: useHand ? 'hand' : 'thread_spinner',
+        ticks: useHand ? 4 : 2,
+        outputs: [{ itemId: 'cordage', quantity: 1 }],
+      },
+    };
+  }
   if ((processId === 'make_barkcloth' || processId === 'pound_barkcloth') && itemTags.includes('inner_bark_cloth')) {
     return {
       type: 'shared',
@@ -2722,8 +2961,8 @@ function resolveSharedProcessingOption(itemId, processId) {
   return null;
 }
 
-function resolveProcessingDescriptor(itemId, processId) {
-  return resolveSharedProcessingOption(itemId, processId)
+function resolveProcessingDescriptor(itemId, processId, processLocationHint = null) {
+  return resolveSharedProcessingOption(itemId, processId, processLocationHint)
     || resolvePlantProcessingOption(itemId, processId)
     || resolveAnimalProcessingOption(itemId, processId)
     || null;
@@ -2799,6 +3038,16 @@ function computeProcessOutputs(descriptor, quantity) {
     if (Number.isFinite(Number(output.tanninRemaining))) {
       latest.tanninRemaining = Math.max(0, Math.min(1, Number(output.tanninRemaining)));
     }
+    if (
+      descriptor.type === 'plant'
+      && !Number.isFinite(Number(latest.decayDaysRemaining))
+    ) {
+      const outPlant = parsePlantPartItemId(outputItemId);
+      const catalogDecay = Number(outPlant?.subStage?.decay_days);
+      if (Number.isFinite(catalogDecay) && catalogDecay > 0) {
+        latest.decayDaysRemaining = Math.max(0, Math.floor(catalogDecay));
+      }
+    }
   }
 
   return normalized;
@@ -2828,7 +3077,10 @@ function validateProcessItemAction(state, action, actor) {
     return { ok: false, code: 'insufficient_item_quantity', message: 'process_item requires available item quantity in actor inventory' };
   }
 
-  const descriptor = resolveProcessingDescriptor(itemId, processId);
+  const processLocationHint = typeof action.payload?.processLocation === 'string'
+    ? action.payload.processLocation
+    : null;
+  const descriptor = resolveProcessingDescriptor(itemId, processId, processLocationHint);
   if (!descriptor) {
     return { ok: false, code: 'unknown_process_option', message: 'process_item requires known processing option for payload.itemId + payload.processId' };
   }
@@ -2854,6 +3106,9 @@ function validateProcessItemAction(state, action, actor) {
     if (processLocation !== 'camp' && !hasCampStationUnlocked(state, processLocation)) {
       return { ok: false, code: 'missing_station', message: `process_item requires station: ${processLocation}`, stationId: processLocation };
     }
+    if (processLocation !== 'camp' && !isActorAdjacentToStation(state, actor, processLocation)) {
+      return { ok: false, code: 'station_out_of_range', message: `process_item requires adjacency to station: ${processLocation}`, stationId: processLocation };
+    }
   }
 
   const outputs = computeProcessOutputs(descriptor, quantity);
@@ -2871,9 +3126,17 @@ function validateProcessItemAction(state, action, actor) {
     quantity,
   );
 
-  const ticks = Number.isFinite(Number(descriptor.processOption.ticks))
+  const ticksPerUnit = Number.isFinite(Number(descriptor.processOption.ticks))
     ? Math.max(1, Math.floor(Number(descriptor.processOption.ticks)))
     : 1;
+  // GDD §8.6: one sugar-boiling session (~150 ticks) processes a batch at the station; cost does not stack per vessel.
+  let ticks = processId === 'boil_sap'
+    ? ticksPerUnit
+    : Math.max(1, ticksPerUnit * quantity);
+
+  if (processId === 'butcher' && actorQualifiesForWorkbenchFieldBonus(state, actor)) {
+    ticks = Math.max(1, Math.floor(ticks * 0.8));
+  }
 
   return {
     ok: true,
@@ -3639,13 +3902,95 @@ function isUnlockEnabled(state, unlockKey) {
   if (typeof unlockKey !== 'string' || !unlockKey) {
     return true;
   }
-
-  return state?.techUnlocks?.[unlockKey] !== false;
+  const value = state?.techUnlocks?.[unlockKey];
+  if (state?.techForest?.version != null) {
+    return value === true;
+  }
+  return value !== false;
 }
 
 function hasCampStationUnlocked(state, stationId) {
   return Array.isArray(state?.camp?.stationsUnlocked)
     && state.camp.stationsUnlocked.includes(stationId);
+}
+
+function getCampFootprintBounds(state) {
+  const anchorX = Number(state?.camp?.anchorX);
+  const anchorY = Number(state?.camp?.anchorY);
+  if (!Number.isInteger(anchorX) || !Number.isInteger(anchorY)) {
+    return null;
+  }
+  return {
+    minX: anchorX - 1,
+    maxX: anchorX + 2,
+    minY: anchorY - 1,
+    maxY: anchorY + 2,
+    anchorX,
+    anchorY,
+  };
+}
+
+/** First free camp tile for a new station: in-bounds, not the anchor fire tile, not already occupied. */
+function findFirstDefaultCampStationPlacement(state, campBounds) {
+  if (!campBounds) {
+    return null;
+  }
+  for (let y = campBounds.minY; y <= campBounds.maxY; y += 1) {
+    for (let x = campBounds.minX; x <= campBounds.maxX; x += 1) {
+      if (x === campBounds.anchorX && y === campBounds.anchorY) {
+        continue;
+      }
+      if (!inBounds(state, x, y)) {
+        continue;
+      }
+      if (isTileOccupiedByCampStation(state, x, y)) {
+        continue;
+      }
+      return { x, y };
+    }
+  }
+  return null;
+}
+
+function getCampStationPlacement(state, stationId) {
+  const placement = state?.camp?.stationPlacements?.[stationId];
+  if (!Number.isInteger(placement?.x) || !Number.isInteger(placement?.y)) {
+    return null;
+  }
+  return { x: placement.x, y: placement.y };
+}
+
+function isTileOccupiedByCampStation(state, x, y) {
+  if (!state?.camp?.stationPlacements || typeof state.camp.stationPlacements !== 'object') {
+    return false;
+  }
+  return Object.values(state.camp.stationPlacements).some((placement) => (
+    Number.isInteger(placement?.x)
+    && Number.isInteger(placement?.y)
+    && placement.x === x
+    && placement.y === y
+  ));
+}
+
+function isActorAdjacentToStation(state, actor, stationId) {
+  const actorX = Number(actor?.x);
+  const actorY = Number(actor?.y);
+  const placement = getCampStationPlacement(state, stationId);
+  if (!Number.isInteger(actorX) || !Number.isInteger(actorY) || !placement) {
+    return false;
+  }
+  return Math.abs(actorX - placement.x) <= 1 && Math.abs(actorY - placement.y) <= 1;
+}
+
+/** 20% workbench bonus only when the workbench is built (tile placement), not research-unlock alone. */
+function actorQualifiesForWorkbenchFieldBonus(state, actor) {
+  if (!getCampStationPlacement(state, 'workbench')) {
+    return false;
+  }
+  if (isActorWithinCampBounds(state, actor)) {
+    return true;
+  }
+  return isActorAdjacentToStation(state, actor, 'workbench');
 }
 
 const THREAD_SPINNER_TASK_KINDS = new Set([
@@ -3691,11 +4036,7 @@ function getPartnerTaskTicksRequired(state, taskKind, ticksRequiredRaw) {
 
 function getToolCraftTickCost(state, actor, recipe) {
   const baseCost = Number.isInteger(recipe?.craftTicks) ? recipe.craftTicks : 1;
-  if (!isActorWithinCampBounds(state, actor)) {
-    return baseCost;
-  }
-
-  if (!hasCampStationUnlocked(state, 'workbench')) {
+  if (!actorQualifiesForWorkbenchFieldBonus(state, actor)) {
     return baseCost;
   }
 
@@ -3722,16 +4063,73 @@ function getActorBudgetCurrent(actor) {
   return 0;
 }
 
+/** Matches GDD: up to 40 overdraft ticks/day before pass-out (tickBudgetCurrent may reach -40). */
+export const MAX_DAILY_TICK_OVERDRAFT = 40;
+
+/**
+ * Preview spending `tickCost` from a tick budget value (typically actor.tickBudgetCurrent).
+ * Used by UI context menus to warn on overdraft or disable when the spend would pass the daily limit.
+ */
+export function previewTickBudgetImpact(tickBudgetCurrent, tickCost) {
+  const current = Number.isFinite(Number(tickBudgetCurrent)) ? Number(tickBudgetCurrent) : 0;
+  const cost = Number.isInteger(tickCost) ? tickCost : Math.floor(Number(tickCost) || 0);
+  if (!Number.isFinite(cost) || cost < 1) {
+    return {
+      tickCost: cost,
+      budgetAfter: current,
+      wouldOverdraft: false,
+      exceedsDailyOverdraftLimit: false,
+    };
+  }
+  const budgetAfter = current - cost;
+  return {
+    tickCost: cost,
+    budgetAfter,
+    wouldOverdraft: budgetAfter < 0,
+    exceedsDailyOverdraftLimit: budgetAfter < -MAX_DAILY_TICK_OVERDRAFT,
+  };
+}
+
+function actorCanSpendTickBudget(actor, tickCost) {
+  const current = getActorBudgetCurrent(actor);
+  const preview = previewTickBudgetImpact(current, tickCost);
+  return !preview.exceedsDailyOverdraftLimit;
+}
+
+function gateActorTickBudget(actor, validation) {
+  if (!validation || !validation.ok) {
+    return validation;
+  }
+  const kind = validation.normalizedAction?.kind;
+  if (kind === 'debrief_enter' || kind === 'debrief_exit') {
+    return validation;
+  }
+  const tickCost = Number(validation.normalizedAction?.tickCost);
+  if (!Number.isInteger(tickCost) || tickCost < 1) {
+    return validation;
+  }
+  if (!actorCanSpendTickBudget(actor, tickCost)) {
+    const actorId = typeof actor?.id === 'string' ? actor.id : '(unknown)';
+    return {
+      ok: false,
+      code: 'no_tick_budget',
+      message: `actor ${actorId} would exceed the daily tick overdraft limit (+${MAX_DAILY_TICK_OVERDRAFT})`,
+    };
+  }
+  return validation;
+}
+
 function isActorWithinCampBounds(state, actor) {
-  const campX = Number(state?.camp?.anchorX);
-  const campY = Number(state?.camp?.anchorY);
+  const bounds = getCampFootprintBounds(state);
   const actorX = Number(actor?.x);
   const actorY = Number(actor?.y);
-  if (!Number.isInteger(campX) || !Number.isInteger(campY) || !Number.isInteger(actorX) || !Number.isInteger(actorY)) {
+  if (!bounds || !Number.isInteger(actorX) || !Number.isInteger(actorY)) {
     return false;
   }
-
-  return Math.abs(actorX - campX) <= 1 && Math.abs(actorY - campY) <= 1;
+  return actorX >= bounds.minX
+    && actorX <= bounds.maxX
+    && actorY >= bounds.minY
+    && actorY <= bounds.maxY;
 }
 
 function inBounds(state, x, y) {
@@ -4046,6 +4444,74 @@ function validateLeachingBasketRetrieveAction(state, action, actor) {
   };
 }
 
+const ROCK_HARVEST_YIELD_BY_TYPE = Object.freeze({
+  glacial_erratic: Object.freeze({
+    heavy_rock: Object.freeze({
+      rockYield: 'heavy_rock',
+      outputItemId: 'heavy_rock',
+      tickCost: 3,
+      outputFootprintW: 2,
+      outputFootprintH: 2,
+    }),
+    flat_stone: Object.freeze({
+      rockYield: 'flat_stone',
+      outputItemId: 'flat_stone',
+      tickCost: 2,
+      outputFootprintW: 1,
+      outputFootprintH: 1,
+    }),
+  }),
+  flint_cobble_scatter: Object.freeze({
+    flint_cobble: Object.freeze({
+      rockYield: 'flint_cobble',
+      outputItemId: 'flint_cobble',
+      tickCost: 5,
+      outputFootprintW: 1,
+      outputFootprintH: 1,
+    }),
+    flat_stone: Object.freeze({
+      rockYield: 'flat_stone',
+      outputItemId: 'flat_stone',
+      tickCost: 3,
+      outputFootprintW: 1,
+      outputFootprintH: 1,
+    }),
+  }),
+});
+
+function resolveRockHarvestYieldEntry(rockType, rockYieldRaw) {
+  const byType = ROCK_HARVEST_YIELD_BY_TYPE[rockType];
+  if (!byType) {
+    return null;
+  }
+  const fallbackKey = rockType === 'glacial_erratic' ? 'heavy_rock' : 'flint_cobble';
+  const key = typeof rockYieldRaw === 'string' && rockYieldRaw !== '' ? rockYieldRaw : fallbackKey;
+  return byType[key] || null;
+}
+
+/** Labels + tick costs for tile context menus (GDD rock split: heavy vs flat vs flint). */
+export function listRockHarvestYieldChoices(rockType) {
+  const byType = ROCK_HARVEST_YIELD_BY_TYPE[rockType];
+  if (!byType) {
+    return [];
+  }
+  const order = rockType === 'glacial_erratic'
+    ? ['heavy_rock', 'flat_stone']
+    : ['flint_cobble', 'flat_stone'];
+  return order
+    .map((k) => byType[k])
+    .filter(Boolean)
+    .map((entry) => ({
+      rockYield: entry.rockYield,
+      label: entry.rockYield === 'heavy_rock'
+        ? 'Harvest heavy rock'
+        : entry.rockYield === 'flat_stone'
+          ? 'Harvest flat stone'
+          : 'Harvest flint cobbles',
+      tickCost: entry.tickCost,
+    }));
+}
+
 function validateHarvestAction(state, action, actor) {
   const plantId = typeof action.payload?.plantId === 'string' ? action.payload.plantId : '';
   if (plantId) {
@@ -4109,13 +4575,27 @@ function validateHarvestAction(state, action, actor) {
     const reachTools = getHarvestReachToolState(actor);
     const poolState = getHarvestActionPoolState(subStageEntry, reachTier);
     if (reachTier === 'canopy' && !reachTools.canAccessCanopyPool) {
-      return {
-        ok: false,
-        code: 'missing_required_tool',
-        message: 'harvest reach tier canopy requires tool:ladder in inventory',
-        requiredToolId: 'tool:ladder',
-        ...poolState,
-      };
+      const g = poolState.remainingActionsGround;
+      const e = poolState.remainingActionsElevated;
+      const c = poolState.remainingActionsCanopy;
+      if (g <= 0 && e > 0 && !reachTools.canAccessElevatedPool) {
+        return {
+          ok: false,
+          code: 'missing_required_tool',
+          message: 'harvest canopy sub-stage requires tool:stool or tool:ladder for elevated pool actions',
+          requiredToolId: 'tool:stool',
+          ...poolState,
+        };
+      }
+      if (g <= 0 && (e <= 0 || !reachTools.canAccessElevatedPool) && c > 0) {
+        return {
+          ok: false,
+          code: 'missing_required_tool',
+          message: 'harvest reach tier canopy requires tool:ladder in inventory',
+          requiredToolId: 'tool:ladder',
+          ...poolState,
+        };
+      }
     }
     if (reachTier === 'canopy' && poolState.remainingActionsCanopyCascade <= 0) {
       return {
@@ -4211,9 +4691,16 @@ function validateHarvestAction(state, action, actor) {
   }
 
   const tile = getTile(state, target.x, target.y);
+  const rockYieldRaw = typeof action.payload?.rockYield === 'string' ? action.payload.rockYield : '';
   if (tile?.rockType === 'glacial_erratic' || tile?.rockType === 'flint_cobble_scatter') {
-    const outputItemId = tile.rockType === 'glacial_erratic' ? 'heavy_rock' : 'flint_cobble';
-    const tickCost = tile.rockType === 'glacial_erratic' ? 3 : 5;
+    const sel = resolveRockHarvestYieldEntry(tile.rockType, rockYieldRaw);
+    if (!sel) {
+      return {
+        ok: false,
+        code: 'invalid_rock_yield',
+        message: 'harvest payload.rockYield is missing or not valid for this rock tile',
+      };
+    }
     return {
       ok: true,
       code: null,
@@ -4226,12 +4713,13 @@ function validateHarvestAction(state, action, actor) {
           x: target.x,
           y: target.y,
           rockType: tile.rockType,
-          outputItemId,
+          rockYield: sel.rockYield,
+          outputItemId: sel.outputItemId,
           outputQuantity: 1,
-          outputFootprintW: outputItemId === 'heavy_rock' ? 2 : 1,
-          outputFootprintH: outputItemId === 'heavy_rock' ? 2 : 1,
+          outputFootprintW: sel.outputFootprintW,
+          outputFootprintH: sel.outputFootprintH,
         },
-        tickCost,
+        tickCost: sel.tickCost,
       },
     };
   }
@@ -4493,7 +4981,7 @@ function validateEatAction(state, action, actor) {
   }
 
   const fieldEdibilityScore = resolveFieldEdibilityScore(itemId);
-  if (Number.isFinite(fieldEdibilityScore) && fieldEdibilityScore < MIN_FIELD_EDIBILITY_SCORE) {
+  if (fieldEdibilityScore < MIN_FIELD_EDIBILITY_SCORE) {
     return {
       ok: false,
       code: 'item_not_field_edible',
@@ -4642,6 +5130,73 @@ function validateCampStationBuildAction(state, action, actor) {
     };
   }
 
+  const campBounds = getCampFootprintBounds(state);
+  if (!campBounds) {
+    return {
+      ok: false,
+      code: 'invalid_camp_anchor',
+      message: 'camp_station_build requires a valid camp anchor',
+    };
+  }
+
+  const hasExplicitX = Number.isInteger(action.payload?.x);
+  const hasExplicitY = Number.isInteger(action.payload?.y);
+  let placementX;
+  let placementY;
+  if (hasExplicitX && hasExplicitY) {
+    placementX = action.payload.x;
+    placementY = action.payload.y;
+  } else if (!hasExplicitX && !hasExplicitY) {
+    const auto = findFirstDefaultCampStationPlacement(state, campBounds);
+    if (!auto) {
+      return {
+        ok: false,
+        code: 'no_free_station_tile',
+        message: 'camp_station_build has no free camp tile for station placement',
+      };
+    }
+    placementX = auto.x;
+    placementY = auto.y;
+  } else {
+    return {
+      ok: false,
+      code: 'invalid_station_placement',
+      message: 'camp_station_build requires both payload.x and payload.y when specifying placement',
+    };
+  }
+
+  if (
+    placementX < campBounds.minX || placementX > campBounds.maxX
+    || placementY < campBounds.minY || placementY > campBounds.maxY
+  ) {
+    return {
+      ok: false,
+      code: 'station_out_of_camp_bounds',
+      message: 'camp_station_build requires placement within camp bounds',
+    };
+  }
+  if (placementX === campBounds.anchorX && placementY === campBounds.anchorY) {
+    return {
+      ok: false,
+      code: 'station_on_camp_anchor',
+      message: 'camp_station_build cannot place a station on the camp anchor tile',
+    };
+  }
+  if (!inBounds(state, placementX, placementY)) {
+    return {
+      ok: false,
+      code: 'station_out_of_bounds',
+      message: 'camp_station_build placement tile is out of world bounds',
+    };
+  }
+  if (isTileOccupiedByCampStation(state, placementX, placementY)) {
+    return {
+      ok: false,
+      code: 'station_tile_occupied',
+      message: 'camp_station_build requires an unoccupied camp tile (one station per tile)',
+    };
+  }
+
   return {
     ok: true,
     code: null,
@@ -4651,6 +5206,8 @@ function validateCampStationBuildAction(state, action, actor) {
       payload: {
         ...action.payload,
         stationId: recipe.stationId,
+        x: placementX,
+        y: placementY,
       },
       tickCost: recipe.craftTicks,
     },
@@ -4757,6 +5314,86 @@ function validatePartnerTaskSetAction(state, action) {
     return { ok: false, code: 'invalid_partner_task_kind', message: 'partner_task_set requires payload.task.kind (string)' };
   }
 
+  if (taskKind === TECH_RESEARCH_TASK_KIND) {
+    const meta = rawTask?.meta && typeof rawTask.meta === 'object' ? rawTask.meta : {};
+    const unlockKey = typeof meta.unlockKey === 'string' ? meta.unlockKey : '';
+    if (!unlockKey) {
+      return { ok: false, code: 'invalid_tech_research', message: 'tech_research requires meta.unlockKey' };
+    }
+    const node = getTechForestNode(state?.techForest, unlockKey);
+    if (!node) {
+      return { ok: false, code: 'unknown_tech_unlock', message: `unknown tech unlock: ${unlockKey}` };
+    }
+    if (isUnlockEnabled(state, unlockKey)) {
+      return { ok: false, code: 'tech_already_researched', message: `already researched: ${unlockKey}` };
+    }
+    if (node.parentUnlockKey && !isUnlockEnabled(state, node.parentUnlockKey)) {
+      return {
+        ok: false,
+        code: 'tech_prerequisite_missing',
+        message: `research requires prerequisite: ${node.parentUnlockKey}`,
+        unlockKey: node.parentUnlockKey,
+      };
+    }
+    if (!Number.isInteger(ticksRequiredRaw) || ticksRequiredRaw <= 0) {
+      return { ok: false, code: 'invalid_partner_task_ticks', message: 'partner_task_set requires payload.task.ticksRequired (positive integer)' };
+    }
+    if (ticksRequiredRaw !== node.researchTicks) {
+      return {
+        ok: false,
+        code: 'tech_research_tick_mismatch',
+        message: `tech research ticks must be ${node.researchTicks}`,
+      };
+    }
+    const taskInputsTech = normalizeTaskInputs(rawTask?.inputs);
+    if (taskInputsTech.length > 0) {
+      return { ok: false, code: 'invalid_tech_research', message: 'tech_research must not include stockpile inputs' };
+    }
+
+    const rawQueuePolicyTech = typeof action.payload?.queuePolicy === 'string'
+      ? action.payload.queuePolicy
+      : typeof rawTask?.queuePolicy === 'string' ? rawTask.queuePolicy : 'append';
+    const queuePolicyTech = rawQueuePolicyTech === 'replace' || rawQueuePolicyTech === 'append'
+      ? rawQueuePolicyTech
+      : '';
+    if (!queuePolicyTech) {
+      return {
+        ok: false,
+        code: 'invalid_partner_task_queue_policy',
+        message: 'partner_task_set payload.queuePolicy must be "append" or "replace"',
+      };
+    }
+
+    const taskIdTech = typeof rawTask?.taskId === 'string' && rawTask.taskId
+      ? rawTask.taskId
+      : `${action.actionId}:task`;
+
+    const emptyReq = { stations: [], unlocks: [] };
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: {
+          ...action.payload,
+          queuePolicy: queuePolicyTech,
+          task: {
+            taskId: taskIdTech,
+            kind: taskKind,
+            ticksRequired: ticksRequiredRaw,
+            inputs: [],
+            requirements: emptyReq,
+            outputs: [],
+            status: 'queued',
+            failureReason: null,
+            meta: { ...meta, unlockKey },
+          },
+        },
+      },
+    };
+  }
+
   const requiredStationId = getRequiredStationForPartnerTask(taskKind);
   const taskRequirements = normalizeTaskRequirements(rawTask?.requirements, requiredStationId);
   for (const stationId of taskRequirements.stations) {
@@ -4852,6 +5489,54 @@ export function getActionTickCost(kind, payload = {}) {
   return normalizeTickCost(kind, payload);
 }
 
+function validateInventoryRelocateStackAction(state, action, actor) {
+  const stackIndex = Number.isInteger(action.payload?.stackIndex)
+    ? action.payload.stackIndex
+    : Math.floor(Number(action.payload?.stackIndex));
+  const slotX = Number.isInteger(action.payload?.slotX)
+    ? action.payload.slotX
+    : Math.floor(Number(action.payload?.slotX));
+  const slotY = Number.isInteger(action.payload?.slotY)
+    ? action.payload.slotY
+    : Math.floor(Number(action.payload?.slotY));
+  if (!Number.isInteger(stackIndex)) {
+    return {
+      ok: false,
+      code: 'invalid_relocation_payload',
+      message: 'inventory_relocate_stack requires integer payload.stackIndex',
+    };
+  }
+  if (!Number.isInteger(slotX) || !Number.isInteger(slotY)) {
+    return {
+      ok: false,
+      code: 'invalid_relocation_payload',
+      message: 'inventory_relocate_stack requires integer payload.slotX and payload.slotY',
+    };
+  }
+  const check = checkActorInventoryRelocation(actor, stackIndex, slotX, slotY);
+  if (!check.ok) {
+    return {
+      ok: false,
+      code: check.code,
+      message: check.message,
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        stackIndex,
+        slotX,
+        slotY,
+      },
+    },
+  };
+}
+
 function validateMoveAction(state, action, actor) {
   const dx = Number(action.payload?.dx);
   const dy = Number(action.payload?.dy);
@@ -4907,10 +5592,6 @@ export function validateAction(state, rawAction, options = {}) {
     return { ok: false, code: 'actor_unavailable', message: `actor ${action.actorId} is unavailable (health <= 0)` };
   }
 
-  if (getActorBudgetCurrent(actor) <= 0) {
-    return { ok: false, code: 'no_tick_budget', message: `actor ${action.actorId} has no remaining tick budget` };
-  }
-
   const unlockCheck = isActionUnlocked(state, action.kind);
   if (!unlockCheck.unlocked) {
     return {
@@ -4921,188 +5602,117 @@ export function validateAction(state, rawAction, options = {}) {
     };
   }
 
-  if (!Number.isInteger(action.tickCost) || action.tickCost < 1) {
-    return { ok: false, code: 'invalid_tick_cost', message: 'action tickCost must be a positive integer' };
+  if (!Number.isInteger(action.tickCost) || action.tickCost < 0) {
+    return { ok: false, code: 'invalid_tick_cost', message: 'action tickCost must be a non-negative integer' };
   }
 
+  let validationResult;
   if (action.kind === 'move') {
-    return validateMoveAction(state, action, actor);
+    validationResult = validateMoveAction(state, action, actor);
+  } else if (action.kind === 'harvest') {
+    validationResult = validateHarvestAction(state, action, actor);
+  } else if (action.kind === 'fell_tree') {
+    validationResult = validateFellTreeAction(state, action, actor);
+  } else if (action.kind === 'trap_place_snare') {
+    validationResult = validateTrapPlaceSnareAction(state, action, actor);
+  } else if (action.kind === 'trap_place_deadfall') {
+    validationResult = validateTrapPlaceDeadfallAction(state, action, actor);
+  } else if (action.kind === 'trap_place_fish_weir') {
+    validationResult = validateTrapPlaceFishWeirAction(state, action, actor);
+  } else if (action.kind === 'auto_rod_place') {
+    validationResult = validateAutoRodPlaceAction(state, action, actor);
+  } else if (action.kind === 'trap_check') {
+    validationResult = validateTrapCheckAction(state, action, actor);
+  } else if (action.kind === 'trap_bait') {
+    validationResult = validateTrapBaitAction(state, action, actor);
+  } else if (action.kind === 'marker_place') {
+    validationResult = validateMarkerPlaceAction(state, action, actor);
+  } else if (action.kind === 'marker_remove') {
+    validationResult = validateMarkerRemoveAction(state, action, actor);
+  } else if (action.kind === 'fish_rod_cast') {
+    validationResult = validateFishRodCastAction(state, action, actor);
+  } else if (action.kind === 'inspect') {
+    validationResult = validateInspectAction(state, action, actor);
+  } else if (action.kind === 'dig') {
+    validationResult = validateDigAction(state, action, actor);
+  } else if (action.kind === 'hoe') {
+    validationResult = validateHoeAction(state, action, actor);
+  } else if (action.kind === 'tap_insert_spout') {
+    validationResult = validateTapInsertSpoutAction(state, action, actor);
+  } else if (action.kind === 'tap_remove_spout') {
+    validationResult = validateTapRemoveSpoutAction(state, action, actor);
+  } else if (action.kind === 'tap_place_vessel') {
+    validationResult = validateTapPlaceVesselAction(state, action, actor);
+  } else if (action.kind === 'tap_retrieve_vessel') {
+    validationResult = validateTapRetrieveVesselAction(state, action, actor);
+  } else if (action.kind === 'waterskin_fill') {
+    validationResult = validateWaterskinFillAction(state, action, actor);
+  } else if (action.kind === 'waterskin_drink') {
+    validationResult = validateWaterskinDrinkAction(state, action, actor);
+  } else if (action.kind === 'water_drink') {
+    validationResult = validateWaterDrinkAction(state, action, actor);
+  } else if (action.kind === 'leaching_basket_place') {
+    validationResult = validateLeachingBasketPlaceAction(state, action, actor);
+  } else if (action.kind === 'leaching_basket_retrieve') {
+    validationResult = validateLeachingBasketRetrieveAction(state, action, actor);
+  } else if (action.kind === 'item_pickup') {
+    validationResult = validateItemPickupAction(state, action, actor);
+  } else if (action.kind === 'item_drop') {
+    validationResult = validateItemDropAction(state, action, actor);
+  } else if (action.kind === 'eat') {
+    validationResult = validateEatAction(state, action, actor);
+  } else if (action.kind === 'process_item') {
+    validationResult = validateProcessItemAction(state, action, actor);
+  } else if (action.kind === 'camp_stockpile_add') {
+    validationResult = validateCampStockpileAddAction(state, action, actor);
+  } else if (action.kind === 'camp_stockpile_remove') {
+    validationResult = validateCampStockpileRemoveAction(state, action);
+  } else if (action.kind === 'camp_drying_rack_add') {
+    validationResult = validateCampDryingRackAddAction(state, action, actor);
+  } else if (action.kind === 'camp_drying_rack_add_inventory') {
+    validationResult = validateCampDryingRackAddInventoryAction(state, action, actor);
+  } else if (action.kind === 'camp_drying_rack_remove') {
+    validationResult = validateCampDryingRackRemoveAction(state, action, actor);
+  } else if (action.kind === 'meal_plan_set') {
+    validationResult = validateMealPlanSetAction(state, action, actor);
+  } else if (action.kind === 'meal_plan_commit') {
+    validationResult = validateMealPlanCommitAction(state, action, actor);
+  } else if (action.kind === 'camp_station_build') {
+    validationResult = validateCampStationBuildAction(state, action, actor);
+  } else if (action.kind === 'tool_craft') {
+    validationResult = validateToolCraftAction(state, action, actor);
+  } else if (action.kind === 'equip_item') {
+    validationResult = validateEquipItemAction(state, action, actor);
+  } else if (action.kind === 'unequip_item') {
+    validationResult = validateUnequipItemAction(state, action, actor);
+  } else if (action.kind === 'partner_task_set') {
+    validationResult = validatePartnerTaskSetAction(state, action);
+  } else if (action.kind === 'debrief_enter') {
+    validationResult = validateDebriefEnterAction(state, action, actor);
+  } else if (action.kind === 'debrief_exit') {
+    validationResult = validateDebriefExitAction(state, action, actor);
+  } else if (action.kind === 'partner_medicine_administer') {
+    validationResult = validatePartnerMedicineAdministerAction(state, action, actor);
+  } else if (action.kind === 'partner_vision_request') {
+    validationResult = validatePartnerVisionRequestAction(state, action, actor);
+  } else if (action.kind === 'partner_vision_confirm') {
+    validationResult = validatePartnerVisionConfirmAction(state, action, actor);
+  } else if (action.kind === 'partner_vision_choose') {
+    validationResult = validatePartnerVisionChooseAction(state, action, actor);
+  } else if (action.kind === 'nature_sight_overlay_set') {
+    validationResult = validateNatureSightOverlaySetAction(state, action, actor);
+  } else if (action.kind === 'inventory_relocate_stack') {
+    validationResult = validateInventoryRelocateStackAction(state, action, actor);
+  } else {
+    validationResult = {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: action,
+    };
   }
 
-  if (action.kind === 'harvest') {
-    return validateHarvestAction(state, action, actor);
-  }
-
-  if (action.kind === 'fell_tree') {
-    return validateFellTreeAction(state, action, actor);
-  }
-
-  if (action.kind === 'trap_place_snare') {
-    return validateTrapPlaceSnareAction(state, action, actor);
-  }
-
-  if (action.kind === 'trap_place_deadfall') {
-    return validateTrapPlaceDeadfallAction(state, action, actor);
-  }
-
-  if (action.kind === 'trap_place_fish_weir') {
-    return validateTrapPlaceFishWeirAction(state, action, actor);
-  }
-
-  if (action.kind === 'auto_rod_place') {
-    return validateAutoRodPlaceAction(state, action, actor);
-  }
-
-  if (action.kind === 'trap_check') {
-    return validateTrapCheckAction(state, action, actor);
-  }
-
-  if (action.kind === 'fish_rod_cast') {
-    return validateFishRodCastAction(state, action, actor);
-  }
-
-  if (action.kind === 'inspect') {
-    return validateInspectAction(state, action, actor);
-  }
-
-  if (action.kind === 'dig') {
-    return validateDigAction(state, action, actor);
-  }
-
-  if (action.kind === 'hoe') {
-    return validateHoeAction(state, action, actor);
-  }
-
-  if (action.kind === 'tap_insert_spout') {
-    return validateTapInsertSpoutAction(state, action, actor);
-  }
-
-  if (action.kind === 'tap_remove_spout') {
-    return validateTapRemoveSpoutAction(state, action, actor);
-  }
-
-  if (action.kind === 'tap_place_vessel') {
-    return validateTapPlaceVesselAction(state, action, actor);
-  }
-
-  if (action.kind === 'tap_retrieve_vessel') {
-    return validateTapRetrieveVesselAction(state, action, actor);
-  }
-
-  if (action.kind === 'waterskin_fill') {
-    return validateWaterskinFillAction(state, action, actor);
-  }
-
-  if (action.kind === 'waterskin_drink') {
-    return validateWaterskinDrinkAction(state, action, actor);
-  }
-
-  if (action.kind === 'leaching_basket_place') {
-    return validateLeachingBasketPlaceAction(state, action, actor);
-  }
-
-  if (action.kind === 'leaching_basket_retrieve') {
-    return validateLeachingBasketRetrieveAction(state, action, actor);
-  }
-
-  if (action.kind === 'item_pickup') {
-    return validateItemPickupAction(state, action, actor);
-  }
-
-  if (action.kind === 'item_drop') {
-    return validateItemDropAction(state, action, actor);
-  }
-
-  if (action.kind === 'eat') {
-    return validateEatAction(state, action, actor);
-  }
-
-  if (action.kind === 'process_item') {
-    return validateProcessItemAction(state, action, actor);
-  }
-
-  if (action.kind === 'camp_stockpile_add') {
-    return validateCampStockpileAddAction(state, action, actor);
-  }
-
-  if (action.kind === 'camp_stockpile_remove') {
-    return validateCampStockpileRemoveAction(state, action);
-  }
-
-  if (action.kind === 'camp_drying_rack_add') {
-    return validateCampDryingRackAddAction(state, action, actor);
-  }
-
-  if (action.kind === 'camp_drying_rack_add_inventory') {
-    return validateCampDryingRackAddInventoryAction(state, action, actor);
-  }
-
-  if (action.kind === 'camp_drying_rack_remove') {
-    return validateCampDryingRackRemoveAction(state, action, actor);
-  }
-
-  if (action.kind === 'meal_plan_set') {
-    return validateMealPlanSetAction(state, action, actor);
-  }
-
-  if (action.kind === 'meal_plan_commit') {
-    return validateMealPlanCommitAction(state, action, actor);
-  }
-
-  if (action.kind === 'camp_station_build') {
-    return validateCampStationBuildAction(state, action, actor);
-  }
-
-  if (action.kind === 'tool_craft') {
-    return validateToolCraftAction(state, action, actor);
-  }
-
-  if (action.kind === 'equip_item') {
-    return validateEquipItemAction(state, action, actor);
-  }
-
-  if (action.kind === 'unequip_item') {
-    return validateUnequipItemAction(state, action, actor);
-  }
-
-  if (action.kind === 'partner_task_set') {
-    return validatePartnerTaskSetAction(state, action);
-  }
-
-  if (action.kind === 'debrief_enter') {
-    return validateDebriefEnterAction(state, action, actor);
-  }
-
-  if (action.kind === 'debrief_exit') {
-    return validateDebriefExitAction(state, action, actor);
-  }
-
-  if (action.kind === 'partner_medicine_administer') {
-    return validatePartnerMedicineAdministerAction(state, action, actor);
-  }
-
-  if (action.kind === 'partner_vision_request') {
-    return validatePartnerVisionRequestAction(state, action, actor);
-  }
-
-  if (action.kind === 'partner_vision_confirm') {
-    return validatePartnerVisionConfirmAction(state, action, actor);
-  }
-
-  if (action.kind === 'partner_vision_choose') {
-    return validatePartnerVisionChooseAction(state, action, actor);
-  }
-
-  if (action.kind === 'nature_sight_overlay_set') {
-    return validateNatureSightOverlaySetAction(state, action, actor);
-  }
-
-  return {
-    ok: true,
-    code: null,
-    message: 'ok',
-    normalizedAction: action,
-  };
+  return gateActorTickBudget(actor, validationResult);
 }
 
 export function previewAction(state, rawAction, options = {}) {
@@ -5113,15 +5723,17 @@ export function previewAction(state, rawAction, options = {}) {
   const validation = validateAction(state, rawAction, options);
 
   if (validation.ok) {
+    const tc = Number(validation?.normalizedAction?.tickCost);
     return {
       ...validation,
-      tickCost: Number(validation?.normalizedAction?.tickCost) || 1,
+      tickCost: Number.isInteger(tc) ? tc : 1,
     };
   }
 
+  const envTc = Number(envelope.tickCost);
   return {
     ...validation,
-    tickCost: Number(envelope.tickCost) || 1,
+    tickCost: Number.isInteger(envTc) ? envTc : 1,
     normalizedAction: envelope,
   };
 }
@@ -5133,27 +5745,27 @@ export function getAllActions(state, actorId) {
       kind,
       available: false,
       reason: !actor ? 'missing_actor' : 'actor_unavailable',
-      tickCost: ACTION_TICK_COST[kind] || 1,
-    }));
-  }
-
-  if (getActorBudgetCurrent(actor) <= 0) {
-    return ACTION_KINDS.map((kind) => ({
-      kind,
-      available: false,
-      reason: 'no_tick_budget',
-      tickCost: ACTION_TICK_COST[kind] || 1,
+      tickCost: ACTION_TICK_COST[kind] ?? 1,
     }));
   }
 
   return ACTION_KINDS.map((kind) => {
+    const tickCost = ACTION_TICK_COST[kind] ?? 1;
+    if (!actorCanSpendTickBudget(actor, tickCost)) {
+      return {
+        kind,
+        available: false,
+        reason: 'no_tick_budget',
+        tickCost,
+      };
+    }
     const unlockCheck = isActionUnlocked(state, kind);
     return {
       kind,
       available: unlockCheck.unlocked,
       reason: unlockCheck.unlocked ? null : 'missing_unlock',
       unlockKey: unlockCheck.unlocked ? null : unlockCheck.unlockKey,
-      tickCost: ACTION_TICK_COST[kind] || 1,
+      tickCost,
     };
   });
 }

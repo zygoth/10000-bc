@@ -169,11 +169,23 @@ function normalizePlant(rawPlant) {
     })),
   }));
 
+  const rawScent = rawPlant.scent && typeof rawPlant.scent === 'object' ? rawPlant.scent : null;
+  const scentStrength = Number(rawScent?.strength);
+  const scent = rawScent
+    ? {
+      strength: Number.isFinite(scentStrength) ? Math.max(0, Math.min(1, scentStrength)) : undefined,
+      primaryCompound: typeof rawScent.primary_compound === 'string'
+        ? rawScent.primary_compound
+        : (typeof rawScent.primaryCompound === 'string' ? rawScent.primaryCompound : undefined),
+    }
+    : null;
+
   return {
     id: rawPlant.id,
     name: rawPlant.name,
     longevity: rawPlant.longevity,
     ageOfMaturity: rawPlant.age_of_maturity,
+    scent,
     soil: normalizedSoil,
     seedingWindow: normalizeSeasonalWindow(rawPlant.seeding_window),
     dispersal: rawPlant.dispersal,

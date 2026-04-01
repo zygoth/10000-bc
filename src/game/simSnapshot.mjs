@@ -1,4 +1,5 @@
 import { inBounds, tileIndex } from './simWorld.mjs';
+import { ensureTechForestOnLoad } from './techForestGen.mjs';
 
 function normalizeRockType(rockType) {
   if (rockType === 'glacial_erratic' || rockType === 'flint_cobble_scatter') {
@@ -186,11 +187,16 @@ function normalizeDeadfallTrap(deadfallTrap) {
     return null;
   }
 
+  const baitItemId = typeof deadfallTrap.baitItemId === 'string' && deadfallTrap.baitItemId
+    ? deadfallTrap.baitItemId
+    : null;
+
   return {
     active: deadfallTrap.active === true,
     hasCatch: deadfallTrap.hasCatch === true,
     poached: deadfallTrap.poached === true,
     sprung: deadfallTrap.sprung === true,
+    baitItemId,
     reliability: Number.isFinite(Number(deadfallTrap.reliability))
       ? Math.max(0, Math.min(1, Number(deadfallTrap.reliability)))
       : 1,
@@ -222,11 +228,16 @@ function normalizeSimpleSnare(simpleSnare) {
     return null;
   }
 
+  const baitItemId = typeof simpleSnare.baitItemId === 'string' && simpleSnare.baitItemId
+    ? simpleSnare.baitItemId
+    : null;
+
   return {
     active: simpleSnare.active === true,
     hasCatch: simpleSnare.hasCatch === true,
     poached: simpleSnare.poached === true,
     sprung: simpleSnare.sprung === true,
+    baitItemId,
     reliability: Number.isFinite(Number(simpleSnare.reliability))
       ? Math.max(0, Math.min(1, Number(simpleSnare.reliability)))
       : 1,
@@ -511,6 +522,18 @@ function normalizeCampState(camp, width, height) {
     stationsUnlocked: Array.isArray(camp?.stationsUnlocked)
       ? camp.stationsUnlocked.filter((entry) => typeof entry === 'string')
       : [],
+    stationPlacements: camp?.stationPlacements && typeof camp.stationPlacements === 'object'
+      ? Object.fromEntries(
+        Object.entries(camp.stationPlacements)
+          .filter(([stationId, placement]) => (
+            typeof stationId === 'string'
+            && stationId
+            && Number.isInteger(placement?.x)
+            && Number.isInteger(placement?.y)
+          ))
+          .map(([stationId, placement]) => [stationId, { x: placement.x, y: placement.y }]),
+      )
+      : {},
     comforts: Array.isArray(camp?.comforts)
       ? camp.comforts.filter((entry) => typeof entry === 'string')
       : [],
@@ -744,6 +767,7 @@ function normalizeTileForLoad(tile) {
   const normalized = {
     ...tile,
     waterType: normalizedWaterType,
+    markerStick: tile?.markerStick === true,
     dormantSeeds: normalizeDormantSeeds(tile.dormantSeeds),
     beehive: normalizeBeehive(tile.beehive),
     squirrelCache: normalizeSquirrelCache(tile.squirrelCache),
@@ -910,6 +934,9 @@ function normalizeStateForLoad(candidate) {
     ? Number(candidate.dailyTemperatureF)
     : 0;
   const dailyTemperatureBand = normalizeTemperatureBand(candidate.dailyTemperatureBand);
+  const dailySunExposure = Number.isFinite(Number(candidate.dailySunExposure))
+    ? Math.max(0, Math.min(1, Number(candidate.dailySunExposure)))
+    : 1;
   const dailyWindVector = normalizeDailyWindVector(candidate.dailyWindVector);
   const consecutiveFreezingDays = Number.isFinite(Number(candidate.consecutiveFreezingDays))
     ? Math.max(0, Math.floor(Number(candidate.consecutiveFreezingDays)))
@@ -926,7 +953,7 @@ function normalizeStateForLoad(candidate) {
   const pendingActionQueue = normalizeActionLog(candidate.pendingActionQueue);
   const currentDayActionLog = normalizeActionLog(candidate.currentDayActionLog);
 
-  return {
+  const loaded = {
     ...candidate,
     tiles: candidate.tiles.map((tile) => normalizeTileForLoad(tile)),
     animalZonesGenerated,
@@ -942,6 +969,7 @@ function normalizeStateForLoad(candidate) {
     weatherWindStrength,
     dailyTemperatureF,
     dailyTemperatureBand,
+    dailySunExposure,
     dailyWindVector,
     consecutiveFreezingDays,
     runSquirrelCacheNutPool,
@@ -954,6 +982,8 @@ function normalizeStateForLoad(candidate) {
     pendingActionQueue,
     currentDayActionLog,
   };
+  ensureTechForestOnLoad(loaded);
+  return loaded;
 }
 
 function normalizeStateForSave(state) {
@@ -980,6 +1010,9 @@ function normalizeStateForSave(state) {
     ? Number(state.dailyTemperatureF)
     : 0;
   const dailyTemperatureBand = normalizeTemperatureBand(state.dailyTemperatureBand);
+  const dailySunExposure = Number.isFinite(Number(state.dailySunExposure))
+    ? Math.max(0, Math.min(1, Number(state.dailySunExposure)))
+    : 1;
   const dailyWindVector = normalizeDailyWindVector(state.dailyWindVector);
   const consecutiveFreezingDays = Number.isFinite(Number(state.consecutiveFreezingDays))
     ? Math.max(0, Math.floor(Number(state.consecutiveFreezingDays)))
@@ -1012,6 +1045,7 @@ function normalizeStateForSave(state) {
     weatherWindStrength,
     dailyTemperatureF,
     dailyTemperatureBand,
+    dailySunExposure,
     dailyWindVector,
     consecutiveFreezingDays,
     runSquirrelCacheNutPool,

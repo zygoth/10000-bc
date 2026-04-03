@@ -1,6 +1,9 @@
+import { ANIMAL_BY_ID } from '../../game/animalCatalog.mjs';
 import { ITEM_BY_ID } from '../../game/itemCatalog.mjs';
 import { formatPlantPartLabel, parsePlantPartItemId } from '../../game/plantPartDescriptors.mjs';
 import { PLANT_BY_ID } from '../../game/plantCatalog.mjs';
+import { EARTHWORM_ITEM_ID } from '../../game/simCore.constants.mjs';
+import { SIMPLE_SNARE_TARGET_SPECIES_ID } from '../../game/trapBaitLand.mjs';
 import {
   getActionTickCost,
   getItemPickupInventoryBlockReason,
@@ -10,16 +13,152 @@ import {
 } from '../../game/simCore.mjs';
 import { annotateContextEntryTickBudget } from './GameModeChromeDisplayLogic.js';
 
-function landTrapBaitMenuLabel(itemId, formatTokenLabel) {
+function inventoryQuantityForItem(player, itemId) {
+  const stacks = player?.inventory?.stacks;
+  if (!Array.isArray(stacks) || !itemId) {
+    return 0;
+  }
+  let sum = 0;
+  for (const stack of stacks) {
+    if (stack?.itemId === itemId) {
+      sum += Math.max(0, Math.floor(Number(stack.quantity) || 0));
+    }
+  }
+  return sum;
+}
+
+function landTrapBaitMenuLabel(trapKind, itemId, formatTokenLabel) {
+  const prefix = trapKind === 'snare' ? 'Bait snare' : 'Bait deadfall';
   const descriptor = parsePlantPartItemId(itemId);
   if (descriptor) {
-    return `Bait trap (${formatPlantPartLabel(descriptor, { includeSubStage: true })})`;
+    return `${prefix} (${formatPlantPartLabel(descriptor, { includeSubStage: true })})`;
   }
   const catalogName = ITEM_BY_ID[itemId]?.name;
   if (catalogName) {
-    return `Bait trap (${catalogName})`;
+    return `${prefix} (${catalogName})`;
   }
-  return `Bait trap (${formatTokenLabel(itemId)})`;
+  return `${prefix} (${formatTokenLabel(itemId)})`;
+}
+
+function retrieveTrapMenuLabel(tile, formatTokenLabel) {
+  const snare = tile?.simpleSnare?.active === true && tile.simpleSnare.hasCatch === true;
+  const deadfall = tile?.deadfallTrap?.active === true && tile.deadfallTrap.hasCatch === true;
+  const fishIds = tile?.fishTrap?.active === true && Array.isArray(tile.fishTrap.storedCatchSpeciesIds)
+    ? tile.fishTrap.storedCatchSpeciesIds.filter((id) => typeof id === 'string' && id)
+    : [];
+  if (snare) {
+    const name = ANIMAL_BY_ID[SIMPLE_SNARE_TARGET_SPECIES_ID]?.name || 'rabbit';
+    return `Retrieve ${name} carcass`;
+  }
+  if (deadfall) {
+    const sp = tile.deadfallTrap.caughtSpeciesId;
+    const name = typeof sp === 'string' && sp
+      ? (ANIMAL_BY_ID[sp]?.name || formatTokenLabel(sp))
+      : 'animal';
+    return `Retrieve ${name} carcass`;
+  }
+  if (fishIds.length === 1) {
+    const name = ANIMAL_BY_ID[fishIds[0]]?.name || formatTokenLabel(fishIds[0]);
+    return `Retrieve ${name} carcass`;
+  }
+  if (fishIds.length > 1) {
+    return 'Retrieve fish catches';
+  }
+  return 'Retrieve catch';
+}
+
+function appendTrapInteractionEntries({
+  entries,
+  gameState,
+  playerActor,
+  selectedTileEntity,
+  selectedTileX,
+  selectedTileY,
+  formatTokenLabel,
+}) {
+  if (!selectedTileEntity || selectedTileX === null || selectedTileY === null) {
+    return;
+  }
+  const payload = { x: selectedTileX, y: selectedTileY };
+
+  const vRetrieve = validateAction(gameState, { actorId: 'player', kind: 'trap_retrieve', payload });
+  if (vRetrieve.ok) {
+    entries.push({
+      kind: 'trap_retrieve',
+      label: retrieveTrapMenuLabel(selectedTileEntity, formatTokenLabel),
+      tickCost: Number(vRetrieve.normalizedAction?.tickCost) || getActionTickCost('trap_retrieve', payload),
+      payload: vRetrieve.normalizedAction.payload,
+    });
+  }
+
+  const vRemoveBait = validateAction(gameState, { actorId: 'player', kind: 'trap_remove_bait', payload });
+  if (vRemoveBait.ok) {
+    entries.push({
+      kind: 'trap_remove_bait',
+      label: 'Remove bait',
+      tickCost: Number(vRemoveBait.normalizedAction?.tickCost) || getActionTickCost('trap_remove_bait', payload),
+      payload: vRemoveBait.normalizedAction.payload,
+    });
+  }
+
+  const vPickup = validateAction(gameState, { actorId: 'player', kind: 'trap_pickup', payload });
+  if (vPickup.ok) {
+    let label = 'Pick up trap';
+    if (selectedTileEntity.simpleSnare?.active === true) {
+      label = 'Pick up snare';
+    } else if (selectedTileEntity.deadfallTrap?.active === true) {
+      label = 'Pick up deadfall';
+    } else if (selectedTileEntity.fishTrap?.active === true) {
+      label = 'Pick up fish weir';
+    } else if (selectedTileEntity.autoRod?.active === true) {
+      label = 'Pick up auto rod';
+    }
+    entries.push({
+      kind: 'trap_pickup',
+      label,
+      tickCost: Number(vPickup.normalizedAction?.tickCost) || getActionTickCost('trap_pickup', payload),
+      payload: vPickup.normalizedAction.payload,
+    });
+  }
+
+  const autoRod = selectedTileEntity.autoRod?.active === true ? selectedTileEntity.autoRod : null;
+  if (!autoRod) {
+    return;
+  }
+
+  const vCheck = validateAction(gameState, { actorId: 'player', kind: 'trap_check', payload });
+  if (vCheck.ok) {
+    entries.push({
+      kind: 'trap_check',
+      label: 'Check auto rod',
+      tickCost: Number(vCheck.normalizedAction?.tickCost) || getActionTickCost('trap_check', payload),
+      payload: vCheck.normalizedAction.payload,
+    });
+  }
+
+  if (inventoryQuantityForItem(playerActor, EARTHWORM_ITEM_ID) >= 1) {
+    const pWorm = { ...payload, baitItemId: EARTHWORM_ITEM_ID };
+    const vWorm = validateAction(gameState, { actorId: 'player', kind: 'trap_check', payload: pWorm });
+    if (vWorm.ok) {
+      entries.push({
+        kind: 'trap_check',
+        label: 'Check auto rod (re-bait with worm)',
+        tickCost: Number(vWorm.normalizedAction?.tickCost) || getActionTickCost('trap_check', vWorm.normalizedAction?.payload || pWorm),
+        payload: vWorm.normalizedAction.payload,
+      });
+    }
+  }
+
+  const pRepair = { ...payload, repair: true, baitItemId: EARTHWORM_ITEM_ID };
+  const vRepair = validateAction(gameState, { actorId: 'player', kind: 'trap_check', payload: pRepair });
+  if (vRepair.ok) {
+    entries.push({
+      kind: 'trap_check',
+      label: 'Repair auto rod (re-bait with worm)',
+      tickCost: Number(vRepair.normalizedAction?.tickCost) || getActionTickCost('trap_check', vRepair.normalizedAction?.payload || pRepair),
+      payload: vRepair.normalizedAction.payload,
+    });
+  }
 }
 
 function appendLandTrapBaitEntries({
@@ -39,6 +178,7 @@ function appendLandTrapBaitEntries({
   if ((hasSnare && hasDeadfall) || (!hasSnare && !hasDeadfall)) {
     return;
   }
+  const trapKind = hasSnare ? 'snare' : 'deadfall';
   const stacks = playerActor?.inventory?.stacks;
   if (!Array.isArray(stacks)) {
     return;
@@ -56,7 +196,7 @@ function appendLandTrapBaitEntries({
     }
     entries.push({
       kind: 'trap_bait',
-      label: landTrapBaitMenuLabel(itemId, formatTokenLabel),
+      label: landTrapBaitMenuLabel(trapKind, itemId, formatTokenLabel),
       tickCost: Number(v.normalizedAction?.tickCost) || getActionTickCost('trap_bait', v.normalizedAction?.payload || payload),
       payload: v.normalizedAction.payload,
     });
@@ -200,11 +340,18 @@ export function getTileContextMenuEntries({
       return !(Number.isFinite(digTicksToDiscover) && digTicksToDiscover > 0);
     });
   });
-  const otherKinds = inferTileContextActions(selectedTileEntity).filter(
-    (k) => k !== 'move' && k !== 'harvest' && k !== 'item_pickup' && k !== 'trap_bait',
+  const hasInspectableTrap = Boolean(
+    selectedTileEntity?.simpleSnare?.active
+    || selectedTileEntity?.deadfallTrap?.active
+    || selectedTileEntity?.fishTrap?.active
+    || selectedTileEntity?.autoRod?.active,
+  );
+  const inferredTileKinds = inferTileContextActions(selectedTileEntity);
+  const otherKinds = inferredTileKinds.filter(
+    (k) => k !== 'move' && k !== 'harvest' && k !== 'item_pickup' && k !== 'trap_bait' && k !== 'fish_rod_cast',
   );
   for (const kind of otherKinds) {
-    if (kind === 'inspect' && !hasInspectablePlant) {
+    if (kind === 'inspect' && !hasInspectablePlant && !hasInspectableTrap) {
       continue;
     }
     const payload = buildDefaultPayload(kind, baseContext);
@@ -224,6 +371,36 @@ export function getTileContextMenuEntries({
       });
     }
   }
+
+  // fish_rod_cast: unbaited + optional earthworm variant (parameterized payload)
+  if (inferredTileKinds.includes('fish_rod_cast')) {
+    const basePayload = buildDefaultPayload('fish_rod_cast', baseContext);
+    const variants = [{ labelSuffix: '', payload: { ...basePayload } }];
+    if (inventoryQuantityForItem(playerActor, EARTHWORM_ITEM_ID) >= 1) {
+      variants.push({ labelSuffix: ' (baited)', payload: { ...basePayload, baitItemId: EARTHWORM_ITEM_ID } });
+    }
+    for (const { labelSuffix, payload } of variants) {
+      const v = validateAction(gameState, { actorId: 'player', kind: 'fish_rod_cast', payload });
+      if (v.ok) {
+        entries.push({
+          kind: 'fish_rod_cast',
+          label: `fish rod cast${labelSuffix}`,
+          tickCost: Number(v.normalizedAction?.tickCost) || getActionTickCost('fish_rod_cast', payload),
+          payload: v.normalizedAction?.payload || payload,
+        });
+      }
+    }
+  }
+
+  appendTrapInteractionEntries({
+    entries,
+    gameState,
+    playerActor,
+    selectedTileEntity,
+    selectedTileX,
+    selectedTileY,
+    formatTokenLabel,
+  });
 
   appendLandTrapBaitEntries({
     entries,

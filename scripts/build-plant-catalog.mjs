@@ -6,7 +6,7 @@ const PLANTS_DIR = path.join(ROOT, 'data', 'plants');
 const OUTPUT_FILE = path.join(ROOT, 'src', 'game', 'plantCatalog.source.mjs');
 
 function toCatalogShape(plant) {
-  return {
+  const entry = {
     id: plant.id,
     name: plant.name,
     longevity: plant.longevity,
@@ -18,6 +18,16 @@ function toCatalogShape(plant) {
     life_stages: plant.life_stages,
     parts: plant.parts,
   };
+  if (typeof plant.physical_description === 'string' && plant.physical_description) {
+    entry.physical_description = plant.physical_description;
+  }
+  if (typeof plant.game_description === 'string' && plant.game_description) {
+    entry.game_description = plant.game_description;
+  }
+  if (plant.scent && typeof plant.scent === 'object') {
+    entry.scent = plant.scent;
+  }
+  return entry;
 }
 
 function listPlantJsonFiles() {

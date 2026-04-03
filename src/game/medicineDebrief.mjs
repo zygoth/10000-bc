@@ -382,7 +382,7 @@ export function runDebriefVisionConfirm(state, options = {}) {
   };
 }
 
-function resolveVisionRecipes(state) {
+export function resolveVisionRecipes(state) {
   const recipes = [];
   for (const species of GROUND_FUNGUS_CATALOG) {
     const effect = findHallucinogenVisionEffect(species?.ingestion);

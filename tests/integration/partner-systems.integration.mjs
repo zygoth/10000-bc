@@ -159,6 +159,9 @@ function runMealPlanCarcassNutritionPreviewTest() {
 
 function runPartnerTaskQueueProgressionTest() {
   let state = createScenarioState();
+  const fiberItemId = 'urtica_dioica:stalk:green';
+  state.camp.stockpile.stacks = [{ itemId: fiberItemId, quantity: 2, freshness: 1, decayDaysRemaining: 10 }];
+  state.camp.lastPartnerMaintenanceDayCompleted = Number(state.totalDaysSimulated) || 0;
 
   state = applyAction(state, {
     actorId: 'player',
@@ -167,13 +170,14 @@ function runPartnerTaskQueueProgressionTest() {
       task: {
         taskId: 'int-spin-cordage',
         kind: 'spin_cordage',
-        ticksRequired: 2,
+        ticksRequired: 4,
+        inputs: [{ source: 'camp_stockpile', itemId: fiberItemId, quantity: 1 }],
         outputs: [{ itemId: 'cordage', quantity: 1 }],
       },
     },
   });
 
-  state = idleTicks(state, 3);
+  state = idleTicks(state, 4);
   const cordageStack = state.camp.stockpile.stacks.find((entry) => entry.itemId === 'cordage');
   assert.ok(cordageStack, 'partner task completion should deposit outputs into camp stockpile');
   assert.ok(cordageStack.quantity >= 1, 'partner task output quantity should be present');

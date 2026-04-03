@@ -6,6 +6,9 @@ import { TECH_RESEARCHABLE_UNLOCK_KEYS } from './techResearchCatalog.mjs';
 import { SAP_FILLED_VESSEL_ITEM_ID } from './simCore.constants.mjs';
 import { buildDefaultCampStockpileStackFields } from './stockpileDefaultStackOptions.mjs';
 
+/** Camp stockpile item for partner vision confirm (catalog ground fungus; see tests/sim vision flow). */
+export const DEBUG_VISION_HALLUCINOGEN_ITEM_ID = 'psilocybe_caerulipes:fruiting_body:whole';
+
 export function defaultManualTestBootstrapOptions() {
   return {
     enabled: false,
@@ -276,6 +279,8 @@ export function applyManualTestBootstrap(baseState, options = {}) {
   if (mergedOptions.seedCraftingProcessInputs) {
     collectProcessingInputItems(stockpileByItemId);
   }
+  // Enough for two seasonal vision confirms in play view (debrief) without foraging.
+  addItemQuantity(stockpileByItemId, DEBUG_VISION_HALLUCINOGEN_ITEM_ID, 4);
   nextState.camp.stockpile.stacks = mapToStockpileStacks(stockpileByItemId);
 
   return nextState;

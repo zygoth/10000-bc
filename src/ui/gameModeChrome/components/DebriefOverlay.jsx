@@ -1,5 +1,12 @@
+import { useMemo } from 'react';
+import {
+  buildDebriefVisionPanelModel,
+  getDebriefVisionTabShowsAlert,
+} from '../DebriefVisionDisplayLogic.js';
 import { getTechForestEntrySurface } from '../TechForestDisplayLogic.js';
 import MealPlanningPanel from './MealPlanningPanel.jsx';
+import PartnerTaskQueuePanel from './PartnerTaskQueuePanel.jsx';
+import { partnerHistorySummaryLine } from '../../debrief/partnerQueueDisplay.mjs';
 
 export default function DebriefOverlay({
   isDebriefActive,
@@ -12,9 +19,14 @@ export default function DebriefOverlay({
   familyVitalGroups,
   debriefSpoilageEntries,
   medicineNotifications,
-  queueActiveTask,
   queuePendingTasks,
   partnerTaskHistory,
+  gameState,
+  partnerActor,
+  formatTokenLabel,
+  validateAction,
+  onPartnerTaskAppend,
+  onPartnerQueueReorder,
   onRunQuickAction,
   onOpenTechForest,
   mealPlanIngredients,
@@ -26,23 +38,31 @@ export default function DebriefOverlay({
   onMealRemoveIngredient,
   onMealCommit,
   lastMealResult,
-  visionUsesThisSeason,
-  visionSelectionOptions,
   selectedVisionItemId,
   setSelectedVisionItemId,
-  pendingVisionChoices,
   selectedVisionCategory,
   setSelectedVisionCategory,
-  selectedNatureOverlay,
-  setSelectedNatureOverlay,
-  natureSightOverlayOptions,
-  visionNotifications,
-  visionRequest,
-  chosenVisionRewards,
   medicineRequests,
   onFocusConditionInstance,
   onAdministerCondition,
 }) {
+  const simDay = Number.isInteger(gameState?.totalDaysSimulated) ? gameState.totalDaysSimulated : null;
+  const partnerHistoryToday = useMemo(() => {
+    if (!isDebriefActive || simDay == null) {
+      return [];
+    }
+    return partnerTaskHistory.filter((e) => Number(e?.day) === simDay);
+  }, [isDebriefActive, partnerTaskHistory, simDay]);
+
+  const visionPanel = useMemo(
+    () => buildDebriefVisionPanelModel({
+      isDebriefActive,
+      gameState,
+      formatTokenLabel,
+    }),
+    [isDebriefActive, gameState, formatTokenLabel],
+  );
+
   if (!isDebriefActive) {
     return null;
   }
@@ -50,6 +70,14 @@ export default function DebriefOverlay({
   const techForest = getTechForestEntrySurface({
     isDebriefActive,
     debriefSelectedTab: selectedDebriefTab,
+  });
+
+  const debriefForAlert = gameState?.camp?.debrief && typeof gameState.camp.debrief === 'object'
+    ? gameState.camp.debrief
+    : null;
+  const showVisionTabAlert = getDebriefVisionTabShowsAlert({
+    debrief: debriefForAlert,
+    selectedDebriefTab,
   });
 
   return (
@@ -64,10 +92,15 @@ export default function DebriefOverlay({
                 type="button"
                 role="tab"
                 aria-selected={selectedDebriefTab === tab}
-                className={`debrief-tab ${selectedDebriefTab === tab ? 'active' : ''}`}
+                className={`debrief-tab ${selectedDebriefTab === tab ? 'active' : ''}${
+                  tab === 'vision' && showVisionTabAlert ? ' debrief-tab-alert' : ''
+                }`}
                 onClick={() => onSelectDebriefTab(tab)}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'vision' && showVisionTabAlert ? (
+                  <span className="debrief-tab-alert-dot" aria-hidden />
+                ) : null}
               </button>
             ))}
           </div>
@@ -122,38 +155,35 @@ export default function DebriefOverlay({
                   ))}
                 </>
               ) : null}
+              <h3>Partner work today</h3>
+              {partnerHistoryToday.length > 0 ? (
+                <ul className="debrief-partner-history-list debrief-note">
+                  {partnerHistoryToday.map((entry, idx) => (
+                    <li key={`${entry.taskId || 'task'}-${idx}`}>
+                      {partnerHistorySummaryLine(entry, formatTokenLabel)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="debrief-note">No partner tasks completed this day.</p>
+              )}
             </div>
           ) : null}
 
           {selectedDebriefTab === 'queue' ? (
             <div className="debrief-tab-content">
               <h3>Partner Task Queue</h3>
-              {queueActiveTask ? (
-                <p className="debrief-note">
-                  <strong>Active:</strong> {queueActiveTask.kind || queueActiveTask.taskId || 'task'} — {Number(queueActiveTask.ticksRemaining) || 0}/{Number(queueActiveTask.ticksRequired) || 0} ticks remaining
-                </p>
-              ) : (
-                <p className="debrief-note">No active task.</p>
-              )}
-              {queuePendingTasks.length > 0 ? (
-                <>
-                  <p className="debrief-note">Queued ({queuePendingTasks.length}):</p>
-                  {queuePendingTasks.slice(0, 5).map((task, idx) => (
-                    <p key={`qt-${task.taskId || idx}`} className="debrief-note">
-                      #{idx + 1} {task.kind || task.taskId || 'task'} ({Number(task.ticksRequired) || 0} ticks)
-                    </p>
-                  ))}
-                </>
-              ) : null}
-              <button type="button" onClick={() => onRunQuickAction('partner_task_set')}>+ Add Task</button>
-              {techForest.showInDebriefQueueTab && typeof onOpenTechForest === 'function' ? (
-                <button type="button" className="debrief-tech-forest-btn" onClick={onOpenTechForest}>
-                  View Tech Forest
-                </button>
-              ) : null}
-              {partnerTaskHistory.length > 0 ? (
-                <p className="debrief-note">Completed today: {partnerTaskHistory.length} task(s)</p>
-              ) : null}
+              <PartnerTaskQueuePanel
+                gameState={gameState}
+                partnerActor={partnerActor}
+                queuePendingTasks={queuePendingTasks}
+                mealPlanPreview={mealPlanPreview}
+                formatTokenLabel={formatTokenLabel}
+                validateAction={validateAction}
+                onPartnerTaskAppend={onPartnerTaskAppend}
+                onPartnerQueueReorder={onPartnerQueueReorder}
+                onOpenTechForest={techForest.showInDebriefQueueTab ? onOpenTechForest : undefined}
+              />
             </div>
           ) : null}
 
@@ -175,18 +205,22 @@ export default function DebriefOverlay({
             </div>
           ) : null}
 
-          {selectedDebriefTab === 'vision' ? (
+          {selectedDebriefTab === 'vision' && visionPanel.visible ? (
             <div className="debrief-tab-content">
               <h3>Vision</h3>
-              <p className="debrief-note">Season uses: {visionUsesThisSeason} / 2</p>
+              <p className="debrief-note">{visionPanel.seasonLine}</p>
+              <p className="debrief-note">{visionPanel.helpLine}</p>
               <button
                 type="button"
                 onClick={() => onRunQuickAction('partner_vision_request')}
-                disabled={visionUsesThisSeason >= 2}
+                disabled={visionPanel.requestVision.disabled}
               >
                 Request Vision
               </button>
-              {visionSelectionOptions.length > 0 ? (
+              {!visionPanel.requestVision.disabled ? null : visionPanel.requestVision.blockedMessage ? (
+                <p className="debrief-note debrief-vision-block-reason">{visionPanel.requestVision.blockedMessage}</p>
+              ) : null}
+              {visionPanel.confirmItem.show ? (
                 <div className="debrief-select-row">
                   <label htmlFor="vision-confirm-item">Confirm Item</label>
                   <select
@@ -195,16 +229,14 @@ export default function DebriefOverlay({
                     onChange={(e) => setSelectedVisionItemId(e.target.value)}
                   >
                     <option value="">(pick item)</option>
-                    {visionSelectionOptions.map((entry) => (
-                      <option key={`vo-${entry.itemId}`} value={entry.itemId}>
-                        {entry.itemId} ×{entry.quantity}
-                      </option>
+                    {visionPanel.confirmItem.options.map((opt) => (
+                      <option key={`vo-${opt.value}`} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                   <button type="button" onClick={() => onRunQuickAction('partner_vision_confirm')}>Confirm</button>
                 </div>
               ) : null}
-              {pendingVisionChoices.length > 0 ? (
+              {visionPanel.rewardChoice.show ? (
                 <div className="debrief-select-row">
                   <label htmlFor="vision-category-choice">Vision Reward</label>
                   <select
@@ -213,46 +245,29 @@ export default function DebriefOverlay({
                     onChange={(e) => setSelectedVisionCategory(e.target.value)}
                   >
                     <option value="">(pick category)</option>
-                    {pendingVisionChoices.map((entry) => (
-                      <option key={`vc-${entry.category}`} value={entry.category}>
-                        {entry.category}: {entry.rewardLabel || entry.rewardId}
-                      </option>
+                    {visionPanel.rewardChoice.options.map((opt) => (
+                      <option key={`vc-${opt.value}`} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                   <button type="button" onClick={() => onRunQuickAction('partner_vision_choose')}>Choose</button>
                 </div>
               ) : null}
-              <div className="debrief-select-row">
-                <label htmlFor="nature-overlay-choice">Nature Sight Overlay</label>
-                <select
-                  id="nature-overlay-choice"
-                  value={selectedNatureOverlay}
-                  onChange={(e) => setSelectedNatureOverlay(e.target.value)}
-                >
-                  {natureSightOverlayOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={() => onRunQuickAction('nature_sight_overlay_set')}>Apply</button>
-              </div>
-              {visionNotifications.map((entry) => (
-                <p key={`vn-${entry.itemId}-${entry.partName}`} className="debrief-note">{entry.message}</p>
+              {visionPanel.notifications.map((n) => (
+                <p key={n.id} className="debrief-note">{n.text}</p>
               ))}
-              {visionRequest ? (
+              {visionPanel.partnerRequestCard ? (
                 <div className="debrief-request-card">
-                  <p><strong>Plant:</strong> {visionRequest.plantName || visionRequest.speciesId}</p>
-                  <p><strong>Part:</strong> {visionRequest.partLabel || visionRequest.partName} ({visionRequest.subStageLabel || visionRequest.subStageId})</p>
-                  <p><strong>Qty:</strong> {visionRequest.quantity}</p>
-                  <p>{visionRequest.message}</p>
+                  <p><strong>Plant:</strong> {visionPanel.partnerRequestCard.plantName}</p>
+                  <p><strong>Part:</strong> {visionPanel.partnerRequestCard.partLine}</p>
+                  <p><strong>Qty:</strong> {visionPanel.partnerRequestCard.quantity}</p>
+                  <p>{visionPanel.partnerRequestCard.message}</p>
                 </div>
               ) : null}
-              {chosenVisionRewards.length > 0 ? (
+              {visionPanel.chosenRewardsHeading ? (
                 <>
                   <h3>Chosen Rewards</h3>
-                  {chosenVisionRewards.map((reward, idx) => (
-                    <p key={`cvr-${reward.category || 'reward'}-${idx}`} className="debrief-note">
-                      {reward.category || 'reward'}: {reward.rewardLabel || reward.rewardId || 'applied'}
-                    </p>
+                  {visionPanel.chosenRewardLines.map((line) => (
+                    <p key={line.key} className="debrief-note">{line.text}</p>
                   ))}
                 </>
               ) : null}

@@ -125,7 +125,7 @@ describe('TileContextMenuDisplayLogic', () => {
     });
     const baitEntries = yes.filter((e) => e.kind === 'trap_bait');
     expect(baitEntries.length).toBe(1);
-    expect(baitEntries[0].label.startsWith('Bait trap (')).toBe(true);
+    expect(baitEntries[0].label.startsWith('Bait snare (')).toBe(true);
     expect(baitEntries[0].payload?.baitItemId).toBe(RABBIT_DIET_BAIT_PART);
 
     // Already baited → no trap_bait entries

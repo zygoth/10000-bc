@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { PLANT_BY_ID, getSeason } from '../../src/game/plantCatalog.mjs';
+import { GROUND_FUNGUS_BY_ID } from '../../src/game/groundFungusCatalog.mjs';
 import { ANIMAL_BY_ID } from '../../src/game/animalCatalog.mjs';
 import { ITEM_BY_ID, assertKnownItemId } from '../../src/game/itemCatalog.mjs';
-import { GROUND_FUNGUS_BY_ID } from '../../src/game/groundFungusCatalog.mjs';
 import {
   applyHarvestAction,
   advanceDay,
@@ -32,6 +32,11 @@ import {
   validateAction,
 } from '../../src/game/simCore.mjs';
 import { TECH_RESEARCH_TASK_KIND, TECH_RESEARCHABLE_UNLOCK_KEYS } from '../../src/game/techResearchCatalog.mjs';
+import {
+  getTechForestChildResearchBlocker,
+  getTechForestStrictPrerequisiteBlocker,
+  isTechResearchDisplayComplete,
+} from '../../src/game/techForestGen.mjs';
 import { TOOL_RECIPES } from '../../src/game/simActions.mjs';
 import waterGenModule from '../../src/game/waterGen.js';
 import { normalizeStackFootprintValueImpl } from '../../src/game/advanceTick/inventory.mjs';
@@ -74,6 +79,14 @@ function seedSugarBoilingStationPlacement(state) {
     ...prev,
     sugar_boiling_station: { x: ax - 1, y: ay },
   };
+}
+
+/** Keeps partner queue tests focused: real games inject camp maintenance via debrief/advanceDay. */
+function pretendPartnerCampMaintenanceDoneForDay(state) {
+  if (!state?.camp || typeof state.camp !== 'object') {
+    return;
+  }
+  state.camp.lastPartnerMaintenanceDayCompleted = Number(state.totalDaysSimulated) || 0;
 }
 
 function runItemPickupValidationRulesTest() {
@@ -517,10 +530,12 @@ function runAutoRodPlaceAndTrapCheckLifecycleTest() {
   const placedTile = placed.tiles[placementTile.y * placed.width + placementTile.x];
   assert.ok(placedTile.autoRod && placedTile.autoRod.active === true, 'auto_rod_place should persist active autoRod state on tile');
   assert.equal(placedTile.autoRod.state, 'live', 'auto_rod_place should initialize autoRod in live state');
+  assert.equal(placedTile.autoRod.baitStack, null, 'new autoRod should have no baitStack');
 
   placedTile.autoRod = {
     ...placedTile.autoRod,
     state: 'triggered_catch',
+    baitStack: null,
     baitItemId: null,
     pendingSpeciesIds: ['esox_lucius'],
   };
@@ -539,6 +554,8 @@ function runAutoRodPlaceAndTrapCheckLifecycleTest() {
   const rebaitTile = checkAndRebait.tiles[placementTile.y * checkAndRebait.width + placementTile.x];
   assert.equal(rebaitTile.autoRod.state, 'live', 'trap_check with bait should re-arm autoRod to live');
   assert.equal(rebaitTile.autoRod.baitItemId, 'earthworm', 'trap_check with bait should set autoRod baitItemId');
+  assert.ok(rebaitTile.autoRod.baitStack && rebaitTile.autoRod.baitStack.itemId === 'earthworm', 'trap_check should store full earthworm baitStack');
+  assert.equal(rebaitTile.autoRod.baitStack.dryness, 0, 'autoRod bait dryness should stay 0 in water');
   assert.deepEqual(rebaitTile.autoRod.pendingSpeciesIds, [], 'trap_check should clear pending autoRod catches after collection');
   assert.equal(
     checkAndRebait.actors.player.inventory.stacks.some((entry) => entry.itemId === 'esox_lucius:fish_carcass'),
@@ -557,6 +574,7 @@ function runAutoRodPlaceAndTrapCheckLifecycleTest() {
   rebaitTile.autoRod = {
     ...rebaitTile.autoRod,
     state: 'broken',
+    baitStack: null,
     baitItemId: null,
     pendingSpeciesIds: [],
   };
@@ -575,6 +593,36 @@ function runAutoRodPlaceAndTrapCheckLifecycleTest() {
   const repairedTile = repaired.tiles[placementTile.y * repaired.width + placementTile.x];
   assert.equal(repairedTile.autoRod.state, 'live', 'trap_check repair + bait should return broken autoRod to live state');
   assert.equal(repairedTile.autoRod.baitItemId, 'earthworm', 'trap_check repair + bait should re-bait autoRod');
+  assert.ok(repairedTile.autoRod.baitStack?.itemId === 'earthworm', 'repair + bait should persist baitStack on autoRod');
+  assert.equal(repairedTile.autoRod.baitStack.dryness, 0, 'autoRod bait dryness should stay 0 in water');
+
+  const pickupValidation = validateAction(repaired, {
+    actorId: 'player',
+    kind: 'trap_pickup',
+    payload: { x: placementTile.x, y: placementTile.y },
+  });
+  assert.equal(pickupValidation.ok, true, 'trap_pickup should validate on autoRod tile after repair');
+
+  const pickedUp = advanceTick(repaired, {
+    actions: [
+      {
+        actionId: 'auto-rod-pickup',
+        actorId: 'player',
+        kind: 'trap_pickup',
+        payload: { x: placementTile.x, y: placementTile.y },
+      },
+    ],
+  });
+  const afterPickup = pickedUp.tiles[placementTile.y * pickedUp.width + placementTile.x];
+  assert.ok(afterPickup.autoRod == null, 'trap_pickup should remove autoRod from tile');
+  assert.ok(
+    pickedUp.actors.player.inventory.stacks.some((entry) => entry.itemId === 'tool:auto_rod'),
+    'trap_pickup should return tool:auto_rod',
+  );
+  assert.ok(
+    pickedUp.actors.player.inventory.stacks.some((entry) => entry.itemId === 'earthworm'),
+    'trap_pickup should return bait earthworm to inventory',
+  );
   assert.equal(
     repaired.actors.player.inventory.stacks.some((entry) => entry.itemId === 'tool:bone_hook'),
     false,
@@ -4099,6 +4147,7 @@ function runAutoRodSnapshotRoundTripTest() {
   landTile.autoRod = {
     active: true,
     state: 'broken',
+    baitStack: null,
     baitItemId: null,
     pendingSpeciesIds: ['esox_lucius'],
     placedYear: 1,
@@ -4126,6 +4175,7 @@ function runAutoRodSnapshotRoundTripTest() {
     {
       active: true,
       state: 'broken',
+      baitStack: null,
       baitItemId: null,
       pendingSpeciesIds: ['esox_lucius'],
       placedYear: 1,
@@ -4150,28 +4200,35 @@ function runAutoRodSnapshotRoundTripTest() {
 
 function runThreadSpinnerPartnerTaskTickReductionTest() {
   const state = createInitialGameState(4232, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.techUnlocks = {
     ...(state.techUnlocks || {}),
     unlock_station_thread_spinner: true,
   };
+  const fiberItemId = 'urtica_dioica:stalk:green';
+  state.camp.stockpile.stacks = [{ itemId: fiberItemId, quantity: 4, freshness: 1, decayDaysRemaining: 10 }];
+
+  const spinPayload = {
+    kind: 'spin_cordage',
+    ticksRequired: 4,
+    inputs: [{ source: 'camp_stockpile', itemId: fiberItemId, quantity: 1 }],
+    outputs: [{ itemId: 'cordage', quantity: 1 }],
+  };
 
   const beforeBuild = validateAction(state, {
     actorId: 'player',
     kind: 'partner_task_set',
     payload: {
-      task: {
-        kind: 'spin_cordage',
-        ticksRequired: 10,
-      },
+      task: spinPayload,
     },
   });
   assert.equal(beforeBuild.ok, true, 'partner_task_set spin_cordage should validate before thread spinner build');
   assert.equal(
     beforeBuild.normalizedAction.payload.task.ticksRequired,
-    10,
-    'without thread spinner station built, partner spin_cordage ticksRequired should stay at base',
+    4,
+    'without thread spinner station built, partner spin_cordage ticksRequired should stay at hand base (4 ticks / fiber unit)',
   );
 
   const afterBuild = advanceTick(state, {
@@ -4199,21 +4256,20 @@ function runThreadSpinnerPartnerTaskTickReductionTest() {
       },
     },
   };
+  pretendPartnerCampMaintenanceDoneForDay(postBuildForValidation);
+  postBuildForValidation.camp.stockpile.stacks = [{ itemId: fiberItemId, quantity: 4, freshness: 1, decayDaysRemaining: 10 }];
 
   const reducedCordageTask = validateAction(postBuildForValidation, {
     actorId: 'player',
     kind: 'partner_task_set',
     payload: {
-      task: {
-        kind: 'spin_cordage',
-        ticksRequired: 10,
-      },
+      task: spinPayload,
     },
   });
   assert.equal(reducedCordageTask.ok, true, 'partner_task_set spin_cordage should validate after thread spinner build');
   assert.equal(
     reducedCordageTask.normalizedAction.payload.task.ticksRequired,
-    5,
+    2,
     'thread spinner should halve partner spin_cordage ticksRequired',
   );
 
@@ -4244,12 +4300,14 @@ function runThreadSpinnerPartnerTaskTickReductionTest() {
           task: {
             taskId: 'spin-cordage-job',
             kind: 'spin_cordage',
-            ticksRequired: 10,
+            ticksRequired: 4,
+            inputs: [{ source: 'camp_stockpile', itemId: fiberItemId, quantity: 2 }],
             outputs: [{ itemId: 'cordage', quantity: 2 }],
           },
         },
       },
     ],
+    // partner_task_set costs 0 world ticks; partner queue advances only via idleTicks.
     idleTicks: 4,
   });
 
@@ -4297,6 +4355,7 @@ function runIntermediateItemRegistryConsistencyTest() {
 
 function runHideFramePartnerTaskStationRequirementTest() {
   const state = createInitialGameState(4233, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.techUnlocks = {
@@ -4371,7 +4430,7 @@ function runHideFramePartnerTaskStationRequirementTest() {
         },
       },
     ],
-    idleTicks: 7,
+    idleTicks: 8,
   });
   const hideStack = taskRun.camp.stockpile.stacks.find((entry) => entry.itemId === 'dried_hide');
   assert.ok(hideStack, 'completed scrape_and_dry task should deposit dried_hide into camp stockpile');
@@ -4380,6 +4439,7 @@ function runHideFramePartnerTaskStationRequirementTest() {
 
 function runMortarPestlePartnerTaskStationRequirementTest() {
   const state = createInitialGameState(4234, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.techUnlocks = {
@@ -4454,7 +4514,7 @@ function runMortarPestlePartnerTaskStationRequirementTest() {
         },
       },
     ],
-    idleTicks: 7,
+    idleTicks: 8,
   });
   const outputStack = taskRun.camp.stockpile.stacks.find((entry) => entry.itemId === 'walnut_meat');
   assert.ok(outputStack, 'completed crack_shell task should deposit walnut_meat into camp stockpile');
@@ -4463,6 +4523,7 @@ function runMortarPestlePartnerTaskStationRequirementTest() {
 
 function runSugarBoilingPartnerTaskStationRequirementTest() {
   const state = createInitialGameState(4235, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.techUnlocks = {
@@ -4544,7 +4605,7 @@ function runSugarBoilingPartnerTaskStationRequirementTest() {
         },
       },
     ],
-    idleTicks: 7,
+    idleTicks: 8,
   });
   const outputStack = taskRun.camp.stockpile.stacks.find((entry) => entry.itemId === 'maple_sugar');
   assert.ok(outputStack, 'completed boil_sap task should deposit maple_sugar into camp stockpile');
@@ -4582,12 +4643,12 @@ function runProcessItemHandCatalogPipelineTest() {
 
   const outputs = preview.normalizedAction.payload.outputs;
   assert.ok(
-    outputs.some((entry) => entry.itemId === 'juglans_nigra:husked_nut:whole' && entry.quantity === 1),
-    'remove_husk should produce expected husked_nut output from catalog fractions',
+    outputs.some((entry) => entry.itemId === 'juglans_nigra:husked_nut:whole' && entry.quantity === 4),
+    'remove_husk should scale per-fruit outputs linearly (4 fruits × 1 husked nut each)',
   );
   assert.ok(
-    outputs.some((entry) => entry.itemId === 'juglans_nigra:husk:raw' && entry.quantity === 3),
-    'remove_husk should produce expected husk output from catalog fractions',
+    outputs.some((entry) => entry.itemId === 'juglans_nigra:husk:raw' && entry.quantity === 4),
+    'remove_husk should scale per-fruit outputs linearly (4 fruits × 1 husk each)',
   );
 
   const next = advanceTick(state, {
@@ -4611,8 +4672,8 @@ function runProcessItemHandCatalogPipelineTest() {
   const husk = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'juglans_nigra:husk:raw');
   assert.ok(huskedNut, 'process_item should add husked nut output to inventory');
   assert.ok(husk, 'process_item should add husk output to inventory');
-  assert.equal(huskedNut.quantity, 1, 'process_item should add expected husked nut quantity');
-  assert.equal(husk.quantity, 3, 'process_item should add expected husk quantity');
+  assert.equal(huskedNut.quantity, 4, 'process_item should add expected husked nut quantity');
+  assert.equal(husk.quantity, 4, 'process_item should add expected husk quantity');
 }
 
 function runProcessItemStationRequirementPipelineTest() {
@@ -4706,8 +4767,8 @@ function runProcessItemStationRequirementPipelineTest() {
   const nutshell = next.actors.player.inventory.stacks.find((entry) => entry.itemId === 'juglans_nigra:nutshell:broken');
   assert.ok(walnutMeat, 'station process_item should add walnut meat output');
   assert.ok(nutshell, 'station process_item should add nutshell output');
-  assert.equal(walnutMeat.quantity, 1, 'station process_item should apply expected walnut meat fraction output');
-  assert.equal(nutshell.quantity, 4, 'station process_item should apply expected nutshell fraction output');
+  assert.equal(walnutMeat.quantity, 5, 'station process_item should scale crack_shell like 5× single-nut outputs');
+  assert.equal(nutshell.quantity, 5, 'station process_item should scale crack_shell like 5× single-nut outputs');
 }
 
 function runProcessItemBoilSapFilledVesselPipelineTest() {
@@ -4767,7 +4828,7 @@ function runProcessItemBoilSapFilledVesselPipelineTest() {
       ...afterBuild.actors,
       player: {
         ...afterBuild.actors.player,
-        tickBudgetCurrent: 200,
+        tickBudgetCurrent: 400,
       },
     },
   };
@@ -4782,7 +4843,7 @@ function runProcessItemBoilSapFilledVesselPipelineTest() {
     },
   });
   assert.equal(preview.ok, true, 'boil_sap process_item should validate with filled vessel once station is built');
-  assert.equal(preview.normalizedAction.tickCost, 150, 'boil_sap process_item should use shared contract tick cost');
+  assert.equal(preview.normalizedAction.tickCost, 300, 'boil_sap process_item tick cost should scale with vessel quantity (150 × 2)');
   assert.equal(preview.normalizedAction.payload.processLocation, 'sugar_boiling_station', 'boil_sap process_item should require sugar_boiling_station location');
   assert.ok(
     preview.normalizedAction.payload.outputs.some((entry) => entry.itemId === 'tree_sugar' && entry.quantity === 2),
@@ -5395,6 +5456,7 @@ function runPartnerTaskSetValidationTest() {
 
 function runTechResearchPartnerTaskUnlockTest() {
   const state = createInitialGameState(42666, { width: 20, height: 20 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   const forest = state.techForest;
   assert.ok(forest?.byUnlockKey, 'initial state should include techForest');
   const rootEntry = Object.entries(forest.byUnlockKey).find(([, meta]) => meta.depth === 0);
@@ -5434,7 +5496,7 @@ function runTechResearchPartnerTaskUnlockTest() {
         },
       },
     ],
-    idleTicks: tr - 2,
+    idleTicks: tr - 1,
   });
   assert.equal(next.techUnlocks[rootKey], false, 'root should not unlock before last tick');
   next = advanceTick(next, { idleTicks: 1 });
@@ -5474,6 +5536,7 @@ function runTechResearchPartnerTaskUnlockTest() {
   }
 
   const fresh = createInitialGameState(42667, { width: 20, height: 20 });
+  pretendPartnerCampMaintenanceDoneForDay(fresh);
   const prereqChild = Object.entries(fresh.techForest.byUnlockKey).find(([, m]) => m.parentUnlockKey);
   if (prereqChild) {
     const [ck, cm] = prereqChild;
@@ -5493,8 +5556,124 @@ function runTechResearchPartnerTaskUnlockTest() {
   }
 }
 
+function runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest() {
+  const state = createInitialGameState(10000, { width: 40, height: 40 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
+  const { techForest } = state;
+  const ladderKey = 'unlock_tool_ladder';
+  const shovelKey = 'unlock_tool_shovel';
+  const rodKey = 'unlock_tool_fishing_rod';
+
+  assert.equal(techForest.byUnlockKey[ladderKey].parentUnlockKey, rodKey);
+  assert.equal(techForest.byUnlockKey[shovelKey].parentUnlockKey, ladderKey);
+
+  state.techUnlocks[ladderKey] = true;
+  state.techUnlockVisionGranted = { [ladderKey]: true };
+
+  assert.equal(
+    isTechResearchDisplayComplete(techForest, state.techUnlocks, ladderKey, {
+      visionGranted: state.techUnlockVisionGranted,
+      partnerResearched: state.techUnlockPartnerResearch,
+    }),
+    true,
+    'vision-granted ladder should appear display-complete',
+  );
+  assert.equal(
+    isTechResearchDisplayComplete(techForest, state.techUnlocks, shovelKey, {
+      visionGranted: state.techUnlockVisionGranted,
+      partnerResearched: state.techUnlockPartnerResearch,
+    }),
+    false,
+    'shovel should not appear display-complete from ladder vision alone',
+  );
+
+  assert.equal(
+    getTechForestStrictPrerequisiteBlocker(techForest, state.techUnlocks, ladderKey),
+    rodKey,
+    'vision ladder only: strict chain from ladder still blocked at fishing rod',
+  );
+
+  const shovelTicks = techForest.byUnlockKey[shovelKey].researchTicks;
+  const blockedShovel = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_task_set',
+    payload: {
+      task: {
+        kind: TECH_RESEARCH_TASK_KIND,
+        ticksRequired: shovelTicks,
+        meta: { unlockKey: shovelKey },
+      },
+    },
+  });
+  assert.equal(blockedShovel.ok, false, 'shovel research must require full ancestor chain');
+  assert.equal(blockedShovel.code, 'tech_prerequisite_missing');
+  assert.equal(blockedShovel.unlockKey, rodKey);
+
+  state.techUnlocks[rodKey] = true;
+  assert.equal(
+    getTechForestStrictPrerequisiteBlocker(techForest, state.techUnlocks, ladderKey),
+    null,
+  );
+
+  const visionParentBlock = getTechForestChildResearchBlocker(
+    techForest,
+    state.techUnlocks,
+    ladderKey,
+    state.techUnlockVisionGranted,
+    state.techUnlockPartnerResearch,
+  );
+  assert.ok(visionParentBlock, 'vision-granted ladder must still block deeper research until camp research');
+  assert.equal(visionParentBlock.reason, 'vision_parent');
+  assert.equal(visionParentBlock.blockerKey, ladderKey);
+
+  const blockedShovelVisionGap = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_task_set',
+    payload: {
+      task: {
+        kind: TECH_RESEARCH_TASK_KIND,
+        ticksRequired: shovelTicks,
+        meta: { unlockKey: shovelKey },
+      },
+    },
+  });
+  assert.equal(blockedShovelVisionGap.ok, false, 'shovel stays blocked while ladder is vision-only');
+  assert.equal(blockedShovelVisionGap.code, 'tech_prerequisite_missing');
+  assert.equal(blockedShovelVisionGap.unlockKey, ladderKey);
+
+  const ladderTicks = techForest.byUnlockKey[ladderKey].researchTicks;
+  const solidifyLadder = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_task_set',
+    payload: {
+      task: {
+        kind: TECH_RESEARCH_TASK_KIND,
+        ticksRequired: ladderTicks,
+        meta: { unlockKey: ladderKey },
+      },
+    },
+  });
+  assert.equal(solidifyLadder.ok, true, 'partner should queue camp research to solidify vision-granted ladder');
+
+  state.techUnlockPartnerResearch = { [ladderKey]: true };
+  const okShovel = validateAction(state, {
+    actorId: 'player',
+    kind: 'partner_task_set',
+    payload: {
+      task: {
+        kind: TECH_RESEARCH_TASK_KIND,
+        ticksRequired: shovelTicks,
+        meta: { unlockKey: shovelKey },
+      },
+    },
+  });
+  assert.equal(okShovel.ok, true, 'shovel validates after ladder has partner research credit');
+}
+
+
 function runPartnerTaskContinuousProgressionTest() {
   const state = createInitialGameState(4209, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
 
   const next = advanceTick(state, {
     actions: [
@@ -5512,7 +5691,7 @@ function runPartnerTaskContinuousProgressionTest() {
         },
       },
     ],
-    idleTicks: 2,
+    idleTicks: 3,
   });
 
   const applied = next.currentDayActionLog.find((entry) => entry.actionId === 'set-partner-task');
@@ -5530,6 +5709,7 @@ function runPartnerTaskContinuousProgressionTest() {
 
 function runPartnerTaskQueuePolicyAndOutputStackingTest() {
   const state = createInitialGameState(4215, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
 
   const queued = advanceTick(state, {
     actions: [
@@ -5626,7 +5806,7 @@ function runPartnerTaskQueuePolicyAndOutputStackingTest() {
         },
       },
     ],
-    idleTicks: 1,
+    idleTicks: 2,
   });
 
   const secondFiber = secondCompletion.camp.stockpile.stacks.find((entry) => entry.itemId === 'fiber');
@@ -5641,8 +5821,57 @@ function runPartnerTaskQueuePolicyAndOutputStackingTest() {
   );
 }
 
+function runPartnerTaskSetAppendDuringDebriefTest() {
+  const state = createInitialGameState(4216, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
+  state.camp.debrief = { ...(state.camp.debrief || {}), active: true };
+
+  const afterTwoAppends = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'debrief-task-a',
+        actorId: 'player',
+        kind: 'partner_task_set',
+        payload: {
+          task: {
+            taskId: 'debrief-a',
+            kind: 'craft_rope',
+            ticksRequired: 5,
+            outputs: [{ itemId: 'rope', quantity: 1 }],
+          },
+        },
+      },
+      {
+        actionId: 'debrief-task-b',
+        actorId: 'player',
+        kind: 'partner_task_set',
+        payload: {
+          task: {
+            taskId: 'debrief-b',
+            kind: 'craft_rope',
+            ticksRequired: 5,
+            outputs: [{ itemId: 'rope', quantity: 1 }],
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(
+    afterTwoAppends.camp.partnerTaskQueue.active,
+    null,
+    'append during debrief should not park the first partner task in active (queued-only planning)',
+  );
+  const q = afterTwoAppends.camp.partnerTaskQueue.queued;
+  assert.ok(Array.isArray(q) && q.length >= 2, 'debrief appends should land in queued');
+  const ids = q.map((t) => t.taskId);
+  assert.ok(ids.includes('debrief-a'), 'first debrief append should appear in queued');
+  assert.ok(ids.includes('debrief-b'), 'second debrief append should appear in queued');
+}
+
 function runPartnerTaskStraddlesDayBoundaryTest() {
   const state = createInitialGameState(4250, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.dayTick = 398;
   state.camp.stationsUnlocked = ['sugar_boiling_station'];
 
@@ -5662,7 +5891,7 @@ function runPartnerTaskStraddlesDayBoundaryTest() {
         },
       },
     ],
-    idleTicks: 1,
+    idleTicks: 2,
   });
 
   assert.equal(interruptedAtRollover.dayTick, 0, 'task progression should roll into next day at boundary');
@@ -5676,6 +5905,16 @@ function runPartnerTaskStraddlesDayBoundaryTest() {
   const outputBeforeComplete = interruptedAtRollover.camp.stockpile.stacks.find((entry) => entry.itemId === 'tree_sugar');
   assert.equal(outputBeforeComplete, undefined, 'incomplete boil_sap task should not produce output before completion');
 
+  interruptedAtRollover.camp.lastPartnerMaintenanceDayCompleted = Number(interruptedAtRollover.totalDaysSimulated) || 0;
+  interruptedAtRollover.camp.partnerTaskQueue.queued = interruptedAtRollover.camp.partnerTaskQueue.queued.filter(
+    (t) => t?.kind !== 'camp_maintenance',
+  );
+  const pqMirror = interruptedAtRollover.camp.partnerTaskQueue;
+  interruptedAtRollover.actors.partner.taskQueue = {
+    active: pqMirror.active ? { ...pqMirror.active } : null,
+    queued: Array.isArray(pqMirror.queued) ? pqMirror.queued.map((t) => ({ ...(t || {}) })) : [],
+  };
+
   const resumedNextDay = advanceTick(interruptedAtRollover, { idleTicks: 2 });
   assert.equal(resumedNextDay.camp.partnerTaskQueue.active, null, 'partner task should complete after remaining ticks on following day');
 
@@ -5687,6 +5926,7 @@ function runPartnerTaskStraddlesDayBoundaryTest() {
 
 function runPartnerTaskInvalidatesOnMissingInputsTest() {
   const state = createInitialGameState(4251, { width: 30, height: 30 });
+  pretendPartnerCampMaintenanceDoneForDay(state);
   state.actors.player.x = state.camp.anchorX;
   state.actors.player.y = state.camp.anchorY;
   state.camp.stockpile.stacks = [{ itemId: 'fiber', quantity: 1 }];
@@ -6622,8 +6862,10 @@ function runCoatColdExposurePerTickTest() {
   unprotected.dailyTemperatureF = 20;
   unprotected.actors.player.health = 1;
   unprotected.actors.player.inventory.equipment = { gloves: null, coat: null };
-  unprotected.actors.player.x = unprotected.camp.anchorX + 1;
-  unprotected.actors.player.y = unprotected.camp.anchorY;
+  const uax = unprotected.camp.anchorX;
+  const uay = unprotected.camp.anchorY;
+  unprotected.actors.player.x = uax + 5;
+  unprotected.actors.player.y = uay;
 
   const afterExposure = advanceTick(unprotected, { idleTicks: exposureTicks });
   assert.ok(
@@ -6639,8 +6881,10 @@ function runCoatColdExposurePerTickTest() {
     gloves: null,
     coat: { itemId: 'tool:coat', equippedAtDay: 0, equippedAtDayTick: 0 },
   };
-  protectedState.actors.player.x = protectedState.camp.anchorX + 1;
-  protectedState.actors.player.y = protectedState.camp.anchorY;
+  const pax = protectedState.camp.anchorX;
+  const pay = protectedState.camp.anchorY;
+  protectedState.actors.player.x = pax + 5;
+  protectedState.actors.player.y = pay;
 
   const afterProtectedExposure = advanceTick(protectedState, { idleTicks: exposureTicks });
   assert.equal(
@@ -6678,8 +6922,11 @@ function runTemperatureThirstDrainAndSunHatModifierTest() {
       coat: null,
       head: withSunHat ? { itemId: 'tool:sun_hat', equippedAtDay: 0, equippedAtDayTick: 0 } : null,
     };
-    state.actors.player.x = atCamp ? state.camp.anchorX : state.camp.anchorX + 1;
-    state.actors.player.y = state.camp.anchorY;
+    const ax = state.camp.anchorX;
+    const ay = state.camp.anchorY;
+    // In-footprint tile away from anchor; "field" tile well outside camp.
+    state.actors.player.x = atCamp ? ax + 1 : ax + 5;
+    state.actors.player.y = atCamp ? ay + 1 : ay;
     return advanceTick(state, { idleTicks });
   }
 
@@ -6713,10 +6960,9 @@ function runTemperatureThirstDrainAndSunHatModifierTest() {
     Math.abs(hotWithHatDrain - expectedHotWithHatDrain) < 1e-9,
     'equipped sun_hat should halve hot temperature thirst modifier',
   );
-  assert.equal(
-    warmAtCampDrain,
-    0,
-    'player on camp anchor should not lose thirst from field activity tick drain',
+  assert.ok(
+    Math.abs(warmAtCampDrain - warmDrain) < 1e-9,
+    'player at camp during daylight should still lose thirst at the same rate as off-camp (until debrief safe water)',
   );
 }
 
@@ -6890,6 +7136,20 @@ function runWaterskinFillAndDrinkValidationTest() {
     campDrinkValid.normalizedAction.payload.sourceType,
     'safe',
     'camp water_drink should normalize sourceType safe',
+  );
+
+  campPlayer.x = ax + 2;
+  campPlayer.y = ay + 2;
+  const campDrinkCorner = validateAction(campState, {
+    actorId: 'player',
+    kind: 'water_drink',
+    payload: { x: ax + 2, y: ay + 2 },
+  });
+  assert.equal(campDrinkCorner.ok, true, 'water_drink should validate on non-anchor camp footprint tile');
+  assert.equal(
+    campDrinkCorner.normalizedAction.payload.sourceType,
+    'safe',
+    'camp footprint water_drink should normalize sourceType safe',
   );
 
   const stepX = ax + 1 < campState.width ? 1 : -1;
@@ -11026,43 +11286,35 @@ function runDebriefMedicineActionGatingTest() {
   assert.equal(allowed.ok, true, 'partner_medicine_administer should validate once debrief is active');
 }
 
+const VISION_GROUND_FUNGUS_ID = 'psilocybe_caerulipes';
+const VISION_FUNGUS_ITEM_ID = `${VISION_GROUND_FUNGUS_ID}:fruiting_body:whole`;
+
 function runDebriefVisionRequestAndCooldownTest() {
+  const catalogVision = GROUND_FUNGUS_BY_ID[VISION_GROUND_FUNGUS_ID];
+  assert.ok(
+    catalogVision?.ingestion?.dose_response?.some((band) => Array.isArray(band?.effects)
+      && band.effects.some(
+        (e) => e?.type === 'hallucinogen' && e?.partner_prep_required === true,
+      )),
+    'ground fungus catalog (from data/ground_fungi) should define partner vision hallucinogen on Psilocybe caerulipes',
+  );
+
   const state = createInitialGameState(5514, { width: 30, height: 30 });
   const player = state.actors.player;
   player.x = state.camp.anchorX;
   player.y = state.camp.anchorY;
   state.dayTick = 220;
-  const fungusDefinition = GROUND_FUNGUS_BY_ID.amanita_bisporigera || null;
-  const previousIngestion = fungusDefinition?.ingestion || null;
-  if (fungusDefinition) {
-    fungusDefinition.ingestion = {
-      vision_item: { quantity_per_dose: 1 },
-      dose_response: [
-        {
-          effects: [
-            {
-              type: 'hallucinogen',
-              partner_prep_required: true,
-              vision_categories: ['sight', 'tech'],
-              sight_duration_days: 5,
-            },
-          ],
-        },
-      ],
-    };
-  }
 
-  try {
-    const fungusTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
-    assert.ok(fungusTile, 'vision test requires at least one dry land tile for mock fungus zone');
-    fungusTile.groundFungusZone = {
-      type: 'ground_fungus_zone',
-      speciesId: 'amanita_bisporigera',
-      annualFruitChance: 1,
-      fruitingWindows: [],
-      perTileYieldRange: [20, 20],
-      yieldCurrentGrams: 20,
-    };
+  const fungusTile = state.tiles.find((tile) => !tile.waterType && !tile.rockType);
+  assert.ok(fungusTile, 'vision test requires at least one dry land tile for mock fungus zone');
+  fungusTile.groundFungusZone = {
+    type: 'ground_fungus_zone',
+    speciesId: VISION_GROUND_FUNGUS_ID,
+    annualFruitChance: 1,
+    fruitingWindows: [],
+    perTileYieldRange: [20, 20],
+    yieldCurrentGrams: 20,
+  };
 
     const entered = advanceTick(state, {
       actions: [
@@ -11090,8 +11342,13 @@ function runDebriefVisionRequestAndCooldownTest() {
     assert.equal(requestOnly.camp.debrief.visionUsesThisSeason, 0, 'missing ingredient should not consume seasonal vision count');
     assert.equal(requestOnly.camp.debrief.visionRequest.quantity, 1, 'vision request should include required quantity');
     assert.equal(requestOnly.camp.debrief.visionRequest.partName, 'fruiting_body', 'vision request should expose required mushroom part');
+    assert.equal(
+      requestOnly.camp.debrief.visionRequest.speciesId,
+      VISION_GROUND_FUNGUS_ID,
+      'vision request should reference catalog vision mushroom from resolveVisionRecipes',
+    );
 
-    requestOnly.camp.stockpile.stacks = [{ itemId: 'amanita_bisporigera:fruiting_body:whole', quantity: 2 }];
+    requestOnly.camp.stockpile.stacks = [{ itemId: VISION_FUNGUS_ITEM_ID, quantity: 2 }];
     const consumedFirst = advanceTick(requestOnly, {
       actions: [
         {
@@ -11117,7 +11374,7 @@ function runDebriefVisionRequestAndCooldownTest() {
           actionId: 'vision-confirm-consume-1',
           actorId: 'player',
           kind: 'partner_vision_confirm',
-          payload: { itemId: 'amanita_bisporigera:fruiting_body:whole' },
+          payload: { itemId: VISION_FUNGUS_ITEM_ID },
         },
       ],
     });
@@ -11168,13 +11425,14 @@ function runDebriefVisionRequestAndCooldownTest() {
           actionId: 'vision-confirm-consume-2',
           actorId: 'player',
           kind: 'partner_vision_confirm',
-          payload: { itemId: 'amanita_bisporigera:fruiting_body:whole' },
+          payload: { itemId: VISION_FUNGUS_ITEM_ID },
         },
       ],
     });
     assert.equal(confirmSecond.camp.debrief.visionUsesThisSeason, 2, 'two successful vision confirmations should reach seasonal cap');
     assert.ok(confirmSecond.camp.debrief.pendingVisionRevelation, 'second successful vision should again create pending revelation');
 
+    const techUnlockBeforeTechVision = Object.values(confirmSecond.techUnlocks || {}).filter((v) => v === true).length;
     const chosenSecond = advanceTick(confirmSecond, {
       actions: [
         {
@@ -11189,6 +11447,12 @@ function runDebriefVisionRequestAndCooldownTest() {
       Math.floor(Number(chosenSecond.actors.player.visionRewardCounts.tech) || 0),
       1,
       'choosing tech should increment tech revelation counter',
+    );
+    const techUnlockTrueCount = Object.values(chosenSecond.techUnlocks || {}).filter((v) => v === true).length;
+    assert.equal(
+      techUnlockTrueCount,
+      techUnlockBeforeTechVision + 1,
+      'single tech vision revelation should add exactly one techUnlocks true',
     );
 
     const cooldownValidation = validateAction(chosenSecond, {
@@ -11294,11 +11558,6 @@ function runDebriefVisionRequestAndCooldownTest() {
       payload: { overlay: 'animal_density' },
     });
     assert.equal(day2Validation.ok, true, 'overlay lock should reset on next day while sight remains active');
-  } finally {
-    if (fungusDefinition) {
-      fungusDefinition.ingestion = previousIngestion;
-    }
-  }
 }
 
 function main() {
@@ -11392,8 +11651,10 @@ function main() {
     ['action tick-cost preview', runActionTickCostPreviewTest],
     ['partner task set validation', runPartnerTaskSetValidationTest],
     ['tech research partner task unlock', runTechResearchPartnerTaskUnlockTest],
+    ['tech vision ladder does not open shovel without full chain', runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest],
     ['partner task continuous progression', runPartnerTaskContinuousProgressionTest],
     ['partner task queue policy and output stacking', runPartnerTaskQueuePolicyAndOutputStackingTest],
+    ['partner task set append during debrief queues only', runPartnerTaskSetAppendDuringDebriefTest],
     ['partner task straddles day boundary', runPartnerTaskStraddlesDayBoundaryTest],
     ['partner task invalidates on missing inputs', runPartnerTaskInvalidatesOnMissingInputsTest],
     ['inspect and dig core effects', runInspectAndDigCoreEffectsTest],

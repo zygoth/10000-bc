@@ -195,7 +195,7 @@ Left-clicking any tile moves the player there (pathfinding). If the budget is fu
 The context menu is a vertically stacked list of available actions. Each item shows:
 
 - Action name
-- Tick cost (small, greyed)
+- Tick cost in parentheses after the name, except when the label ends with `...` (opens a sub-flow; cost depends on the next choice)
 
 **Action ordering within the context menu:**
 
@@ -206,6 +206,8 @@ The context menu is a vertically stacked list of available actions. Each item sh
 5. Drop item (always last, least likely to be accidental)
 
 **Action ordering note:** If this is the first time the player has interacted with a plant, Inspect is listed first. If the player has harvested this plant before, Harvest leads. This is just list ordering — the player always chooses from the full menu.
+
+**Regression tests:** Headless Jest tests (`TileContextMenuToolSurfacing.test.js`, `InventoryContextMenuSurfacing.test.js`) call the same `inferTileContextActions` and `buildDefaultPayload` wiring as the React client, then `validateAction`, so surfaced menu rows stay aligned with simulation rules (including parameterized rows such as trap bait, leaching material, baited fish cast, and inventory/stockpile payloads).
 
 ### 4.3 Inspect (Right-Click)
 
@@ -275,7 +277,8 @@ The panel occupies the right side of the screen and covers the world view. The f
 
 **Hovering a slot:** Shows item tooltip (see §5.3) — no tick cost.
 
-**Right-clicking a slot:** Opens item context menu:
+**Right-clicking a slot:** Opens item context menu. Each action row shows the tick cost in parentheses after the name (same pattern as the tile context menu), e.g. `Eat (2t)`, `Spin cordage (4t)`, including `0t` for actions that only open a UI flow without advancing time. Actions whose label ends with `...` (opening a station process sub-flow) omit the tick suffix because the cost depends on quantity and process chosen next.
+
 - Eat (if edible; costs 2 ticks)
 - Apply as Poultice (if applicable; costs ticks + cordage)
 - Drop (no tick cost; drops to current tile)

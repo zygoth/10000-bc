@@ -17,6 +17,12 @@ function toCatalogShape(fungus) {
     soil_requirements: fungus.soil_requirements,
     fruiting_windows: fungus.fruiting_windows,
     per_tile_yield_range: fungus.per_tile_yield_range,
+    ...(Array.isArray(fungus.game_tags) && fungus.game_tags.length > 0
+      ? { game_tags: fungus.game_tags }
+      : {}),
+    ...(fungus.ingestion && typeof fungus.ingestion === 'object'
+      ? { ingestion: fungus.ingestion }
+      : {}),
   };
 }
 

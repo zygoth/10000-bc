@@ -6,12 +6,21 @@ import {
   runDebriefVisionRequest,
 } from '../medicineDebrief.mjs';
 import { PLANT_BY_ID } from '../plantCatalog.mjs';
+import { TECH_RESEARCHABLE_UNLOCK_KEYS, getTechResearchMeta } from '../techResearchCatalog.mjs';
+import { getTechForestNode } from '../techForestGen.mjs';
 import { parsePlantPartItemId } from '../plantPartDescriptors.mjs';
 import {
   harvestYieldScaleFactor,
   scaledUnitsPerHarvestActionMidpoint,
 } from '../harvestYieldResolve.mjs';
 import { HUNGER_BAR_CALORIES } from '../simCore.constants.mjs';
+import { isTileWithinCampFootprint } from '../campFootprint.mjs';
+import {
+  autoRodBaitStackFromInventoryStack,
+  defaultLandTrapBaitStackFromItemId,
+  landTrapBaitStackFromInventoryStack,
+  landTrapHasBait,
+} from '../trapBaitLand.mjs';
 
 export function applyActionEffectImpl(state, action, deps) {
   const {
@@ -50,10 +59,21 @@ export function applyActionEffectImpl(state, action, deps) {
     applyHarvestInjuryFromSubStage,
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
+    ensurePartnerCampMaintenanceQueued,
     addActorInventoryItem,
     maxQuantityActorInventoryCanAccept,
     pickupAddOptionsFromWorldStack,
   } = deps;
+
+  const resolveLandTrapBaitStack = (trap) => {
+    if (trap?.baitStack && (Number(trap.baitStack.quantity) || 0) > 0) {
+      return trap.baitStack;
+    }
+    if (typeof trap?.baitItemId === 'string' && trap.baitItemId) {
+      return defaultLandTrapBaitStackFromItemId(trap.baitItemId);
+    }
+    return null;
+  };
 
   const isActorAtCampAnchor = (candidate) => {
     const campX = Number(state?.camp?.anchorX);
@@ -532,9 +552,7 @@ export function applyActionEffectImpl(state, action, deps) {
     const sourceType = typeof action.payload?.sourceType === 'string' ? action.payload.sourceType : null;
 
     if (sourceType === 'safe') {
-      const campX = Number.isInteger(state?.camp?.anchorX) ? state.camp.anchorX : null;
-      const campY = Number.isInteger(state?.camp?.anchorY) ? state.camp.anchorY : null;
-      if (campX !== targetX || campY !== targetY) {
+      if (!isTileWithinCampFootprint(state, targetX, targetY)) {
         return;
       }
       actor.thirst = 1;
@@ -1136,6 +1154,7 @@ export function applyActionEffectImpl(state, action, deps) {
       poached: false,
       sprung: false,
       reliability: 1,
+      baitStack: null,
       baitItemId: null,
       rabbitDensity: getAnimalDensityAtTile(state, 'sylvilagus_floridanus', targetX, targetY),
       placedYear: Number(state.year) || 1,
@@ -1190,6 +1209,7 @@ export function applyActionEffectImpl(state, action, deps) {
       poached: false,
       sprung: false,
       reliability: 1,
+      baitStack: null,
       baitItemId: null,
       lastDensity: 0,
       caughtSpeciesId: null,
@@ -1278,6 +1298,7 @@ export function applyActionEffectImpl(state, action, deps) {
     tile.autoRod = {
       active: true,
       state: 'live',
+      baitStack: null,
       baitItemId: null,
       pendingSpeciesIds: [],
       placedYear: Number(state.year) || 1,
@@ -1361,6 +1382,9 @@ export function applyActionEffectImpl(state, action, deps) {
     const autoRodPendingBefore = Array.isArray(activeAutoRod?.pendingSpeciesIds)
       ? activeAutoRod.pendingSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
       : [];
+    const autoRodBase = autoRodPendingBefore.length > 0
+      ? { ...activeAutoRod, baitStack: null, baitItemId: null }
+      : activeAutoRod;
     if (activeAutoRod && autoRodPendingBefore.length > 0) {
       for (const speciesId of autoRodPendingBefore) {
         const fishMeatPart = (ANIMAL_BY_ID[speciesId]?.parts || []).find((entry) => entry?.id === 'meat') || null;
@@ -1417,8 +1441,8 @@ export function applyActionEffectImpl(state, action, deps) {
     }
 
     if (activeAutoRod) {
-      let nextState = activeAutoRod.state;
-      const baitItemId = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : null;
+      let nextState = autoRodBase.state;
+      const baitItemIdPayload = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : null;
       const repair = action.payload?.repair === true;
 
       if (repair && nextState === 'broken') {
@@ -1429,30 +1453,48 @@ export function applyActionEffectImpl(state, action, deps) {
         }
       }
 
-      let nextBaitItemId = activeAutoRod.baitItemId === EARTHWORM_ITEM_ID
-        ? EARTHWORM_ITEM_ID
-        : null;
-      if (baitItemId === EARTHWORM_ITEM_ID) {
+      let nextBaitStack = null;
+      let nextBaitItemId = null;
+      const baseStack = autoRodBase.baitStack;
+      if (
+        baseStack
+        && typeof baseStack === 'object'
+        && (Number(baseStack.quantity) || 0) > 0
+        && baseStack.itemId === EARTHWORM_ITEM_ID
+      ) {
+        nextBaitStack = { ...baseStack, dryness: 0 };
+        nextBaitItemId = EARTHWORM_ITEM_ID;
+      }
+
+      if (baitItemIdPayload === EARTHWORM_ITEM_ID) {
+        const invStacks = Array.isArray(actor?.inventory?.stacks) ? actor.inventory.stacks : null;
+        const sourceStack = invStacks ? findPreferredStackByItem(invStacks, EARTHWORM_ITEM_ID, 1) : null;
         const consumedBait = removeActorInventoryItem(actor, EARTHWORM_ITEM_ID, 1);
-        if (consumedBait > 0) {
-          nextBaitItemId = EARTHWORM_ITEM_ID;
-          if (nextState !== 'broken') {
-            nextState = 'live';
+        if (consumedBait > 0 && sourceStack) {
+          const placed = autoRodBaitStackFromInventoryStack(sourceStack, consumedBait);
+          if (placed) {
+            nextBaitStack = placed;
+            nextBaitItemId = placed.itemId;
+            if (nextState !== 'broken') {
+              nextState = 'live';
+            }
           }
         }
       }
 
-      if ((nextState === 'triggered_catch' || nextState === 'triggered_escape') && nextBaitItemId === null) {
-        nextState = 'triggered_escape';
+      if (nextState === 'broken' && repair !== true) {
+        nextBaitStack = null;
+        nextBaitItemId = null;
       }
 
-      if (nextState === 'broken' && repair !== true) {
-        nextBaitItemId = null;
+      if ((nextState === 'triggered_catch' || nextState === 'triggered_escape') && !nextBaitItemId) {
+        nextState = 'triggered_escape';
       }
 
       tile.autoRod = {
         ...activeAutoRod,
         state: nextState,
+        baitStack: nextBaitStack,
         baitItemId: nextBaitItemId,
         pendingSpeciesIds: [],
       };
@@ -1482,6 +1524,208 @@ export function applyActionEffectImpl(state, action, deps) {
     return;
   }
 
+  if (action.kind === 'trap_retrieve') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    const activeSnare = tile?.simpleSnare?.active === true ? tile.simpleSnare : null;
+    const activeDeadfall = tile?.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+    const activeFishTrap = tile?.fishTrap?.active === true ? tile.fishTrap : null;
+    if (!tile || (!activeSnare && !activeDeadfall && !activeFishTrap)) {
+      return;
+    }
+
+    const doSnare = activeSnare && activeSnare.hasCatch === true;
+    const doDeadfall = activeDeadfall && activeDeadfall.hasCatch === true
+      && typeof activeDeadfall.caughtSpeciesId === 'string' && activeDeadfall.caughtSpeciesId;
+    const fishIds = activeFishTrap && Array.isArray(activeFishTrap.storedCatchSpeciesIds)
+      ? activeFishTrap.storedCatchSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
+      : [];
+    const doFish = fishIds.length > 0;
+
+    if (!doSnare && !doDeadfall && !doFish) {
+      return;
+    }
+
+    const wasPoachedSnare = doSnare && activeSnare.poached === true;
+    const wasPoachedDeadfall = doDeadfall && activeDeadfall.poached === true;
+
+    if (doSnare) {
+      const speciesId = 'sylvilagus_floridanus';
+      addActorInventoryItemWithOverflowDrop(state, actor, `${speciesId}:carcass`, 1, {
+        freshness: 1,
+        decayDaysRemaining: 3,
+      });
+    }
+
+    if (doDeadfall) {
+      addActorInventoryItemWithOverflowDrop(state, actor, `${activeDeadfall.caughtSpeciesId}:carcass`, 1, {
+        freshness: 1,
+        decayDaysRemaining: 3,
+      });
+    }
+
+    if (doFish) {
+      for (const speciesId of fishIds) {
+        const fishMeatPart = (ANIMAL_BY_ID[speciesId]?.parts || []).find((entry) => entry?.id === 'meat') || null;
+        const decayDays = Number.isFinite(Number(fishMeatPart?.decay_days))
+          ? Math.max(0, Math.floor(Number(fishMeatPart.decay_days)))
+          : 2;
+        addActorInventoryItemWithOverflowDrop(state, actor, `${speciesId}:fish_carcass`, 1, {
+          freshness: 1,
+          decayDaysRemaining: decayDays,
+        });
+      }
+    }
+
+    if (activeSnare) {
+      tile.simpleSnare = {
+        ...activeSnare,
+        hasCatch: false,
+        poached: false,
+        sprung: false,
+        catchResolvedTotalDays: null,
+        daysSinceCatch: 0,
+        lastPoachChance: null,
+        lastPoachRoll: null,
+        lastResolvedYear: state.year,
+        lastResolvedDay: state.dayOfYear,
+      };
+    }
+
+    if (activeDeadfall) {
+      tile.deadfallTrap = {
+        ...activeDeadfall,
+        hasCatch: false,
+        poached: false,
+        sprung: false,
+        caughtSpeciesId: null,
+        catchResolvedTotalDays: null,
+        daysSinceCatch: 0,
+        lastPoachChance: null,
+        lastPoachRoll: null,
+        lastResolvedYear: state.year,
+        lastResolvedDay: state.dayOfYear,
+      };
+    }
+
+    if (activeFishTrap) {
+      tile.fishTrap = {
+        ...activeFishTrap,
+        sprung: false,
+        storedCatchSpeciesIds: [],
+        lastCatchCount: 0,
+        lastResolvedYear: state.year,
+        lastResolvedDay: state.dayOfYear,
+      };
+    }
+
+    actor.lastTrapCheck = {
+      kind: doSnare
+        ? 'simple_snare'
+        : doDeadfall
+          ? 'dead_fall_trap'
+          : 'fish_trap_weir',
+      x: targetX,
+      y: targetY,
+      hadCatch: true,
+      wasPoached: wasPoachedSnare || wasPoachedDeadfall,
+      day: Number(state.totalDaysSimulated) || 0,
+      dayTick: Number(state.dayTick) || 0,
+    };
+    return;
+  }
+
+  if (action.kind === 'trap_pickup') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile) {
+      return;
+    }
+
+    if (tile.simpleSnare?.active === true) {
+      const trap = tile.simpleSnare;
+      const baitStack = resolveLandTrapBaitStack(trap);
+      if (baitStack?.itemId) {
+        addActorInventoryItemWithOverflowDrop(state, actor, baitStack.itemId, 1, pickupAddOptionsFromWorldStack(baitStack) ?? undefined);
+      }
+      delete tile.simpleSnare;
+      addActorInventoryItemWithOverflowDrop(state, actor, 'tool:simple_snare', 1);
+      return;
+    }
+
+    if (tile.deadfallTrap?.active === true) {
+      const trap = tile.deadfallTrap;
+      const baitStack = resolveLandTrapBaitStack(trap);
+      if (baitStack?.itemId) {
+        addActorInventoryItemWithOverflowDrop(state, actor, baitStack.itemId, 1, pickupAddOptionsFromWorldStack(baitStack) ?? undefined);
+      }
+      delete tile.deadfallTrap;
+      addActorInventoryItemWithOverflowDrop(state, actor, 'tool:dead_fall_trap', 1);
+      return;
+    }
+
+    if (tile.autoRod?.active === true) {
+      const rod = tile.autoRod;
+      const baitStack = rod.baitStack && (Number(rod.baitStack.quantity) || 0) > 0 ? rod.baitStack : null;
+      if (baitStack?.itemId) {
+        addActorInventoryItemWithOverflowDrop(state, actor, baitStack.itemId, 1, pickupAddOptionsFromWorldStack(baitStack) ?? undefined);
+      }
+      delete tile.autoRod;
+      addActorInventoryItemWithOverflowDrop(state, actor, 'tool:auto_rod', 1);
+      return;
+    }
+
+    if (tile.fishTrap?.active === true) {
+      delete tile.fishTrap;
+      addActorInventoryItemWithOverflowDrop(state, actor, 'tool:fish_trap_weir', 1);
+    }
+    return;
+  }
+
+  if (action.kind === 'trap_remove_bait') {
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile) {
+      return;
+    }
+
+    const snare = tile.simpleSnare?.active === true ? tile.simpleSnare : null;
+    const deadfall = tile.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+    const trap = snare || deadfall;
+    if (!trap || !landTrapHasBait(trap)) {
+      return;
+    }
+
+    const baitStack = resolveLandTrapBaitStack(trap);
+    if (!baitStack?.itemId) {
+      return;
+    }
+
+    addActorInventoryItemWithOverflowDrop(state, actor, baitStack.itemId, 1, pickupAddOptionsFromWorldStack(baitStack) ?? undefined);
+
+    if (snare) {
+      tile.simpleSnare = { ...snare, baitStack: null, baitItemId: null };
+    } else {
+      tile.deadfallTrap = { ...deadfall, baitStack: null, baitItemId: null };
+    }
+    return;
+  }
+
   if (action.kind === 'trap_bait') {
     const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
     const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
@@ -1504,16 +1748,29 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
 
+    const invStacks = Array.isArray(actor?.inventory?.stacks) ? actor.inventory.stacks : null;
+    const sourceStack = invStacks ? findPreferredStackByItem(invStacks, baitItemId, 1) : null;
+    const available = Math.max(0, Math.floor(Number(sourceStack?.quantity) || 0));
+    if (!sourceStack || available < 1) {
+      return;
+    }
+
+    const baitStack = landTrapBaitStackFromInventoryStack(sourceStack, 1);
+    if (!baitStack) {
+      return;
+    }
+
     const consumed = removeActorInventoryItem(actor, baitItemId, 1);
     if (consumed <= 0) {
       return;
     }
+    baitStack.quantity = consumed;
 
-    if (activeSnare && !activeSnare.baitItemId) {
-      tile.simpleSnare = { ...activeSnare, baitItemId };
+    if (activeSnare && !landTrapHasBait(activeSnare)) {
+      tile.simpleSnare = { ...activeSnare, baitStack, baitItemId: baitStack.itemId };
     }
-    if (activeDeadfall && !activeDeadfall.baitItemId) {
-      tile.deadfallTrap = { ...activeDeadfall, baitItemId };
+    if (activeDeadfall && !landTrapHasBait(activeDeadfall)) {
+      tile.deadfallTrap = { ...activeDeadfall, baitStack, baitItemId: baitStack.itemId };
     }
     return;
   }
@@ -1969,9 +2226,8 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
     debrief.active = true;
-    // Entering debrief snaps the player to the camp anchor so camp-only maintenance
-    // assumptions (safe water, no field thirst drain) hold even if they ended the day
-    // from a different camp tile within the footprint.
+    // Entering debrief snaps the player to the camp anchor; safe camp water refills
+    // thirst and pauses field thirst drain until the next calendar morning.
     if (actor && actor.id === 'player') {
       const ax = Number(state?.camp?.anchorX);
       const ay = Number(state?.camp?.anchorY);
@@ -1979,6 +2235,10 @@ export function applyActionEffectImpl(state, action, deps) {
         actor.x = ax;
         actor.y = ay;
       }
+      actor.thirst = 1;
+    }
+    if (state.camp && typeof state.camp === 'object') {
+      state.camp.nightlyPlayerSafeThirstUntilDawn = true;
     }
     debrief.openedAtDay = Number.isInteger(state?.totalDaysSimulated) ? state.totalDaysSimulated : null;
     const seasonKey = resolveCurrentSeasonKey(state);
@@ -1998,6 +2258,7 @@ export function applyActionEffectImpl(state, action, deps) {
     debrief.pendingVisionRevelation = null;
     debrief.pendingVisionChoices = [];
     debrief.chosenVisionRewards = [];
+    ensurePartnerCampMaintenanceQueued(state);
     return;
   }
 
@@ -2100,11 +2361,12 @@ export function applyActionEffectImpl(state, action, deps) {
     if (!debrief || debrief.active !== true || !debrief.pendingVisionRevelation) {
       return;
     }
-    const category = typeof action?.payload?.category === 'string'
+    const categoryRaw = typeof action?.payload?.category === 'string'
       ? action.payload.category
       : '';
+    const category = categoryRaw.trim().toLowerCase();
     const choices = Array.isArray(debrief.pendingVisionChoices) ? debrief.pendingVisionChoices : [];
-    const chosen = choices.find((entry) => entry?.category === category) || null;
+    const chosen = choices.find((entry) => String(entry?.category || '').toLowerCase() === category) || null;
     if (!chosen) {
       return;
     }
@@ -2119,17 +2381,85 @@ export function applyActionEffectImpl(state, action, deps) {
       targetActor.natureSightPendingDays += duration;
     }
 
+    let plantSpeciesRevealed = [];
+    if (category === 'plant') {
+      if (!Array.isArray(state.camp.identifiedPlantSpeciesIds)) {
+        state.camp.identifiedPlantSpeciesIds = [];
+      }
+      const identified = new Set(state.camp.identifiedPlantSpeciesIds);
+      const onMap = new Set();
+      for (const plant of Object.values(state.plants || {})) {
+        if (!plant || plant.alive === false) {
+          continue;
+        }
+        const sid = plant.speciesId;
+        if (typeof sid !== 'string' || !sid || !PLANT_BY_ID[sid]) {
+          continue;
+        }
+        if (!identified.has(sid)) {
+          onMap.add(sid);
+        }
+      }
+      const sorted = [...onMap].sort();
+      plantSpeciesRevealed = sorted.slice(0, 3);
+      for (const sid of plantSpeciesRevealed) {
+        if (!state.camp.identifiedPlantSpeciesIds.includes(sid)) {
+          state.camp.identifiedPlantSpeciesIds.push(sid);
+        }
+      }
+    }
+
+    let techUnlockKey = null;
+    if (category === 'tech') {
+      const forest = state?.techForest;
+      const unlocks = state?.techUnlocks && typeof state.techUnlocks === 'object' ? state.techUnlocks : {};
+      const locked = TECH_RESEARCHABLE_UNLOCK_KEYS.filter(
+        (k) => getTechForestNode(forest, k) && unlocks[k] !== true,
+      );
+      if (locked.length > 0) {
+        const salt = Math.max(
+          0,
+          Math.floor(Number(targetActor?.visionRewardCounts?.tech || 0)),
+        ) + 17;
+        let h = Math.floor(Number(state?.seed) || 0) >>> 0;
+        h = (Math.imul(h, 31) + (Math.floor(Number(state?.totalDaysSimulated) || 0) >>> 0)) >>> 0;
+        h = (Math.imul(h, 31) + (salt >>> 0)) >>> 0;
+        techUnlockKey = locked[h % locked.length];
+        if (!state.techUnlocks || typeof state.techUnlocks !== 'object') {
+          state.techUnlocks = {};
+        }
+        state.techUnlocks[techUnlockKey] = true;
+        if (!state.techUnlockVisionGranted || typeof state.techUnlockVisionGranted !== 'object') {
+          state.techUnlockVisionGranted = {};
+        }
+        state.techUnlockVisionGranted[techUnlockKey] = true;
+      }
+    }
+
     targetActor.visionRewardCounts[category] = Math.max(
       0,
       Math.floor(Number(targetActor?.visionRewardCounts?.[category] || 0)),
     ) + 1;
+
+    const rewardEntry = {
+      category,
+      rewardId: chosen.rewardId,
+      rewardLabel: chosen.rewardLabel,
+    };
+    if (category === 'plant') {
+      rewardEntry.plantSpeciesIds = plantSpeciesRevealed;
+      rewardEntry.plantNames = plantSpeciesRevealed.map((sid) => (PLANT_BY_ID[sid]?.name || sid));
+    }
+    if (category === 'tech') {
+      rewardEntry.techUnlockKey = techUnlockKey;
+      if (techUnlockKey) {
+        rewardEntry.techUnlockLabel = getTechResearchMeta(techUnlockKey).label;
+      }
+    }
+
     debrief.chosenVisionRewards = [
       ...debrief.chosenVisionRewards,
-      {
-        category,
-        rewardId: chosen.rewardId,
-        rewardLabel: chosen.rewardLabel,
-      },
+      rewardEntry,
     ];
     debrief.pendingVisionRevelation = null;
     debrief.pendingVisionChoices = [];
@@ -2166,11 +2496,22 @@ export function applyActionEffectImpl(state, action, deps) {
         failureReason: null,
       };
       queue.queued = [];
-      mirrorPartnerTaskQueueToActor(state);
+      ensurePartnerCampMaintenanceQueued(state);
       return;
     }
 
-    if (!queue.active) {
+    const debriefPlanning = state?.camp?.debrief?.active === true;
+
+    if (debriefPlanning) {
+      if (!Array.isArray(queue.queued)) {
+        queue.queued = [];
+      }
+      queue.queued.push({
+        ...task,
+        status: 'queued',
+        failureReason: null,
+      });
+    } else if (!queue.active) {
       queue.active = {
         ...task,
         status: 'active',
@@ -2187,6 +2528,28 @@ export function applyActionEffectImpl(state, action, deps) {
       });
     }
 
+    ensurePartnerCampMaintenanceQueued(state);
+  }
+
+  if (action.kind === 'partner_queue_reorder') {
+    const queue = state?.camp?.partnerTaskQueue;
+    const ids = action.payload?.orderedTaskIds;
+    if (!queue || !Array.isArray(ids) || !Array.isArray(queue.queued)) {
+      return;
+    }
+    const byId = new Map(queue.queued.map((t) => [t?.taskId, t]));
+    const next = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        return;
+      }
+      next.push({ ...row });
+    }
+    if (next.length !== queue.queued.length) {
+      return;
+    }
+    queue.queued = next;
     mirrorPartnerTaskQueueToActor(state);
   }
 }

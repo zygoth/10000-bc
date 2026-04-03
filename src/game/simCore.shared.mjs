@@ -124,6 +124,11 @@ export function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {
     nextDayStewTickBonus: Number.isFinite(Number(camp?.nextDayStewTickBonus))
       ? Math.max(0, Math.floor(Number(camp.nextDayStewTickBonus)))
       : 0,
+    lastPartnerMaintenanceDayCompleted: Number.isInteger(camp?.lastPartnerMaintenanceDayCompleted)
+      ? camp.lastPartnerMaintenanceDayCompleted
+      : null,
+    nightlyPlayerSafeThirstUntilDawn: camp?.nightlyPlayerSafeThirstUntilDawn === true,
+    identifiedPlantSpeciesIds: cloneStringArray(camp?.identifiedPlantSpeciesIds),
     debrief: {
       active: camp?.debrief?.active === true,
       openedAtDay: Number.isInteger(camp?.debrief?.openedAtDay) ? camp.debrief.openedAtDay : null,

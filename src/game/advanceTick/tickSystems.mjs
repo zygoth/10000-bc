@@ -44,6 +44,9 @@ export function advanceOneTickImpl(state, hooks) {
     rolled.camp.debrief.pendingVisionChoices = [];
     rolled.camp.debrief.chosenVisionRewards = [];
   }
+  if (rolled?.camp && typeof rolled.camp === 'object') {
+    rolled.camp.nightlyPlayerSafeThirstUntilDawn = false;
+  }
   resetActorTickBudgetsForNewDay(rolled, getActorDayStartTickBudgetBase);
   for (const actor of Object.values(rolled.actors || {})) {
     if ((Number(actor?.health) || 0) <= 0) {

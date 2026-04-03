@@ -109,6 +109,9 @@ function normalizeGroundFungus(rawFungus) {
       .filter(Boolean),
     perTileYieldRange: rawFungus.per_tile_yield_range || [1, 1],
     ingestion: normalizeFungusIngestion(rawFungus.ingestion),
+    gameTags: Array.isArray(rawFungus.game_tags)
+      ? rawFungus.game_tags.filter((tag) => typeof tag === 'string' && tag)
+      : [],
   };
 }
 

@@ -197,6 +197,8 @@ function normalizePlant(rawPlant) {
       ...stage,
       seasonalWindow: normalizeSeasonalWindow(stage.seasonal_window),
     })),
+    physical_description: typeof rawPlant.physical_description === 'string' ? rawPlant.physical_description : '',
+    game_description: typeof rawPlant.game_description === 'string' ? rawPlant.game_description : '',
   };
 }
 

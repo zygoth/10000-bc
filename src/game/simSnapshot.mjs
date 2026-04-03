@@ -1,5 +1,6 @@
 import { inBounds, tileIndex } from './simWorld.mjs';
 import { ensureTechForestOnLoad } from './techForestGen.mjs';
+import { defaultLandTrapBaitStackFromItemId } from './trapBaitLand.mjs';
 
 function normalizeRockType(rockType) {
   if (rockType === 'glacial_erratic' || rockType === 'flint_cobble_scatter') {
@@ -115,14 +116,14 @@ function normalizeAutoRod(autoRod) {
     ? state
     : 'live';
 
-  const baitItemId = typeof autoRod.baitItemId === 'string' && autoRod.baitItemId
-    ? autoRod.baitItemId
-    : null;
+  const baitStack = normalizeLandTrapBaitStack(autoRod.baitStack, null);
+  const baitItemId = baitStack?.itemId || null;
 
   return {
     active: autoRod.active === true,
     state: normalizedState,
     baitItemId,
+    baitStack,
     pendingSpeciesIds: Array.isArray(autoRod.pendingSpeciesIds)
       ? autoRod.pendingSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
       : [],
@@ -182,6 +183,28 @@ function normalizeFishTrap(fishTrap) {
   };
 }
 
+function normalizeLandTrapBaitStack(raw, baitItemIdFallback) {
+  if (raw && typeof raw === 'object' && typeof raw.itemId === 'string' && raw.itemId) {
+    const quantity = Math.max(1, Math.floor(Number(raw.quantity) || 1));
+    const footprintW = Math.max(1, Math.floor(Number(raw.footprintW) || 1));
+    const footprintH = Math.max(1, Math.floor(Number(raw.footprintH) || 1));
+    const out = {
+      ...raw,
+      itemId: raw.itemId,
+      quantity,
+      footprintW,
+      footprintH,
+    };
+    delete out.slotX;
+    delete out.slotY;
+    return out;
+  }
+  if (typeof baitItemIdFallback === 'string' && baitItemIdFallback) {
+    return defaultLandTrapBaitStackFromItemId(baitItemIdFallback);
+  }
+  return null;
+}
+
 function normalizeDeadfallTrap(deadfallTrap) {
   if (!deadfallTrap || typeof deadfallTrap !== 'object') {
     return null;
@@ -191,12 +214,15 @@ function normalizeDeadfallTrap(deadfallTrap) {
     ? deadfallTrap.baitItemId
     : null;
 
+  const baitStack = normalizeLandTrapBaitStack(deadfallTrap.baitStack, baitItemId);
+
   return {
     active: deadfallTrap.active === true,
     hasCatch: deadfallTrap.hasCatch === true,
     poached: deadfallTrap.poached === true,
     sprung: deadfallTrap.sprung === true,
-    baitItemId,
+    baitItemId: baitStack?.itemId || baitItemId,
+    baitStack,
     reliability: Number.isFinite(Number(deadfallTrap.reliability))
       ? Math.max(0, Math.min(1, Number(deadfallTrap.reliability)))
       : 1,
@@ -232,12 +258,15 @@ function normalizeSimpleSnare(simpleSnare) {
     ? simpleSnare.baitItemId
     : null;
 
+  const baitStack = normalizeLandTrapBaitStack(simpleSnare.baitStack, baitItemId);
+
   return {
     active: simpleSnare.active === true,
     hasCatch: simpleSnare.hasCatch === true,
     poached: simpleSnare.poached === true,
     sprung: simpleSnare.sprung === true,
-    baitItemId,
+    baitItemId: baitStack?.itemId || baitItemId,
+    baitStack,
     reliability: Number.isFinite(Number(simpleSnare.reliability))
       ? Math.max(0, Math.min(1, Number(simpleSnare.reliability)))
       : 1,
@@ -558,6 +587,13 @@ function normalizeCampState(camp, width, height) {
     nextDayStewTickBonus: Number.isFinite(Number(camp?.nextDayStewTickBonus))
       ? Math.max(0, Math.floor(Number(camp.nextDayStewTickBonus)))
       : 0,
+    lastPartnerMaintenanceDayCompleted: Number.isInteger(camp?.lastPartnerMaintenanceDayCompleted)
+      ? camp.lastPartnerMaintenanceDayCompleted
+      : null,
+    nightlyPlayerSafeThirstUntilDawn: camp?.nightlyPlayerSafeThirstUntilDawn === true,
+    identifiedPlantSpeciesIds: Array.isArray(camp?.identifiedPlantSpeciesIds)
+      ? camp.identifiedPlantSpeciesIds.filter((entry) => typeof entry === 'string' && entry)
+      : [],
     debrief: {
       active: camp?.debrief?.active === true,
       openedAtDay: Number.isInteger(camp?.debrief?.openedAtDay) ? camp.debrief.openedAtDay : null,

@@ -218,6 +218,85 @@ const GROUND_FUNGUS_CATALOG_SOURCE = [
       18,
       80
     ]
+  },
+  {
+    "id": "psilocybe_caerulipes",
+    "type": "ground_fungus",
+    "common_name": "Blue-foot Psilocybe",
+    "latin_name": "Psilocybe caerulipes",
+    "zone_count_range": [
+      10,
+      22
+    ],
+    "zone_radius_range": [
+      2,
+      4
+    ],
+    "annual_fruit_chance": 0.28,
+    "soil_requirements": {
+      "ph_range": [
+        5.5,
+        7
+      ],
+      "drainage": {
+        "tolerance_range": [
+          0.35,
+          0.88
+        ]
+      },
+      "fertility": {
+        "tolerance_range": [
+          0.25,
+          0.82
+        ]
+      },
+      "moisture": {
+        "tolerance_range": [
+          0.42,
+          0.85
+        ]
+      },
+      "shade": {
+        "tolerance_range": [
+          0.35,
+          0.95
+        ]
+      }
+    },
+    "fruiting_windows": [
+      {
+        "start": "mid_summer",
+        "end": "late_fall"
+      }
+    ],
+    "per_tile_yield_range": [
+      12,
+      48
+    ],
+    "game_tags": [
+      "psilocybin"
+    ],
+    "ingestion": {
+      "vision_item": {
+        "quantity_per_dose": 1
+      },
+      "dose_response": [
+        {
+          "effects": [
+            {
+              "type": "hallucinogen",
+              "partner_prep_required": true,
+              "vision_categories": [
+                "plant",
+                "tech",
+                "sight"
+              ],
+              "sight_duration_days": 5
+            }
+          ]
+        }
+      ]
+    }
   }
 ];
 

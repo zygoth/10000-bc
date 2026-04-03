@@ -112,6 +112,114 @@ export function getTechForestNode(forest, unlockKey) {
 }
 
 /**
+ * First key on the path from `fromUnlockKey` through parents whose `techUnlocks` is not true.
+ * Returns null when `fromUnlockKey` and every forest ancestor to the root are `techUnlocks === true`.
+ *
+ * Used to gate **new** tech research on descendants: a vision may set a deep `techUnlocks` entry
+ * without earlier chain links; children must not become queueable until the full chain is filled.
+ *
+ * @param {ReturnType<typeof generateTechForest>} forest
+ * @param {Record<string, boolean>|null|undefined} techUnlocks
+ * @param {string} fromUnlockKey
+ * @returns {string|null}
+ */
+export function getTechForestStrictPrerequisiteBlocker(forest, techUnlocks, fromUnlockKey) {
+  if (typeof fromUnlockKey !== 'string' || !fromUnlockKey) {
+    return null;
+  }
+  if (!forest?.byUnlockKey?.[fromUnlockKey]) {
+    return fromUnlockKey;
+  }
+  let current = fromUnlockKey;
+  while (current) {
+    if (techUnlocks?.[current] !== true) {
+      return current;
+    }
+    const node = forest.byUnlockKey[current];
+    if (!node?.parentUnlockKey) {
+      return null;
+    }
+    current = node.parentUnlockKey;
+  }
+  return null;
+}
+
+/**
+ * Why a forest child node cannot queue research yet (strict chain vs vision-only parent).
+ * @typedef {{ blockerKey: string, reason: 'strict' | 'vision_parent' }} TechForestChildResearchBlocker
+ */
+
+/**
+ * Gate for researching a node whose forest parent is `parentUnlockKey`.
+ * After strict `techUnlocks` chain from parent is satisfied, a parent granted only by vision
+ * still blocks children until partner camp research completes on that parent (`techUnlockPartnerResearch`).
+ *
+ * @param {ReturnType<typeof generateTechForest>} forest
+ * @param {Record<string, boolean>|null|undefined} techUnlocks
+ * @param {string} parentUnlockKey
+ * @param {Record<string, boolean>|null|undefined} visionGranted
+ * @param {Record<string, boolean>|null|undefined} partnerResearched
+ * @returns {TechForestChildResearchBlocker|null}
+ */
+export function getTechForestChildResearchBlocker(
+  forest,
+  techUnlocks,
+  parentUnlockKey,
+  visionGranted,
+  partnerResearched,
+) {
+  if (typeof parentUnlockKey !== 'string' || !parentUnlockKey) {
+    return null;
+  }
+  const strict = getTechForestStrictPrerequisiteBlocker(forest, techUnlocks, parentUnlockKey);
+  if (strict) {
+    return { blockerKey: strict, reason: 'strict' };
+  }
+  if (
+    visionGranted?.[parentUnlockKey] === true
+    && partnerResearched?.[parentUnlockKey] !== true
+  ) {
+    return { blockerKey: parentUnlockKey, reason: 'vision_parent' };
+  }
+  return null;
+}
+
+/**
+ * True when this key counts as fully unlocked in the tech forest UI.
+ * Normal case: researched and every forest ancestor is also researched.
+ * Also true when this exact key was granted by a vision (no prereq research required for display)
+ * or completed via partner tech research (ticks spent), even if an earlier chain link is still locked.
+ *
+ * @param {{ visionGranted?: Record<string, boolean>, partnerResearched?: Record<string, boolean> }|null} [displaySources]
+ */
+export function isTechResearchDisplayComplete(forest, techUnlocks, unlockKey, displaySources = null) {
+  if (typeof unlockKey !== 'string' || !unlockKey || techUnlocks?.[unlockKey] !== true) {
+    return false;
+  }
+  if (displaySources?.visionGranted?.[unlockKey] === true) {
+    return true;
+  }
+  if (displaySources?.partnerResearched?.[unlockKey] === true) {
+    return true;
+  }
+  let current = unlockKey;
+  while (current) {
+    const node = forest?.byUnlockKey?.[current];
+    if (!node) {
+      return false;
+    }
+    if (!node.parentUnlockKey) {
+      return true;
+    }
+    if (techUnlocks?.[node.parentUnlockKey] !== true) {
+      return false;
+    }
+    current = node.parentUnlockKey;
+  }
+  return true;
+}
+
+/**
  * Fresh run: all research keys false (nothing pre-researched).
  * @param {ReturnType<typeof generateTechForest>} forest
  */
@@ -181,7 +289,19 @@ export function ensureTechForestOnLoad(candidate) {
     } else {
       candidate.techUnlocks = mergeTechUnlocksFromSave(forest, candidate.techUnlocks);
     }
+    if (!candidate.techUnlockVisionGranted || typeof candidate.techUnlockVisionGranted !== 'object') {
+      candidate.techUnlockVisionGranted = {};
+    }
+    if (!candidate.techUnlockPartnerResearch || typeof candidate.techUnlockPartnerResearch !== 'object') {
+      candidate.techUnlockPartnerResearch = {};
+    }
     return;
   }
   candidate.techUnlocks = mergeTechUnlocksFromSave(candidate.techForest, candidate.techUnlocks);
+  if (!candidate.techUnlockVisionGranted || typeof candidate.techUnlockVisionGranted !== 'object') {
+    candidate.techUnlockVisionGranted = {};
+  }
+  if (!candidate.techUnlockPartnerResearch || typeof candidate.techUnlockPartnerResearch !== 'object') {
+    candidate.techUnlockPartnerResearch = {};
+  }
 }

@@ -24,6 +24,7 @@ function GameModeChromePanel({
   metrics,
   gameState,
   playerActor,
+  partnerActor = null,
   playerAtCamp,
   campHasDryingRackStation = false,
   playerNatureSightDays,
@@ -92,20 +93,14 @@ function GameModeChromePanel({
   onMealAddFromStockpile,
   onMealAddFromInventory,
   onMealRemoveIngredient,
-  chosenVisionRewards,
   onBeginDay,
-  visionUsesThisSeason,
-  visionSelectionOptions,
   selectedVisionItemId,
   setSelectedVisionItemId,
-  pendingVisionChoices,
   selectedVisionCategory,
   setSelectedVisionCategory,
   selectedNatureOverlay,
   setSelectedNatureOverlay,
   natureSightOverlayOptions,
-  visionNotifications,
-  visionRequest,
   medicineNotifications,
   medicineRequests,
   onFocusConditionInstance,
@@ -115,7 +110,13 @@ function GameModeChromePanel({
   onCloseTechForest,
   techForest = null,
   techUnlocks = null,
+  techUnlockVisionGranted = null,
+  techUnlockPartnerResearch = null,
   onQueueTechResearch,
+  formatTokenLabel,
+  validateAction,
+  onPartnerTaskAppend,
+  onPartnerQueueReorder,
 }) {
   const [itemContextMenu, setItemContextMenu] = useState(null);
   const selectedStockpileEntry = getSelectedStackEntry(campStockpileStacks, selectedStockpileItemId);
@@ -199,7 +200,7 @@ function GameModeChromePanel({
 
       <InventoryPanel
         isDebriefActive={isDebriefActive}
-        isOpen={isInventoryPanelOpen}
+        isOpen={isInventoryPanelOpen && !isDebriefActive}
         carryWeightSeverity={carryWeightSeverity}
         playerCarryWeightKg={playerCarryWeightKg}
         playerCarryCapacityKg={playerCarryCapacityKg}
@@ -264,9 +265,14 @@ function GameModeChromePanel({
         familyVitalGroups={familyVitalGroups}
         debriefSpoilageEntries={debriefSpoilageEntries}
         medicineNotifications={medicineNotifications}
-        queueActiveTask={queueActiveTask}
         queuePendingTasks={queuePendingTasks}
         partnerTaskHistory={partnerTaskHistory}
+        gameState={gameState}
+        partnerActor={partnerActor}
+        formatTokenLabel={formatTokenLabel}
+        validateAction={validateAction}
+        onPartnerTaskAppend={onPartnerTaskAppend}
+        onPartnerQueueReorder={onPartnerQueueReorder}
         onRunQuickAction={onRunQuickAction}
         mealPlanIngredients={mealPlanIngredients}
         mealPlanPreview={mealPlanPreview}
@@ -276,19 +282,10 @@ function GameModeChromePanel({
         onMealAddFromStockpile={onMealAddFromStockpile}
         onMealAddFromInventory={onMealAddFromInventory}
         onMealRemoveIngredient={onMealRemoveIngredient}
-        visionUsesThisSeason={visionUsesThisSeason}
-        visionSelectionOptions={visionSelectionOptions}
         selectedVisionItemId={selectedVisionItemId}
         setSelectedVisionItemId={setSelectedVisionItemId}
-        pendingVisionChoices={pendingVisionChoices}
         selectedVisionCategory={selectedVisionCategory}
         setSelectedVisionCategory={setSelectedVisionCategory}
-        selectedNatureOverlay={selectedNatureOverlay}
-        setSelectedNatureOverlay={setSelectedNatureOverlay}
-        natureSightOverlayOptions={natureSightOverlayOptions}
-        visionNotifications={visionNotifications}
-        visionRequest={visionRequest}
-        chosenVisionRewards={chosenVisionRewards}
         medicineRequests={medicineRequests}
         onFocusConditionInstance={onFocusConditionInstance}
         onAdministerCondition={onAdministerCondition}
@@ -299,6 +296,8 @@ function GameModeChromePanel({
         <TechForestOverlay
           techForest={techForest}
           techUnlocks={techUnlocks}
+          techUnlockVisionGranted={techUnlockVisionGranted}
+          techUnlockPartnerResearch={techUnlockPartnerResearch}
           queueActiveTask={queueActiveTask}
           queuePendingTasks={queuePendingTasks}
           onQueueTechResearch={onQueueTechResearch}

@@ -3,6 +3,7 @@ import { CAMP_STATION_RECIPES, TOOL_RECIPES } from './simActions.mjs';
 import { PLANT_CATALOG } from './plantCatalog.mjs';
 import {
   applyManualTestBootstrap,
+  DEBUG_VISION_HALLUCINOGEN_ITEM_ID,
   defaultManualTestBootstrapOptions,
 } from './manualTestBootstrap.mjs';
 
@@ -67,5 +68,7 @@ describe('manualTestBootstrap', () => {
     expect(walnut).toBeTruthy();
     expect(walnut.decayDaysRemaining).toBe(300);
     expect(Number.isFinite(Number(walnut.unitWeightKg)) && Number(walnut.unitWeightKg) > 0).toBe(true);
+
+    expect(byItem.get(DEBUG_VISION_HALLUCINOGEN_ITEM_ID)).toBeGreaterThanOrEqual(4);
   });
 });

@@ -44,12 +44,18 @@ export function cloneTile(tile) {
   const simpleSnare = tile?.simpleSnare
     ? {
       ...tile.simpleSnare,
+      baitStack: tile.simpleSnare.baitStack && typeof tile.simpleSnare.baitStack === 'object'
+        ? { ...tile.simpleSnare.baitStack }
+        : null,
     }
     : null;
 
   const deadfallTrap = tile?.deadfallTrap
     ? {
       ...tile.deadfallTrap,
+      baitStack: tile.deadfallTrap.baitStack && typeof tile.deadfallTrap.baitStack === 'object'
+        ? { ...tile.deadfallTrap.baitStack }
+        : null,
     }
     : null;
 
@@ -65,6 +71,9 @@ export function cloneTile(tile) {
   const autoRod = tile?.autoRod
     ? {
       ...tile.autoRod,
+      baitStack: tile.autoRod.baitStack && typeof tile.autoRod.baitStack === 'object'
+        ? { ...tile.autoRod.baitStack }
+        : null,
       pendingSpeciesIds: Array.isArray(tile.autoRod.pendingSpeciesIds)
         ? [...tile.autoRod.pendingSpeciesIds]
         : [],

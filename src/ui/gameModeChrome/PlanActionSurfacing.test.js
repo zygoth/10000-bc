@@ -122,6 +122,27 @@ describe('Plan: surfacing + sim (fixtures)', () => {
     expect(hand.normalizedAction.payload.processLocation).toBe('hand');
   });
 
+  test('hand process_item gets workbench tick reduction (e.g. spin_cordage)', () => {
+    let state = buildBaseGameState(7012, { width: 20, height: 20 });
+    const ax = state.camp.anchorX;
+    const ay = state.camp.anchorY;
+    state = withCampStation(state, 'workbench', { x: ax + 1, y: ay });
+    withPlayerAt(state, ax, ay);
+    withPlayerInventory(state, [{ itemId: NETTLE_STALK, quantity: 3 }]);
+    const v = validateAction(state, {
+      actorId: 'player',
+      kind: 'process_item',
+      payload: {
+        itemId: NETTLE_STALK,
+        processId: 'spin_cordage',
+        quantity: 1,
+        processLocation: 'hand',
+      },
+    });
+    expect(v.ok).toBe(true);
+    expect(v.normalizedAction.tickCost).toBe(3);
+  });
+
   test('glacial erratic tile menu surfaces heavy rock and flat stone harvests', () => {
     let state = buildBaseGameState(7004, { width: 20, height: 20 });
     const x = 8;

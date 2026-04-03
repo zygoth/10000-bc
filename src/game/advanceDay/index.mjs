@@ -56,6 +56,15 @@ export function advanceDayImpl(state, steps = 1, hooks) {
       nextState.year += 1;
       applyYearRollover(nextState, hooks);
     }
+
+    for (const actor of Object.values(nextState.actors || {})) {
+      if (!actor || (Number(actor.health) || 0) <= 0) {
+        continue;
+      }
+      if (actor.id !== 'player') {
+        actor.thirst = 1;
+      }
+    }
   }
 
   return nextState;

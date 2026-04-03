@@ -283,6 +283,21 @@ function normalizeFrame(frame, opaqueBottomInFrame = null) {
   };
 }
 
+function scaledCatalogFrame(normalized, scaleX, scaleY) {
+  return {
+    x: Math.round(normalized.x * scaleX),
+    y: Math.round(normalized.y * scaleY),
+    w: Math.round(normalized.w * scaleX),
+    h: Math.round(normalized.h * scaleY),
+    sourceW: Math.round(normalized.sourceW * scaleX),
+    sourceH: Math.round(normalized.sourceH * scaleY),
+    offsetX: Math.round(normalized.offsetX * scaleX),
+    offsetY: Math.round(normalized.offsetY * scaleY),
+    anchorX: Math.round(normalized.anchorX * scaleX),
+    anchorY: Math.round(normalized.anchorY * scaleY),
+  };
+}
+
 function readPngDimensions(filePath) {
   const bytes = fs.readFileSync(filePath);
   return {
@@ -317,18 +332,33 @@ function buildSpeciesSpriteEntry(plantDir, spriteAlphaCache) {
     const frame = frameByFilename[filename];
     if (frame) {
       const normalized = normalizeFrame(frame, opaqueBottomByFilename[filename]);
-      lifeStageFrames[lifeStage.stage] = {
-        x: Math.round(normalized.x * scaleX),
-        y: Math.round(normalized.y * scaleY),
-        w: Math.round(normalized.w * scaleX),
-        h: Math.round(normalized.h * scaleY),
-        sourceW: Math.round(normalized.sourceW * scaleX),
-        sourceH: Math.round(normalized.sourceH * scaleY),
-        offsetX: Math.round(normalized.offsetX * scaleX),
-        offsetY: Math.round(normalized.offsetY * scaleY),
-        anchorX: Math.round(normalized.anchorX * scaleX),
-        anchorY: Math.round(normalized.anchorY * scaleY),
-      };
+      lifeStageFrames[lifeStage.stage] = scaledCatalogFrame(normalized, scaleX, scaleY);
+    }
+  }
+
+  const partSubStageFrames = {};
+  for (const part of plant.parts || []) {
+    const partName = part?.name;
+    if (!partName) {
+      continue;
+    }
+    for (const subStage of part.sub_stages || part.subStages || []) {
+      const subId = subStage?.id;
+      if (!subId) {
+        continue;
+      }
+      const specificFile = `${speciesId}_${partName}_${subId}.png`;
+      const genericFile = `${speciesId}_${partName}.png`;
+      const frame = frameByFilename[specificFile] || frameByFilename[genericFile];
+      if (!frame) {
+        continue;
+      }
+      const usedFile = frameByFilename[specificFile] ? specificFile : genericFile;
+      const normalized = normalizeFrame(frame, opaqueBottomByFilename[usedFile]);
+      if (!partSubStageFrames[partName]) {
+        partSubStageFrames[partName] = {};
+      }
+      partSubStageFrames[partName][subId] = scaledCatalogFrame(normalized, scaleX, scaleY);
     }
   }
 
@@ -341,6 +371,7 @@ function buildSpeciesSpriteEntry(plantDir, spriteAlphaCache) {
     atlasWidth: pngDimensions.width,
     atlasHeight: pngDimensions.height,
     lifeStageFrames,
+    partSubStageFrames,
   };
 }
 
@@ -364,6 +395,7 @@ function main() {
     atlasWidth: entry.atlasWidth,
     atlasHeight: entry.atlasHeight,
     lifeStageFrames: entry.lifeStageFrames,
+    partSubStageFrames: entry.partSubStageFrames,
   }]));
 
   const output = `const PLANT_SPRITE_CATALOG_SOURCE = ${JSON.stringify(catalog, null, 2)};\n\nexport default PLANT_SPRITE_CATALOG_SOURCE;\n`;

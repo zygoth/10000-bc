@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { formatContextMenuActionWithTickCost } from '../GameModeChromeDisplayLogic.js';
 
 export default function ItemContextMenu({
   isDebriefActive,
@@ -30,8 +31,8 @@ export default function ItemContextMenu({
               entry.disabled === true && entry.disabledReason
                 ? entry.disabledReason
                 : entry.tickOverdraftWarning
-                  ? 'Uses stored energy tomorrow (overdraft).'
-                  : undefined
+                  ? `${entry.label}: uses stored energy tomorrow (overdraft).`
+                  : formatContextMenuActionWithTickCost(entry)
             }
             onClick={() => {
               if (entry.disabled === true) {
@@ -41,7 +42,9 @@ export default function ItemContextMenu({
               onClose();
             }}
           >
-            <span className="iso-context-menu-action-primary">{entry.label}</span>
+            <span className="iso-context-menu-action-primary">
+              {formatContextMenuActionWithTickCost(entry)}
+            </span>
             {entry.tickOverdraftWarning ? (
               <span className="iso-context-menu-action-warn">Uses tomorrow&apos;s energy</span>
             ) : null}

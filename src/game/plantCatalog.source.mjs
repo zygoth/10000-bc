@@ -470,6 +470,8 @@ const PLANT_CATALOG_SOURCE = [
         ]
       }
     ],
+    "physical_description": "A herbaceous biennial plant. In its first year, it forms a low rosette of finely divided, lacy, fern-like leaves. In the second year, it produces a solid, green stem covered in fine hairs, topped with flat umbels of small white flowers, often with a single dark red or purple floret in the center. The root is a pale taproot.",
+    "game_description": "The ancestor of the domesticated carrot. First-year roots contain starches that extract well when cooked. In the second year, the root becomes highly fibrous. Closely resembles deadly poison hemlock; positive identification relies on the hairy stem and distinctive scent.",
     "scent": {
       "strength": 0.6,
       "primary_compound": "carotol"
@@ -1198,6 +1200,8 @@ const PLANT_CATALOG_SOURCE = [
         ]
       }
     ],
+    "physical_description": "A large canopy deciduous tree reaching up to 130 feet tall. It has dark, deeply furrowed bark forming diamond patterns, and large compound leaves with 15-23 leaflets. It produces large, spherical green fruits that house heavily ridged, hard-shelled nuts.",
+    "game_description": "Produces highly nutritious and calorie-dense nuts, but processing them requires significant effort to remove the thick, staining husks and crack the extremely hard shells. The wood makes excellent structural material. Husks contain juglone which can be used medicinally but causes severe nausea if ingested.",
     "scent": {
       "strength": 0.6,
       "primary_compound": "juglone"
@@ -1703,6 +1707,8 @@ const PLANT_CATALOG_SOURCE = [
         ]
       }
     ],
+    "physical_description": "An upright herbaceous perennial reaching 1 to 2 meters tall. Its deeply veined, serrated leaves are arranged oppositely on a fibrous green stalk. The entire plant is covered in tiny, stiff, hollow hairs.",
+    "game_description": "The leaves are high in vitamins and make a good cooked green, as boiling completely destroys the stinging hairs. In late summer and fall, the mature stalks provide strong, high-quality fiber for cordage. Harvesting bare-handed will cause painful stings.",
     "scent": {
       "strength": 0.3,
       "primary_compound": "hexenal"

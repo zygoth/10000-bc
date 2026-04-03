@@ -38,7 +38,13 @@ import {
   mulberry32,
   tileIndex,
 } from './simWorld.mjs';
+import { defaultLandTrapBaitStackFromItemId } from './trapBaitLand.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
+import {
+  CAMP_MAINTENANCE_TASK_KIND,
+  getCampMaintenanceReserveTicks,
+  getPartnerQueuePlanningDay,
+} from './campMaintenance.mjs';
 import { generateTechForest, initialTechUnlocksAllLocked } from './techForestGen.mjs';
 import {
   applyDailyWaterFreezeState,
@@ -287,25 +293,13 @@ function hasEquippedItem(actor, itemId) {
   return equipment?.[slot]?.itemId === itemId;
 }
 
-function isActorAtCampAnchor(state, actor) {
-  if (!state || !actor) {
-    return false;
-  }
-  const campX = Number(state?.camp?.anchorX);
-  const campY = Number(state?.camp?.anchorY);
-  if (!Number.isInteger(campX) || !Number.isInteger(campY)) {
-    return false;
-  }
-  return Number(actor.x) === campX && Number(actor.y) === campY;
-}
-
 function applyColdExposureTick(state) {
   const player = state?.actors?.player;
   if (!player || (Number(player.health) || 0) <= 0) {
     return;
   }
 
-  if (isActorAtCampAnchor(state, player)) {
+  if (isActorInCampFootprint(state, player)) {
     return;
   }
 
@@ -329,7 +323,7 @@ function applyTemperatureThirstTick(state) {
     return;
   }
 
-  if (isActorAtCampAnchor(state, player)) {
+  if (state?.camp?.nightlyPlayerSafeThirstUntilDawn === true) {
     return;
   }
 
@@ -817,7 +811,11 @@ function resolveAutoRodTickOutcome(state, tile, tickOrdinal, phaseSalt = 0) {
   }
 
   const targets = collectFishableWaterTargetsAround(state, tile.x, tile.y);
-  const baited = rod.baitItemId === EARTHWORM_ITEM_ID;
+  const baitStack = rod.baitStack;
+  const baited = baitStack
+    && typeof baitStack === 'object'
+    && (Number(baitStack.quantity) || 0) > 0
+    && baitStack.itemId === EARTHWORM_ITEM_ID;
   const candidates = buildFishRodCandidateEntries(state, targets, {
     baited,
     attractionMultiplier: AUTO_ROD_ATTRACTION_MULTIPLIER,
@@ -850,6 +848,7 @@ function resolveAutoRodTickOutcome(state, tile, tickOrdinal, phaseSalt = 0) {
   }
 
   if (baited) {
+    rod.baitStack = null;
     rod.baitItemId = null;
   }
 
@@ -1148,6 +1147,18 @@ function isTileWithinCampFootprint(state, x, y) {
   return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
 }
 
+function isActorInCampFootprint(state, actor) {
+  if (!state || !actor) {
+    return false;
+  }
+  const x = Number(actor.x);
+  const y = Number(actor.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    return false;
+  }
+  return isTileWithinCampFootprint(state, x, y);
+}
+
 function clearPlantsFromCampFootprint(state) {
   if (!state || !Array.isArray(state?.tiles) || !state?.plants) {
     return;
@@ -1246,6 +1257,8 @@ function defaultCampState(width, height) {
     nauseaByIngredient: {},
     lastMealResult: null,
     nextDayStewTickBonus: 0,
+    lastPartnerMaintenanceDayCompleted: null,
+    identifiedPlantSpeciesIds: [],
     debrief: {
       active: false,
       openedAtDay: null,
@@ -1320,7 +1333,7 @@ function getDailyTickBudgetRoleBonus(state, actor) {
   return 0;
 }
 
-function getActorDayStartTickBudgetBase(state, actor) {
+export function getActorDayStartTickBudgetBase(state, actor) {
   const intrinsicBase = Number.isFinite(actor?.tickBudgetBase)
     ? Number(actor.tickBudgetBase)
     : 0;
@@ -1390,6 +1403,59 @@ function mirrorPartnerTaskQueueToActor(state) {
     active: queue.active ? { ...queue.active } : null,
     queued: Array.isArray(queue.queued) ? queue.queued.map((task) => ({ ...(task || {}) })) : [],
   };
+}
+
+function ensurePartnerCampMaintenanceQueued(state) {
+  const queue = state?.camp?.partnerTaskQueue;
+  const partner = state?.actors?.partner;
+  if (!queue || !partner) {
+    return;
+  }
+
+  const day = getPartnerQueuePlanningDay(state);
+  const ticks = Math.max(1, Math.floor(Number(getCampMaintenanceReserveTicks(state)) || 1));
+
+  if (!Array.isArray(queue.queued)) {
+    queue.queued = [];
+  }
+
+  queue.queued = queue.queued.filter((t) => t?.kind !== CAMP_MAINTENANCE_TASK_KIND);
+
+  const active = queue.active;
+  if (active?.kind === CAMP_MAINTENANCE_TASK_KIND) {
+    const md = Number(active.meta?.maintenanceDay);
+    if (md === day) {
+      mirrorPartnerTaskQueueToActor(state);
+      return;
+    }
+    appendPartnerTaskHistory(state, {
+      taskId: active.taskId,
+      kind: CAMP_MAINTENANCE_TASK_KIND,
+      status: 'failed',
+      failureReason: 'superseded_new_day',
+    });
+    queue.active = null;
+  }
+
+  const maintenanceDoneDay = state.camp.lastPartnerMaintenanceDayCompleted;
+  if (maintenanceDoneDay != null && Number(maintenanceDoneDay) === day) {
+    mirrorPartnerTaskQueueToActor(state);
+    return;
+  }
+
+  queue.queued.unshift(
+    normalizePartnerTask({
+      taskId: `camp-maintenance-day-${day}`,
+      kind: CAMP_MAINTENANCE_TASK_KIND,
+      ticksRequired: ticks,
+      ticksRemaining: ticks,
+      inputs: [],
+      outputs: [],
+      requirements: { stations: [], unlocks: [] },
+      meta: { locked: true, maintenanceDay: day },
+    }),
+  );
+  mirrorPartnerTaskQueueToActor(state);
 }
 
 function addCampStockpileItem(camp, itemId, quantity, options = null) {
@@ -2093,6 +2159,194 @@ function applyDecayToStackArrayScaled(stacks, state, decayDayFraction, options =
   return next;
 }
 
+/** Merge one stack onto a tile's ground items (same merge rules as a single-tile drop). */
+function mergeStackIntoWorldItemsAtTile(state, x, y, incomingStack) {
+  if (!state.worldItemsByTile || typeof state.worldItemsByTile !== 'object') {
+    state.worldItemsByTile = {};
+  }
+  if (!incomingStack || typeof incomingStack !== 'object') {
+    return;
+  }
+  const itemId = typeof incomingStack.itemId === 'string' ? incomingStack.itemId : '';
+  const quantity = Math.max(1, Math.floor(Number(incomingStack.quantity) || 0));
+  if (!itemId || quantity <= 0) {
+    return;
+  }
+
+  const key = `${x},${y}`;
+  const incomingFreshness = Number.isFinite(Number(incomingStack.freshness)) ? Number(incomingStack.freshness) : null;
+  const incomingDecayDaysRemaining = Number.isFinite(Number(incomingStack.decayDaysRemaining))
+    ? Number(incomingStack.decayDaysRemaining)
+    : null;
+  const incomingUnitWeightKg = Number.isFinite(Number(incomingStack.unitWeightKg))
+    ? Number(incomingStack.unitWeightKg)
+    : null;
+  const incomingDryness = Number.isFinite(Number(incomingStack.dryness))
+    ? clamp01(Number(incomingStack.dryness))
+    : null;
+  const incomingTanninRemaining = Number.isFinite(Number(incomingStack.tanninRemaining))
+    ? clamp01(Number(incomingStack.tanninRemaining))
+    : null;
+  const incomingFootprintW = normalizeStackFootprintValue(incomingStack.footprintW);
+  const incomingFootprintH = normalizeStackFootprintValue(incomingStack.footprintH);
+
+  const stacks = Array.isArray(state.worldItemsByTile[key]) ? state.worldItemsByTile[key] : [];
+  if (stacks.length === 0) {
+    const nextStack = {
+      itemId,
+      quantity,
+      footprintW: incomingFootprintW,
+      footprintH: incomingFootprintH,
+    };
+    if (incomingFreshness !== null) {
+      nextStack.freshness = incomingFreshness;
+    }
+    if (incomingDecayDaysRemaining !== null && incomingDecayDaysRemaining >= 0) {
+      nextStack.decayDaysRemaining = incomingDecayDaysRemaining;
+    }
+    if (incomingUnitWeightKg !== null && incomingUnitWeightKg >= 0) {
+      nextStack.unitWeightKg = incomingUnitWeightKg;
+    }
+    if (incomingDryness !== null) {
+      nextStack.dryness = incomingDryness;
+    }
+    if (incomingTanninRemaining !== null) {
+      nextStack.tanninRemaining = incomingTanninRemaining;
+    }
+    state.worldItemsByTile[key] = [nextStack];
+    return;
+  }
+
+  if (stacks.length === 1 && stacks[0]?.itemId === itemId) {
+    const existing = { ...stacks[0] };
+    const priorQty = Math.max(0, Math.floor(Number(existing.quantity) || 0));
+    existing.quantity = priorQty + quantity;
+    existing.footprintW = normalizeStackFootprintValue(existing.footprintW || incomingFootprintW);
+    existing.footprintH = normalizeStackFootprintValue(existing.footprintH || incomingFootprintH);
+    mergeStackMetadata(
+      existing,
+      priorQty,
+      quantity,
+      incomingFreshness,
+      incomingDecayDaysRemaining,
+      incomingUnitWeightKg,
+      incomingDryness,
+      incomingTanninRemaining,
+    );
+    state.worldItemsByTile[key] = [existing];
+    return;
+  }
+
+  const nextStack = {
+    itemId,
+    quantity,
+    footprintW: incomingFootprintW,
+    footprintH: incomingFootprintH,
+  };
+  if (incomingFreshness !== null) {
+    nextStack.freshness = incomingFreshness;
+  }
+  if (incomingDecayDaysRemaining !== null && incomingDecayDaysRemaining >= 0) {
+    nextStack.decayDaysRemaining = incomingDecayDaysRemaining;
+  }
+  if (incomingUnitWeightKg !== null && incomingUnitWeightKg >= 0) {
+    nextStack.unitWeightKg = incomingUnitWeightKg;
+  }
+  if (incomingDryness !== null) {
+    nextStack.dryness = incomingDryness;
+  }
+  if (incomingTanninRemaining !== null) {
+    nextStack.tanninRemaining = incomingTanninRemaining;
+  }
+  state.worldItemsByTile[key] = [...stacks, nextStack];
+}
+
+/**
+ * Age land-trap bait like ground world stacks: rain reset, sun drying, decay; rotting bait falls to the tile.
+ */
+function processLandTrapBaitDecay(state, decayDayFraction, groundDrynessIncrement, resetRainDryness) {
+  const sun = getEffectiveDailySunExposure(state);
+  for (const tile of state.tiles || []) {
+    if (!tile || tile.waterType) {
+      continue;
+    }
+    const x = tile.x;
+    const y = tile.y;
+    const key = `${x},${y}`;
+
+    for (const field of ['simpleSnare', 'deadfallTrap', 'autoRod']) {
+      const trap = tile[field];
+      if (!trap || trap.active !== true) {
+        continue;
+      }
+
+      const isAutoRod = field === 'autoRod';
+      if (isAutoRod && trap.state !== 'live') {
+        continue;
+      }
+
+      let nextTrap = trap;
+      if (!isAutoRod && typeof trap.baitItemId === 'string' && trap.baitItemId && (!trap.baitStack || (Number(trap.baitStack?.quantity) || 0) <= 0)) {
+        const legacyStack = defaultLandTrapBaitStackFromItemId(trap.baitItemId);
+        if (legacyStack) {
+          nextTrap = { ...trap, baitStack: legacyStack };
+          tile[field] = nextTrap;
+        }
+      }
+
+      const stack = nextTrap.baitStack;
+      if (!stack || typeof stack !== 'object') {
+        continue;
+      }
+      const qty = Math.max(0, Math.floor(Number(stack.quantity) || 0));
+      if (qty <= 0) {
+        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        continue;
+      }
+
+      let s = { ...stack, quantity: qty };
+      if (isAutoRod) {
+        s.dryness = 0;
+      } else {
+        if (resetRainDryness) {
+          s = resetGroundDrynessIfRainyDay(s, sun);
+        }
+        if (groundDrynessIncrement > 0) {
+          s = applyDryingIncrementToStack(s, groundDrynessIncrement);
+        }
+      }
+
+      const out = applyDecayToStackArrayScaled([s], state, decayDayFraction, {
+        earthwormEscapeOnExpire: true,
+        onRottingExpired: (st) => {
+          if (st?.itemId === ROTTING_ORGANIC_ITEM_ID) {
+            applyRottingOrganicFertilityBonusAtTile(state, key);
+          }
+        },
+      });
+
+      if (out.length === 0) {
+        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        continue;
+      }
+
+      const top = out[0];
+      if (top?.itemId === ROTTING_ORGANIC_ITEM_ID) {
+        mergeStackIntoWorldItemsAtTile(state, x, y, top);
+        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        continue;
+      }
+
+      const baitTop = isAutoRod ? { ...top, dryness: 0 } : top;
+      tile[field] = {
+        ...nextTrap,
+        baitStack: baitTop,
+        baitItemId: typeof baitTop?.itemId === 'string' ? baitTop.itemId : null,
+      };
+    }
+  }
+}
+
 function addWorldItemNearby(state, originX, originY, itemId, quantity, options = null) {
   return addWorldItemNearbyImpl(state, originX, originY, itemId, quantity, options, {
     normalizeStackFootprintValue,
@@ -2193,6 +2447,8 @@ function applyBatchCalendarDayItemProgress(state) {
     }
   }
   state.worldItemsByTile = nextWorldItemsByTile;
+
+  processLandTrapBaitDecay(state, 1, groundInc, true);
 }
 
 function applyItemDecayAndDryingTick(state) {
@@ -2258,6 +2514,9 @@ function applyItemDecayAndDryingTick(state) {
     }
   }
   state.worldItemsByTile = nextWorldItemsByTile;
+
+  const resetTrapRainDryness = isDaylight && dayTick === 0 && sun < DAILY_SUN_DRYING_EPSILON;
+  processLandTrapBaitDecay(state, 1 / TICKS_PER_DAY, groundInc, resetTrapRainDryness);
 }
 
 function applyDailySapTapFill(state) {
@@ -2372,15 +2631,14 @@ function cloneActorInventoryForPreview(actor) {
   };
 }
 
-/** Build `addActorInventoryItem` options from a ground or stockpile stack (same metadata shape). */
+/** Build `addActorInventoryItem` options from a ground, stockpile, or trap-held stack (same metadata shape). */
 export function pickupAddOptionsFromWorldStack(stack) {
   if (!stack || typeof stack !== 'object') {
     return null;
   }
   const opts = {};
-  const uw = Number(stack.unitWeightKg);
-  if (Number.isFinite(uw)) {
-    opts.unitWeightKg = uw;
+  if (stack.unitWeightKg != null && Number.isFinite(Number(stack.unitWeightKg)) && Number(stack.unitWeightKg) >= 0) {
+    opts.unitWeightKg = Number(stack.unitWeightKg);
   }
   if (stack.footprintW != null && stack.footprintW !== '') {
     opts.footprintW = stack.footprintW;
@@ -2388,16 +2646,17 @@ export function pickupAddOptionsFromWorldStack(stack) {
   if (stack.footprintH != null && stack.footprintH !== '') {
     opts.footprintH = stack.footprintH;
   }
-  if (Number.isFinite(Number(stack.freshness))) {
+  if (stack.freshness != null && Number.isFinite(Number(stack.freshness))) {
     opts.freshness = Number(stack.freshness);
   }
-  if (Number.isFinite(Number(stack.decayDaysRemaining)) && Number(stack.decayDaysRemaining) >= 0) {
+  if (stack.decayDaysRemaining != null && Number.isFinite(Number(stack.decayDaysRemaining))
+    && Number(stack.decayDaysRemaining) >= 0) {
     opts.decayDaysRemaining = Number(stack.decayDaysRemaining);
   }
-  if (Number.isFinite(Number(stack.dryness))) {
+  if (stack.dryness != null && Number.isFinite(Number(stack.dryness))) {
     opts.dryness = Number(stack.dryness);
   }
-  if (Number.isFinite(Number(stack.tanninRemaining))) {
+  if (stack.tanninRemaining != null && Number.isFinite(Number(stack.tanninRemaining))) {
     opts.tanninRemaining = Number(stack.tanninRemaining);
   }
   return Object.keys(opts).length > 0 ? opts : null;
@@ -2568,7 +2827,19 @@ function progressPartnerTaskQueueOneTick(state) {
           state.techUnlocks = {};
         }
         state.techUnlocks[uk] = true;
+        if (!state.techUnlockPartnerResearch || typeof state.techUnlockPartnerResearch !== 'object') {
+          state.techUnlockPartnerResearch = {};
+        }
+        state.techUnlockPartnerResearch[uk] = true;
       }
+      appendPartnerTaskHistory(state, {
+        taskId: finishing.taskId,
+        kind: finishing.kind,
+        status: 'completed',
+        failureReason: null,
+      });
+    } else if (finishing.kind === CAMP_MAINTENANCE_TASK_KIND) {
+      state.camp.lastPartnerMaintenanceDayCompleted = Number(state.totalDaysSimulated) || 0;
       appendPartnerTaskHistory(state, {
         taskId: finishing.taskId,
         kind: finishing.kind,
@@ -2638,6 +2909,7 @@ function applyActionEffect(state, action) {
     applyHarvestInjuryFromSubStage,
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
+    ensurePartnerCampMaintenanceQueued,
     addActorInventoryItem,
     maxQuantityActorInventoryCanAccept,
     pickupAddOptionsFromWorldStack,
@@ -3836,6 +4108,8 @@ export function createInitialGameState(seed = 10000, options = {}) {
     height,
     techForest,
     techUnlocks: initialTechUnlocksAllLocked(techForest),
+    techUnlockVisionGranted: {},
+    techUnlockPartnerResearch: {},
     dayOfYear: 5,
     year: 1,
     totalDaysSimulated: 0,
@@ -3885,7 +4159,7 @@ export function advanceDay(state, steps = 1, options = {}) {
   const applyDailyItemDecayHook = options.skipBatchItemProgress === true
     ? () => {}
     : applyBatchCalendarDayItemProgress;
-  return advanceDayImpl(state, steps, {
+  const next = advanceDayImpl(state, steps, {
     clonePlant,
     cloneTile,
     cloneActors,
@@ -3918,6 +4192,8 @@ export function advanceDay(state, steps = 1, options = {}) {
     advanceDeadLogDecayByYear,
     refillSquirrelCachesByYear,
   });
+  ensurePartnerCampMaintenanceQueued(next);
+  return next;
 }
 
 export function countDormantSeeds(state) {

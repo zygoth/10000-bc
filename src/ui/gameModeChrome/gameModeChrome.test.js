@@ -1,5 +1,6 @@
 import {
   annotateContextEntryTickBudget,
+  formatContextMenuActionWithTickCost,
   formatWeightLabel,
   getCarryWeightSeverity,
   getSelectedStackEntry,
@@ -80,6 +81,23 @@ describe('gameModeChrome display logic', () => {
     const out = annotateContextEntryTickBudget({ kind: 'x', label: 'Long', tickCost: 50, payload: {} }, player);
     expect(out.disabled).toBe(true);
     expect(typeof out.disabledReason).toBe('string');
+  });
+
+  test('formatContextMenuActionWithTickCost appends tick suffix for 0, 1, and larger costs', () => {
+    expect(formatContextMenuActionWithTickCost({ label: 'Drop', tickCost: 0 })).toBe('Drop (0t)');
+    expect(formatContextMenuActionWithTickCost({ label: 'Move', tickCost: 1 })).toBe('Move (1t)');
+    expect(formatContextMenuActionWithTickCost({ label: 'Eat', tickCost: 2 })).toBe('Eat (2t)');
+    expect(formatContextMenuActionWithTickCost({ label: 'Spin cordage', tickCost: 4 })).toBe('Spin cordage (4t)');
+  });
+
+  test('formatContextMenuActionWithTickCost treats non-finite tickCost as 0', () => {
+    expect(formatContextMenuActionWithTickCost({ label: 'X', tickCost: NaN })).toBe('X (0t)');
+    expect(formatContextMenuActionWithTickCost({ label: 'Y' })).toBe('Y (0t)');
+  });
+
+  test('formatContextMenuActionWithTickCost omits suffix when label ends with ellipsis', () => {
+    expect(formatContextMenuActionWithTickCost({ label: 'Spin Thread...', tickCost: 0 })).toBe('Spin Thread...');
+    expect(formatContextMenuActionWithTickCost({ label: 'Workbench Process...', tickCost: 0 })).toBe('Workbench Process...');
   });
 
   test('annotateContextEntryTickBudget merges pass-out reason with existing disabledReason', () => {

@@ -1,3 +1,5 @@
+import { getLandTrapBaitItemId } from '../trapBaitLand.mjs';
+
 export function rollDeadfallCatchImpl(state, tile, trap, deps) {
   const {
     clamp01,
@@ -32,7 +34,7 @@ export function rollDeadfallCatchImpl(state, tile, trap, deps) {
     const density = clamp01(getAnimalDensityAtTile(state, speciesId, tile.x, tile.y));
     maxDensity = Math.max(maxDensity, density);
     const baseCatchRate = clamp01(Number(species?.base_catch_rate) || 0);
-    const baitItemId = typeof trap?.baitItemId === 'string' && trap.baitItemId ? trap.baitItemId : null;
+    const baitItemId = getLandTrapBaitItemId(trap);
     const baitMultiplier = baitItemId
       ? landTrapBaitMultiplierForTargetSpecies(baitItemId, speciesId)
       : 1;
@@ -300,7 +302,7 @@ export function rollSimpleSnareCatchImpl(state, tile, snare, deps) {
     : 1;
 
   const baseChance = clamp01(SIMPLE_SNARE_BASE_CATCH_CHANCE + (rabbitDensity * SIMPLE_SNARE_RABBIT_DENSITY_WEIGHT));
-  const baitItemId = typeof snare?.baitItemId === 'string' && snare.baitItemId ? snare.baitItemId : null;
+  const baitItemId = getLandTrapBaitItemId(snare);
   const baitMultiplier = baitItemId
     ? landTrapBaitMultiplierForTargetSpecies(baitItemId, SIMPLE_SNARE_TARGET_SPECIES_ID)
     : 1;

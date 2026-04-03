@@ -47,3 +47,4 @@ npm run cap:open:android
 - Update app metadata in `package.json` (`name`, `build.appId`, `build.productName`).
 - Update Capacitor identity in `capacitor.config.ts`.
 - Replace `scripts/steam_appid.txt` with your Steam app id.
+- For React/sim state mutation safety, see `docs/state_update_safety.md`.

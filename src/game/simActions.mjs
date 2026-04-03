@@ -19,14 +19,17 @@ import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
 import { ensureHarvestEntryState } from './harvestEntryState.mjs';
 import { checkActorInventoryRelocation } from './inventoryRelocate.mjs';
 import {
+  landTrapHasBait,
   parseLandTrapBaitPlantSpeciesId,
   plantSpeciesEligibleForDeadfallLandBait,
   plantSpeciesEligibleForSimpleSnareBait,
 } from './trapBaitLand.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
-import { getTechForestNode } from './techForestGen.mjs';
-import { isActorWithinCampFootprint } from './campFootprint.mjs';
+import { CAMP_MAINTENANCE_TASK_KIND } from './campMaintenance.mjs';
+import { getTechForestChildResearchBlocker, getTechForestNode } from './techForestGen.mjs';
+import { isActorWithinCampFootprint, isTileWithinCampFootprint } from './campFootprint.mjs';
 import { resolveStewIngredientDescriptor as resolveStewIngredientDescriptorShared } from './stewIngredientDescriptor.mjs';
+import { resolveVisionRecipes } from './medicineDebrief.mjs';
 
 const ACTION_KINDS = [
   'move',
@@ -38,6 +41,9 @@ const ACTION_KINDS = [
   'auto_rod_place',
   'trap_check',
   'trap_bait',
+  'trap_retrieve',
+  'trap_pickup',
+  'trap_remove_bait',
   'marker_place',
   'marker_remove',
   'fish_rod_cast',
@@ -69,6 +75,7 @@ const ACTION_KINDS = [
   'equip_item',
   'unequip_item',
   'partner_task_set',
+  'partner_queue_reorder',
   'debrief_enter',
   'debrief_exit',
   'partner_medicine_administer',
@@ -89,6 +96,9 @@ const ACTION_TICK_COST = {
   auto_rod_place: 2,
   trap_check: 2,
   trap_bait: 1,
+  trap_retrieve: 2,
+  trap_pickup: 2,
+  trap_remove_bait: 1,
   marker_place: 1,
   marker_remove: 1,
   fish_rod_cast: 5,
@@ -121,13 +131,16 @@ const ACTION_TICK_COST = {
   tool_craft: 1,
   equip_item: 1,
   unequip_item: 1,
-  partner_task_set: 1,
+  // Queuing partner work is nightly planning; must not spend player ticks or advance dayTick (see actionRunner).
+  partner_task_set: 0,
+  partner_queue_reorder: 0,
   debrief_enter: 0,
   debrief_exit: 0,
   partner_medicine_administer: 1,
-  partner_vision_request: 1,
-  partner_vision_confirm: 1,
-  partner_vision_choose: 1,
+  // Vision flow is nightly debrief UI only (no dayTick / hunger advance); batch-safe in one advanceTick.
+  partner_vision_request: 0,
+  partner_vision_confirm: 0,
+  partner_vision_choose: 0,
   nature_sight_overlay_set: 1,
   inventory_relocate_stack: 0,
 };
@@ -776,9 +789,10 @@ function validateWaterDrinkAction(state, action, actor) {
     };
   }
 
-  const campX = Number.isInteger(state?.camp?.anchorX) ? state.camp.anchorX : null;
-  const campY = Number.isInteger(state?.camp?.anchorY) ? state.camp.anchorY : null;
-  if (campX !== null && campY !== null && target.x === campX && target.y === campY) {
+  if (
+    isActorWithinCampFootprint(state, actor)
+    && isTileWithinCampFootprint(state, target.x, target.y)
+  ) {
     return {
       ok: true,
       code: null,
@@ -1523,25 +1537,19 @@ function validateTrapBaitAction(state, action, actor) {
     };
   }
 
-  if (hasSimpleSnare) {
-    const baitItemId = typeof tile.simpleSnare?.baitItemId === 'string' ? tile.simpleSnare.baitItemId : null;
-    if (baitItemId) {
-      return {
-        ok: false,
-        code: 'trap_bait_already_baited',
-        message: 'trap_bait target already baited',
-      };
-    }
+  if (hasSimpleSnare && landTrapHasBait(tile.simpleSnare)) {
+    return {
+      ok: false,
+      code: 'trap_bait_already_baited',
+      message: 'trap_bait target already baited',
+    };
   }
-  if (hasDeadfallTrap) {
-    const baitItemId = typeof tile.deadfallTrap?.baitItemId === 'string' ? tile.deadfallTrap.baitItemId : null;
-    if (baitItemId) {
-      return {
-        ok: false,
-        code: 'trap_bait_already_baited',
-        message: 'trap_bait target already baited',
-      };
-    }
+  if (hasDeadfallTrap && landTrapHasBait(tile.deadfallTrap)) {
+    return {
+      ok: false,
+      code: 'trap_bait_already_baited',
+      message: 'trap_bait target already baited',
+    };
   }
 
   const baitItemIdRaw = typeof action.payload?.baitItemId === 'string' ? action.payload.baitItemId : '';
@@ -1606,6 +1614,201 @@ function validateTrapBaitAction(state, action, actor) {
         y: target.y,
         baitItemId,
       },
+    },
+  };
+}
+
+function validateTrapRetrieveAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'trap_retrieve_out_of_bounds', message: 'trap_retrieve target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'trap_retrieve target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  const snare = tile?.simpleSnare?.active === true ? tile.simpleSnare : null;
+  const deadfall = tile?.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+  const fishTrap = tile?.fishTrap?.active === true ? tile.fishTrap : null;
+
+  const hasSnareCatch = snare && snare.hasCatch === true;
+  const hasDeadfallCatch = deadfall && deadfall.hasCatch === true;
+  const fishStored = fishTrap && Array.isArray(fishTrap.storedCatchSpeciesIds)
+    ? fishTrap.storedCatchSpeciesIds.filter((id) => typeof id === 'string' && id)
+    : [];
+  const hasFish = fishStored.length > 0;
+
+  if (!hasSnareCatch && !hasDeadfallCatch && !hasFish) {
+    return {
+      ok: false,
+      code: 'trap_retrieve_nothing',
+      message: 'trap_retrieve requires a catch to collect (snare, deadfall, or fish weir)',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: { x: target.x, y: target.y },
+      tickCost: ACTION_TICK_COST.trap_retrieve,
+    },
+  };
+}
+
+function validateTrapPickupAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'trap_pickup_out_of_bounds', message: 'trap_pickup target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'trap_pickup target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  const snare = tile?.simpleSnare?.active === true ? tile.simpleSnare : null;
+  const deadfall = tile?.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+  const fishTrap = tile?.fishTrap?.active === true ? tile.fishTrap : null;
+  const autoRod = tile?.autoRod?.active === true ? tile.autoRod : null;
+
+  const nLand = (snare ? 1 : 0) + (deadfall ? 1 : 0);
+  const nFish = fishTrap ? 1 : 0;
+  const nAutoRod = autoRod ? 1 : 0;
+  if (nLand + nFish + nAutoRod !== 1) {
+    return {
+      ok: false,
+      code: 'trap_pickup_invalid_target',
+      message: 'trap_pickup requires exactly one active snare, deadfall, fish weir, or auto rod on the tile',
+    };
+  }
+
+  if (snare) {
+    if (snare.hasCatch === true) {
+      return {
+        ok: false,
+        code: 'trap_pickup_blocked_catch',
+        message: 'trap_pickup requires retrieving the catch before picking up the snare',
+      };
+    }
+  }
+  if (deadfall) {
+    if (deadfall.hasCatch === true) {
+      return {
+        ok: false,
+        code: 'trap_pickup_blocked_catch',
+        message: 'trap_pickup requires retrieving the catch before picking up the deadfall',
+      };
+    }
+  }
+  if (fishTrap) {
+    const stored = Array.isArray(fishTrap.storedCatchSpeciesIds)
+      ? fishTrap.storedCatchSpeciesIds.filter((id) => typeof id === 'string' && id)
+      : [];
+    if (stored.length > 0) {
+      return {
+        ok: false,
+        code: 'trap_pickup_blocked_catch',
+        message: 'trap_pickup requires retrieving stored fish before picking up the weir',
+      };
+    }
+  }
+  if (autoRod) {
+    const pending = Array.isArray(autoRod.pendingSpeciesIds)
+      ? autoRod.pendingSpeciesIds.filter((id) => typeof id === 'string' && id)
+      : [];
+    if (pending.length > 0) {
+      return {
+        ok: false,
+        code: 'trap_pickup_blocked_catch',
+        message: 'trap_pickup requires checking the auto rod to collect fish before picking it up',
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: { x: target.x, y: target.y },
+      tickCost: ACTION_TICK_COST.trap_pickup,
+    },
+  };
+}
+
+function validateTrapRemoveBaitAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'trap_remove_bait_out_of_bounds', message: 'trap_remove_bait target is out of bounds' };
+  }
+
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'trap_remove_bait target must be on current or adjacent tile',
+    };
+  }
+
+  const tile = getTile(state, target.x, target.y);
+  const snare = tile?.simpleSnare?.active === true ? tile.simpleSnare : null;
+  const deadfall = tile?.deadfallTrap?.active === true ? tile.deadfallTrap : null;
+
+  const nLand = (snare ? 1 : 0) + (deadfall ? 1 : 0);
+  if (nLand !== 1) {
+    return {
+      ok: false,
+      code: 'trap_remove_bait_invalid_target',
+      message: 'trap_remove_bait requires exactly one active snare or deadfall on the tile',
+    };
+  }
+
+  const trap = snare || deadfall;
+  if (!landTrapHasBait(trap)) {
+    return {
+      ok: false,
+      code: 'trap_remove_bait_empty',
+      message: 'trap_remove_bait requires bait on the trap',
+    };
+  }
+
+  if (snare && snare.hasCatch === true) {
+    return {
+      ok: false,
+      code: 'trap_remove_bait_blocked_catch',
+      message: 'trap_remove_bait cannot be used while the snare holds a catch',
+    };
+  }
+  if (deadfall && deadfall.hasCatch === true) {
+    return {
+      ok: false,
+      code: 'trap_remove_bait_blocked_catch',
+      message: 'trap_remove_bait cannot be used while the deadfall holds a catch',
+    };
+  }
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: { x: target.x, y: target.y },
+      tickCost: ACTION_TICK_COST.trap_remove_bait,
     },
   };
 }
@@ -2651,6 +2854,14 @@ function validatePartnerVisionRequestAction(state, action, actor) {
       message: 'partner_vision_request blocked until pending vision confirmation is resolved',
     };
   }
+  const visionRecipes = resolveVisionRecipes(state);
+  if (!Array.isArray(visionRecipes) || visionRecipes.length <= 0) {
+    return {
+      ok: false,
+      code: 'vision_no_eligible_sources',
+      message: 'No vision-eligible plants or ground fungi on the map (partner cannot prepare a vision).',
+    };
+  }
   return {
     ok: true,
     code: null,
@@ -2997,6 +3208,39 @@ function resolveOutputItemIdFromPart(descriptor, outputPartName) {
   return `${descriptor.species.id}:${outputPartName}:${preferred.id}`;
 }
 
+/** Per input unit, same rules previously used for quantity === 1 in batch formulas. */
+function computePerUnitProcessOutputQuantity(explicitQuantity, yieldFraction) {
+  if (Number.isFinite(explicitQuantity) && explicitQuantity > 0) {
+    return Math.max(1, Math.floor(explicitQuantity * 1));
+  }
+  if (Number.isFinite(yieldFraction) && yieldFraction > 0) {
+    return Math.max(1, Math.floor(yieldFraction * 1));
+  }
+  return 1;
+}
+
+function applyProcessOutputMetadata(latest, output, outputItemId, descriptor) {
+  if (Number.isFinite(Number(output.freshness))) {
+    latest.freshness = Math.max(0, Math.min(1, Number(output.freshness)));
+  }
+  if (Number.isFinite(Number(output.decayDaysRemaining))) {
+    latest.decayDaysRemaining = Math.max(0, Math.floor(Number(output.decayDaysRemaining)));
+  }
+  if (Number.isFinite(Number(output.tanninRemaining))) {
+    latest.tanninRemaining = Math.max(0, Math.min(1, Number(output.tanninRemaining)));
+  }
+  if (
+    descriptor.type === 'plant'
+    && !Number.isFinite(Number(latest.decayDaysRemaining))
+  ) {
+    const outPlant = parsePlantPartItemId(outputItemId);
+    const catalogDecay = Number(outPlant?.subStage?.decay_days);
+    if (Number.isFinite(catalogDecay) && catalogDecay > 0) {
+      latest.decayDaysRemaining = Math.max(0, Math.floor(catalogDecay));
+    }
+  }
+}
+
 function computeProcessOutputs(descriptor, quantity) {
   const normalizedQty = Math.max(1, Math.floor(Number(quantity) || 1));
   const outputs = Array.isArray(descriptor?.processOption?.outputs)
@@ -3018,36 +3262,16 @@ function computeProcessOutputs(descriptor, quantity) {
 
     const explicitQuantity = Number(output.quantity);
     const yieldFraction = Number(output.yield_fraction);
-    let outputQuantity;
-    if (Number.isFinite(explicitQuantity) && explicitQuantity > 0) {
-      outputQuantity = Math.max(1, Math.floor(explicitQuantity * normalizedQty));
-    } else if (Number.isFinite(yieldFraction) && yieldFraction > 0) {
-      outputQuantity = Math.max(1, Math.floor(yieldFraction * normalizedQty));
-    } else {
-      outputQuantity = normalizedQty;
-    }
+    const perUnit = computePerUnitProcessOutputQuantity(explicitQuantity, yieldFraction);
+    const hasExplicitOrYield = (Number.isFinite(explicitQuantity) && explicitQuantity > 0)
+      || (Number.isFinite(yieldFraction) && yieldFraction > 0);
+    const outputQuantity = hasExplicitOrYield
+      ? perUnit * normalizedQty
+      : normalizedQty;
 
-    normalized.push({ itemId: outputItemId, quantity: outputQuantity });
-    const latest = normalized[normalized.length - 1];
-    if (Number.isFinite(Number(output.freshness))) {
-      latest.freshness = Math.max(0, Math.min(1, Number(output.freshness)));
-    }
-    if (Number.isFinite(Number(output.decayDaysRemaining))) {
-      latest.decayDaysRemaining = Math.max(0, Math.floor(Number(output.decayDaysRemaining)));
-    }
-    if (Number.isFinite(Number(output.tanninRemaining))) {
-      latest.tanninRemaining = Math.max(0, Math.min(1, Number(output.tanninRemaining)));
-    }
-    if (
-      descriptor.type === 'plant'
-      && !Number.isFinite(Number(latest.decayDaysRemaining))
-    ) {
-      const outPlant = parsePlantPartItemId(outputItemId);
-      const catalogDecay = Number(outPlant?.subStage?.decay_days);
-      if (Number.isFinite(catalogDecay) && catalogDecay > 0) {
-        latest.decayDaysRemaining = Math.max(0, Math.floor(catalogDecay));
-      }
-    }
+    const latest = { itemId: outputItemId, quantity: outputQuantity };
+    applyProcessOutputMetadata(latest, output, outputItemId, descriptor);
+    normalized.push(latest);
   }
 
   return normalized;
@@ -3129,12 +3353,10 @@ function validateProcessItemAction(state, action, actor) {
   const ticksPerUnit = Number.isFinite(Number(descriptor.processOption.ticks))
     ? Math.max(1, Math.floor(Number(descriptor.processOption.ticks)))
     : 1;
-  // GDD §8.6: one sugar-boiling session (~150 ticks) processes a batch at the station; cost does not stack per vessel.
-  let ticks = processId === 'boil_sap'
-    ? ticksPerUnit
-    : Math.max(1, ticksPerUnit * quantity);
+  // Each filled vessel is one boiling session at the station (catalog ticks per unit × batch quantity).
+  let ticks = Math.max(1, ticksPerUnit * quantity);
 
-  if (processId === 'butcher' && actorQualifiesForWorkbenchFieldBonus(state, actor)) {
+  if (processLocation === 'hand' && actorQualifiesForWorkbenchFieldBonus(state, actor)) {
     ticks = Math.max(1, Math.floor(ticks * 0.8));
   }
 
@@ -3154,6 +3376,162 @@ function validateProcessItemAction(state, action, actor) {
         returnItems,
       },
       tickCost: ticks,
+    },
+  };
+}
+
+/**
+ * Build a partner queue task from camp stockpile materials using processing catalog ticks/outputs
+ * (same rules as process_item at the station; no workbench field discount — partner works at the station).
+ */
+export function previewPartnerQueueTaskFromStockpileProcess(state, params) {
+  const itemId = typeof params?.itemId === 'string' ? params.itemId : '';
+  const processId = typeof params?.processId === 'string' ? params.processId : '';
+  const processLocationHint = typeof params?.processLocation === 'string' ? params.processLocation : null;
+  const quantityRaw = Number(params?.quantity);
+  const quantity = Number.isInteger(quantityRaw) && quantityRaw > 0
+    ? quantityRaw
+    : Math.max(1, Math.floor(Number(quantityRaw) || 1));
+
+  if (!itemId) {
+    return { ok: false, code: 'missing_item', message: 'Select a stockpile item.' };
+  }
+  if (!processId) {
+    return { ok: false, code: 'missing_process', message: 'Select a process.' };
+  }
+
+  if (processId === 'spin_cordage') {
+    if (!itemId) {
+      return { ok: false, code: 'missing_item', message: 'Select a stockpile item.' };
+    }
+    const spinTags = resolveCraftTagsForItem(itemId);
+    if (!spinTags.includes('cordage_fiber')) {
+      return { ok: false, code: 'invalid_spin_target', message: 'This item is not cordage fiber.' };
+    }
+    const stockpileSpin = buildCampStockpileQuantityMap(state);
+    const availableSpin = Math.max(0, Math.floor(Number(stockpileSpin[itemId]) || 0));
+    if (availableSpin < quantity) {
+      return {
+        ok: false,
+        code: 'insufficient_stockpile_quantity',
+        message: `Stockpile needs ${quantity}× ${itemId} (${availableSpin} available).`,
+        requiredItemId: itemId,
+      };
+    }
+    const useSpinnerPreview = hasCampStationUnlocked(state, 'thread_spinner');
+    const spinDescriptor = resolveProcessingDescriptor(
+      itemId,
+      'spin_cordage',
+      useSpinnerPreview ? 'thread_spinner' : 'hand',
+    );
+    if (!spinDescriptor?.processOption) {
+      return { ok: false, code: 'unknown_process_option', message: 'That item does not support spinning cordage.' };
+    }
+    const ticksRequiredSpinPreview = getPartnerTaskTicksRequired(state, 'spin_cordage', 4 * quantity);
+    const outputsSpinPreview = computeProcessOutputs(spinDescriptor, quantity);
+    const taskRequirementsSpinPreview = normalizeTaskRequirements(
+      null,
+      useSpinnerPreview ? 'thread_spinner' : null,
+    );
+    const taskInputsSpinPreview = normalizeTaskInputs([{ source: 'camp_stockpile', itemId, quantity }]);
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      ticksRequired: ticksRequiredSpinPreview,
+      task: {
+        kind: 'spin_cordage',
+        ticksRequired: ticksRequiredSpinPreview,
+        inputs: taskInputsSpinPreview,
+        requirements: taskRequirementsSpinPreview,
+        outputs: normalizeTaskOutputs(outputsSpinPreview),
+        meta: {
+          source: 'stockpile_process',
+          itemId,
+          processId: 'spin_cordage',
+          quantity,
+          processLocation: useSpinnerPreview ? 'thread_spinner' : 'hand',
+        },
+      },
+    };
+  }
+
+  const requiredStation = getRequiredStationForPartnerTask(processId);
+  if (!requiredStation) {
+    return {
+      ok: false,
+      code: 'unsupported_partner_process',
+      message: 'This process is not assigned via partner station tasks.',
+    };
+  }
+  if (!hasCampStationUnlocked(state, requiredStation)) {
+    return {
+      ok: false,
+      code: 'missing_station',
+      message: `Partner needs station built first: ${requiredStation}`,
+      stationId: requiredStation,
+    };
+  }
+
+  const stockpileByItemId = buildCampStockpileQuantityMap(state);
+  const available = Math.max(0, Math.floor(Number(stockpileByItemId[itemId]) || 0));
+  if (available < quantity) {
+    return {
+      ok: false,
+      code: 'insufficient_stockpile_quantity',
+      message: `Stockpile needs ${quantity}× ${itemId} (${available} available).`,
+      requiredItemId: itemId,
+    };
+  }
+
+  const descriptor = resolveProcessingDescriptor(itemId, processId, processLocationHint);
+  if (!descriptor) {
+    return { ok: false, code: 'unknown_process_option', message: 'That item does not support this process.' };
+  }
+
+  const loc = typeof descriptor?.processOption?.location === 'string'
+    ? descriptor.processOption.location
+    : 'hand';
+  if (loc !== requiredStation) {
+    return {
+      ok: false,
+      code: 'process_location_mismatch',
+      message: 'This process uses a different station for this item.',
+    };
+  }
+
+  const outputs = computeProcessOutputs(descriptor, quantity);
+  if (outputs.length === 0) {
+    return { ok: false, code: 'process_no_outputs', message: 'No outputs for that batch size.' };
+  }
+
+  const ticksPerUnit = Number.isFinite(Number(descriptor.processOption.ticks))
+    ? Math.max(1, Math.floor(Number(descriptor.processOption.ticks)))
+    : 1;
+  const ticksRaw = Math.max(1, ticksPerUnit * quantity);
+
+  const ticksRequired = getPartnerTaskTicksRequired(state, processId, ticksRaw);
+  const taskInputs = normalizeTaskInputs([{ source: 'camp_stockpile', itemId, quantity }]);
+  const taskRequirements = normalizeTaskRequirements(null, requiredStation);
+
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    ticksRequired,
+    task: {
+      kind: processId,
+      ticksRequired,
+      inputs: taskInputs,
+      requirements: taskRequirements,
+      outputs: normalizeTaskOutputs(outputs),
+      meta: {
+        source: 'stockpile_process',
+        itemId,
+        processId,
+        quantity,
+        processLocation: loc,
+      },
     },
   };
 }
@@ -3316,7 +3694,7 @@ function resolveAnimalPartFromItemId(itemId) {
   return (species?.parts || []).find((entry) => entry?.id === partId) || null;
 }
 
-function resolveCraftTagsForItem(itemId) {
+export function resolveCraftTagsForItem(itemId) {
   function collectTags(sourceTags, target) {
     if (!Array.isArray(sourceTags)) {
       return;
@@ -3982,7 +4360,10 @@ function isActorAdjacentToStation(state, actor, stationId) {
   return Math.abs(actorX - placement.x) <= 1 && Math.abs(actorY - placement.y) <= 1;
 }
 
-/** 20% workbench bonus only when the workbench is built (tile placement), not research-unlock alone. */
+/**
+ * 20% tick reduction when the workbench is built (tile placement), not research-unlock alone.
+ * Used for `tool_craft` and for any `process_item` whose resolved location is `hand` (in camp or adjacent to workbench).
+ */
 function actorQualifiesForWorkbenchFieldBonus(state, actor) {
   if (!getCampStationPlacement(state, 'workbench')) {
     return false;
@@ -5292,6 +5673,93 @@ function validateToolCraftAction(state, action, actor) {
   };
 }
 
+function countIdMultiset(ids) {
+  const m = new Map();
+  for (const id of ids) {
+    m.set(id, (m.get(id) || 0) + 1);
+  }
+  return m;
+}
+
+function multisetsEqual(a, b) {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function validatePartnerQueueReorderAction(state, action) {
+  const partner = getActor(state, 'partner');
+  if (!partner) {
+    return { ok: false, code: 'missing_partner', message: 'partner actor is required for partner_queue_reorder' };
+  }
+  if ((Number(partner.health) || 0) <= 0) {
+    return { ok: false, code: 'partner_unavailable', message: 'partner actor is unavailable (health <= 0)' };
+  }
+  if (state?.camp?.debrief?.active !== true) {
+    return {
+      ok: false,
+      code: 'partner_queue_reorder_debrief_only',
+      message: 'Partner queue reorder is only available during nightly debrief.',
+    };
+  }
+  const queue = state?.camp?.partnerTaskQueue;
+  const queued = Array.isArray(queue?.queued) ? queue.queued : [];
+  const rawIds = action.payload?.orderedTaskIds;
+  if (!Array.isArray(rawIds) || rawIds.length !== queued.length) {
+    return {
+      ok: false,
+      code: 'invalid_partner_queue_reorder',
+      message: 'orderedTaskIds must list every queued partner task exactly once.',
+    };
+  }
+  const orderedTaskIds = rawIds.map((id) => (typeof id === 'string' ? id : ''));
+  if (orderedTaskIds.some((id) => !id)) {
+    return {
+      ok: false,
+      code: 'invalid_partner_queue_reorder',
+      message: 'Each orderedTaskIds entry must be a non-empty string (taskId).',
+    };
+  }
+  const currentIds = queued.map((t) => (typeof t?.taskId === 'string' ? t.taskId : ''));
+  if (currentIds.some((id) => !id)) {
+    return {
+      ok: false,
+      code: 'invalid_partner_queue_reorder',
+      message: 'All queued partner tasks must have a taskId before reordering.',
+    };
+  }
+  if (!multisetsEqual(countIdMultiset(currentIds), countIdMultiset(orderedTaskIds))) {
+    return {
+      ok: false,
+      code: 'invalid_partner_queue_reorder',
+      message: 'orderedTaskIds must be a reorder of the current queue (same taskIds).',
+    };
+  }
+  const maint = queued.find((t) => t?.kind === CAMP_MAINTENANCE_TASK_KIND);
+  if (maint && orderedTaskIds[0] !== maint.taskId) {
+    return {
+      ok: false,
+      code: 'maintenance_must_lead',
+      message: 'Camp maintenance must remain first in the partner queue.',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: { orderedTaskIds },
+    },
+  };
+}
+
 function validatePartnerTaskSetAction(state, action) {
   const partner = getActor(state, 'partner');
   if (!partner) {
@@ -5314,6 +5782,20 @@ function validatePartnerTaskSetAction(state, action) {
     return { ok: false, code: 'invalid_partner_task_kind', message: 'partner_task_set requires payload.task.kind (string)' };
   }
 
+  const rawQueuePolicyHead = typeof action.payload?.queuePolicy === 'string'
+    ? action.payload.queuePolicy
+    : typeof rawTask?.queuePolicy === 'string' ? rawTask.queuePolicy : 'append';
+  if (rawQueuePolicyHead === 'replace') {
+    const activePartnerTask = state?.camp?.partnerTaskQueue?.active;
+    if (activePartnerTask?.kind === CAMP_MAINTENANCE_TASK_KIND) {
+      return {
+        ok: false,
+        code: 'maintenance_active',
+        message: 'Finish camp maintenance before replacing the active partner task.',
+      };
+    }
+  }
+
   if (taskKind === TECH_RESEARCH_TASK_KIND) {
     const meta = rawTask?.meta && typeof rawTask.meta === 'object' ? rawTask.meta : {};
     const unlockKey = typeof meta.unlockKey === 'string' ? meta.unlockKey : '';
@@ -5324,16 +5806,36 @@ function validatePartnerTaskSetAction(state, action) {
     if (!node) {
       return { ok: false, code: 'unknown_tech_unlock', message: `unknown tech unlock: ${unlockKey}` };
     }
-    if (isUnlockEnabled(state, unlockKey)) {
+    const visionGranted = state?.techUnlockVisionGranted && typeof state.techUnlockVisionGranted === 'object'
+      ? state.techUnlockVisionGranted
+      : null;
+    const partnerResearched = state?.techUnlockPartnerResearch && typeof state.techUnlockPartnerResearch === 'object'
+      ? state.techUnlockPartnerResearch
+      : null;
+    const solidifyingVisionGrant = isUnlockEnabled(state, unlockKey)
+      && visionGranted?.[unlockKey] === true
+      && partnerResearched?.[unlockKey] !== true;
+    if (isUnlockEnabled(state, unlockKey) && !solidifyingVisionGrant) {
       return { ok: false, code: 'tech_already_researched', message: `already researched: ${unlockKey}` };
     }
-    if (node.parentUnlockKey && !isUnlockEnabled(state, node.parentUnlockKey)) {
-      return {
-        ok: false,
-        code: 'tech_prerequisite_missing',
-        message: `research requires prerequisite: ${node.parentUnlockKey}`,
-        unlockKey: node.parentUnlockKey,
-      };
+    if (node.parentUnlockKey) {
+      const childBlock = getTechForestChildResearchBlocker(
+        state?.techForest,
+        state?.techUnlocks,
+        node.parentUnlockKey,
+        visionGranted,
+        partnerResearched,
+      );
+      if (childBlock) {
+        return {
+          ok: false,
+          code: 'tech_prerequisite_missing',
+          message: childBlock.reason === 'vision_parent'
+            ? `research requires partner camp research on prerequisite: ${childBlock.blockerKey}`
+            : `research requires prerequisite: ${childBlock.blockerKey}`,
+          unlockKey: childBlock.blockerKey,
+        };
+      }
     }
     if (!Number.isInteger(ticksRequiredRaw) || ticksRequiredRaw <= 0) {
       return { ok: false, code: 'invalid_partner_task_ticks', message: 'partner_task_set requires payload.task.ticksRequired (positive integer)' };
@@ -5388,6 +5890,137 @@ function validatePartnerTaskSetAction(state, action) {
             status: 'queued',
             failureReason: null,
             meta: { ...meta, unlockKey },
+          },
+        },
+      },
+    };
+  }
+
+  if (taskKind === CAMP_MAINTENANCE_TASK_KIND) {
+    return {
+      ok: false,
+      code: 'reserved_task_kind',
+      message: 'Camp maintenance is scheduled automatically and cannot be set manually.',
+    };
+  }
+
+  if (taskKind === 'spin_cordage') {
+    const taskInputsSpin = normalizeTaskInputs(rawTask?.inputs);
+    const fiberLines = [];
+    for (const input of taskInputsSpin) {
+      if (input.source !== 'camp_stockpile' || input.required === false) {
+        continue;
+      }
+      if (!resolveCraftTagsForItem(input.itemId).includes('cordage_fiber')) {
+        return {
+          ok: false,
+          code: 'invalid_spin_input',
+          message: 'spin_cordage stockpile inputs must be cordage fiber material.',
+        };
+      }
+      fiberLines.push(input);
+    }
+    if (fiberLines.length < 1) {
+      return {
+        ok: false,
+        code: 'spin_requires_fiber',
+        message: 'spin_cordage requires cordage fiber from the camp stockpile.',
+      };
+    }
+    const fiberItemIds = new Set(fiberLines.map((line) => line.itemId));
+    if (fiberItemIds.size !== 1) {
+      return {
+        ok: false,
+        code: 'spin_single_fiber',
+        message: 'spin_cordage supports one fiber item type per batch.',
+      };
+    }
+    const fiberItemId = fiberLines[0].itemId;
+    const fiberUnits = fiberLines.reduce(
+      (sum, line) => sum + Math.max(0, Math.floor(Number(line.quantity) || 0)),
+      0,
+    );
+    if (fiberUnits < 1) {
+      return {
+        ok: false,
+        code: 'spin_requires_fiber',
+        message: 'spin_cordage requires a positive fiber quantity.',
+      };
+    }
+
+    const stockpileByItemIdSpin = buildCampStockpileQuantityMap(state);
+    for (const input of fiberLines) {
+      const available = Math.max(0, Math.floor(Number(stockpileByItemIdSpin[input.itemId]) || 0));
+      const q = Math.max(0, Math.floor(Number(input.quantity) || 0));
+      if (available < q) {
+        return {
+          ok: false,
+          code: 'insufficient_stockpile_quantity',
+          message: `partner_task_set requires ${q}x ${input.itemId} in camp stockpile`,
+          requiredItemId: input.itemId,
+        };
+      }
+    }
+
+    const useSpinner = hasCampStationUnlocked(state, 'thread_spinner');
+    const spinHint = useSpinner ? 'thread_spinner' : 'hand';
+    const spinDescriptor = resolveProcessingDescriptor(fiberItemId, 'spin_cordage', spinHint);
+    if (!spinDescriptor?.processOption) {
+      return {
+        ok: false,
+        code: 'unknown_process_option',
+        message: 'That fiber cannot be spun into cordage.',
+      };
+    }
+
+    const ticksRequiredSpin = getPartnerTaskTicksRequired(state, 'spin_cordage', 4 * fiberUnits);
+    const outputsSpin = computeProcessOutputs(spinDescriptor, fiberUnits);
+    const taskRequirementsSpin = normalizeTaskRequirements(null, useSpinner ? 'thread_spinner' : null);
+
+    const rawQueuePolicySpin = typeof action.payload?.queuePolicy === 'string'
+      ? action.payload.queuePolicy
+      : typeof rawTask?.queuePolicy === 'string' ? rawTask.queuePolicy : 'append';
+    const queuePolicySpin = rawQueuePolicySpin === 'replace' || rawQueuePolicySpin === 'append'
+      ? rawQueuePolicySpin
+      : '';
+    if (!queuePolicySpin) {
+      return {
+        ok: false,
+        code: 'invalid_partner_task_queue_policy',
+        message: 'partner_task_set payload.queuePolicy must be "append" or "replace"',
+      };
+    }
+
+    const taskIdSpin = typeof rawTask?.taskId === 'string' && rawTask.taskId
+      ? rawTask.taskId
+      : `${action.actionId}:task`;
+
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: {
+          ...action.payload,
+          queuePolicy: queuePolicySpin,
+          task: {
+            taskId: taskIdSpin,
+            kind: taskKind,
+            ticksRequired: ticksRequiredSpin,
+            inputs: taskInputsSpin,
+            requirements: taskRequirementsSpin,
+            outputs: normalizeTaskOutputs(outputsSpin),
+            status: 'queued',
+            failureReason: null,
+            meta: {
+              ...(rawTask?.meta && typeof rawTask.meta === 'object' ? rawTask.meta : {}),
+              source: 'stockpile_process',
+              itemId: fiberItemId,
+              processId: 'spin_cordage',
+              quantity: fiberUnits,
+              processLocation: useSpinner ? 'thread_spinner' : 'hand',
+            },
           },
         },
       },
@@ -5625,6 +6258,12 @@ export function validateAction(state, rawAction, options = {}) {
     validationResult = validateTrapCheckAction(state, action, actor);
   } else if (action.kind === 'trap_bait') {
     validationResult = validateTrapBaitAction(state, action, actor);
+  } else if (action.kind === 'trap_retrieve') {
+    validationResult = validateTrapRetrieveAction(state, action, actor);
+  } else if (action.kind === 'trap_pickup') {
+    validationResult = validateTrapPickupAction(state, action, actor);
+  } else if (action.kind === 'trap_remove_bait') {
+    validationResult = validateTrapRemoveBaitAction(state, action, actor);
   } else if (action.kind === 'marker_place') {
     validationResult = validateMarkerPlaceAction(state, action, actor);
   } else if (action.kind === 'marker_remove') {
@@ -5687,6 +6326,8 @@ export function validateAction(state, rawAction, options = {}) {
     validationResult = validateUnequipItemAction(state, action, actor);
   } else if (action.kind === 'partner_task_set') {
     validationResult = validatePartnerTaskSetAction(state, action);
+  } else if (action.kind === 'partner_queue_reorder') {
+    validationResult = validatePartnerQueueReorderAction(state, action);
   } else if (action.kind === 'debrief_enter') {
     validationResult = validateDebriefEnterAction(state, action, actor);
   } else if (action.kind === 'debrief_exit') {

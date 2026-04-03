@@ -39,6 +39,27 @@ export function annotateContextEntryTickBudget(entry, playerActor) {
   return next;
 }
 
+function contextMenuLabelOmitsTickSuffix(label) {
+  return typeof label === 'string' && label.trimEnd().endsWith('...');
+}
+
+/**
+ * Action label with tick suffix, matching tile context menu (e.g. "Eat (2t)", "Inspect Drying Rack (0t)").
+ * Labels ending with "..." (station sub-flows) show no suffix.
+ */
+export function formatContextMenuActionWithTickCost(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return '';
+  }
+  const label = typeof entry.label === 'string' ? entry.label : String(entry.kind || '');
+  if (contextMenuLabelOmitsTickSuffix(label)) {
+    return label;
+  }
+  const raw = Number(entry.tickCost);
+  const ticks = Number.isFinite(raw) ? raw : 0;
+  return `${label} (${ticks}t)`;
+}
+
 export function formatWeightLabel(valueKg) {
   const numeric = Number(valueKg);
   if (!Number.isFinite(numeric)) return '0g';

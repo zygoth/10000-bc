@@ -4,6 +4,10 @@ import {
   TECH_FOREST_FILTER_GROUPS,
   TECH_RESEARCH_TASK_KIND,
 } from '../../../game/techResearchCatalog.mjs';
+import {
+  getTechForestChildResearchBlocker,
+  isTechResearchDisplayComplete,
+} from '../../../game/techForestGen.mjs';
 
 function collectQueuedTechKeys(activeTask, pendingTasks) {
   const keys = new Set();
@@ -26,6 +30,8 @@ function collectQueuedTechKeys(activeTask, pendingTasks) {
 export default function TechForestOverlay({
   techForest,
   techUnlocks,
+  techUnlockVisionGranted = null,
+  techUnlockPartnerResearch = null,
   queueActiveTask,
   queuePendingTasks,
   onQueueTechResearch,
@@ -45,6 +51,18 @@ export default function TechForestOverlay({
     [techForest],
   );
 
+  const techDisplaySources = useMemo(
+    () => ({
+      visionGranted: techUnlockVisionGranted && typeof techUnlockVisionGranted === 'object'
+        ? techUnlockVisionGranted
+        : null,
+      partnerResearched: techUnlockPartnerResearch && typeof techUnlockPartnerResearch === 'object'
+        ? techUnlockPartnerResearch
+        : null,
+    }),
+    [techUnlockVisionGranted, techUnlockPartnerResearch],
+  );
+
   const nodeMatchesFilter = useCallback((unlockKey) => {
     if (filterId === 'all') {
       return true;
@@ -60,18 +78,40 @@ export default function TechForestOverlay({
 
   const describeNodeStatus = useCallback((node) => {
     const { unlockKey, parentUnlockKey } = node;
-    if (techUnlocks?.[unlockKey] === true) {
+    if (isTechResearchDisplayComplete(techForest, techUnlocks, unlockKey, techDisplaySources)) {
       return { label: 'Researched', className: 'tech-forest-status--done' };
     }
-    if (parentUnlockKey && techUnlocks?.[parentUnlockKey] !== true) {
-      const parentMeta = getTechResearchMeta(parentUnlockKey);
+    if (techUnlocks?.[unlockKey] === true) {
       return {
-        label: `Locked — requires ${parentMeta.label || parentUnlockKey}`,
-        className: 'tech-forest-status--locked',
+        label: 'Insight — finish prerequisite research first',
+        className: 'tech-forest-status--avail',
       };
     }
+    if (parentUnlockKey) {
+      const childBlock = getTechForestChildResearchBlocker(
+        techForest,
+        techUnlocks,
+        parentUnlockKey,
+        techDisplaySources.visionGranted,
+        techDisplaySources.partnerResearched,
+      );
+      if (childBlock) {
+        if (childBlock.reason === 'vision_parent') {
+          const pMeta = getTechResearchMeta(childBlock.blockerKey);
+          return {
+            label: `Locked — research ${pMeta.label || childBlock.blockerKey} at camp (vision alone does not open this branch)`,
+            className: 'tech-forest-status--locked',
+          };
+        }
+        const blockerMeta = getTechResearchMeta(childBlock.blockerKey);
+        return {
+          label: `Locked — requires ${blockerMeta.label || childBlock.blockerKey}`,
+          className: 'tech-forest-status--locked',
+        };
+      }
+    }
     return { label: 'Available', className: 'tech-forest-status--avail' };
-  }, [techUnlocks]);
+  }, [techForest, techUnlocks, techDisplaySources]);
 
   let selectedNode = null;
   if (selectedKey && techForest?.byUnlockKey?.[selectedKey]) {
@@ -84,10 +124,28 @@ export default function TechForestOverlay({
     }
   }
 
+  const childBlockForSelected = selectedNode?.parentUnlockKey
+    ? getTechForestChildResearchBlocker(
+      techForest,
+      techUnlocks,
+      selectedNode.parentUnlockKey,
+      techDisplaySources.visionGranted,
+      techDisplaySources.partnerResearched,
+    )
+    : null;
+
+  const solidifyVisionTarget = selectedNode
+    && techUnlocks?.[selectedNode.unlockKey] === true
+    && techDisplaySources.visionGranted?.[selectedNode.unlockKey] === true
+    && techDisplaySources.partnerResearched?.[selectedNode.unlockKey] !== true;
+
   const canQueueSelected = selectedNode
-    && techUnlocks?.[selectedNode.unlockKey] !== true
-    && (!selectedNode.parentUnlockKey || techUnlocks?.[selectedNode.parentUnlockKey] === true)
-    && !queuedKeys.has(selectedNode.unlockKey);
+    && !childBlockForSelected
+    && !queuedKeys.has(selectedNode.unlockKey)
+    && (
+      solidifyVisionTarget
+      || techUnlocks?.[selectedNode.unlockKey] !== true
+    );
 
   return (
     <div
@@ -145,7 +203,7 @@ export default function TechForestOverlay({
                         <span className="tech-forest-node-ticks">{node.researchTicks} ticks</span>
                         <span className={`tech-forest-status ${status.className}`}>{status.label}</span>
                         {queued ? <span className="tech-forest-badge">Queued</span> : null}
-                        {techUnlocks?.[node.unlockKey] === true ? (
+                        {isTechResearchDisplayComplete(techForest, techUnlocks, node.unlockKey, techDisplaySources) ? (
                           <span className="tech-forest-badge tech-forest-badge--done">Complete</span>
                         ) : null}
                       </button>

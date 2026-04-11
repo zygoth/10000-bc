@@ -100,6 +100,11 @@ describe('gameModeChrome display logic', () => {
     expect(formatContextMenuActionWithTickCost({ label: 'Workbench Process...', tickCost: 0 })).toBe('Workbench Process...');
   });
 
+  test('formatContextMenuActionWithTickCost omits suffix for dig (parameterized tick count)', () => {
+    expect(formatContextMenuActionWithTickCost({ kind: 'dig', label: 'dig', tickCost: 0 })).toBe('dig');
+    expect(formatContextMenuActionWithTickCost({ kind: 'dig', label: 'dig', tickCost: 99 })).toBe('dig');
+  });
+
   test('annotateContextEntryTickBudget merges pass-out reason with existing disabledReason', () => {
     const player = { tickBudgetCurrent: 2, tickBudgetBase: 200 };
     const out = annotateContextEntryTickBudget({

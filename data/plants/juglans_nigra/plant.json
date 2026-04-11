@@ -12,7 +12,7 @@
   "longevity": "perennial",
   "soil": {
     "ph_range": [
-      6.0,
+      6,
       7.5
     ],
     "drainage": {
@@ -24,7 +24,7 @@
     "fertility": {
       "tolerance_range": [
         0.5,
-        1.0
+        1
       ]
     },
     "moisture": {
@@ -35,7 +35,7 @@
     },
     "shade": {
       "tolerance_range": [
-        0.0,
+        0,
         0.2
       ]
     }
@@ -182,14 +182,14 @@
           },
           "field_description": "Long compound leaves with many small leaflets. Strong spicy-citrus scent when crushed.",
           "game_description": "Contains strong tannins and juglone. Inedible, but can be crushed for a mild antibacterial poultice.",
-          "edibility_score": 0.0,
+          "edibility_score": 0,
           "edibility_harshness": 0.8,
-          "unit_weight_g": 5.0,
+          "unit_weight_g": 5,
           "nutrition": {
             "calories": 0.05,
-            "protein": 0.0,
+            "protein": 0,
             "carbs": 0.01,
-            "fat": 0.0
+            "fat": 0
           },
           "texture": "fibrous",
           "taste_notes": [
@@ -201,9 +201,8 @@
             "citrus",
             "spicy"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 0.5,
@@ -229,10 +228,10 @@
           "harvest_damage": 0.05,
           "regrowth_days": 15,
           "regrowth_max_harvests": 1,
-          "decay_days": 3.0,
+          "decay_days": 3,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         },
         {
           "id": "yellow",
@@ -242,7 +241,7 @@
           },
           "field_description": "Yellow, drying compound leaves preparing to drop from the tree.",
           "game_description": "Drying leaves with diminished potency. Largely useless.",
-          "edibility_score": 0.0,
+          "edibility_score": 0,
           "edibility_harshness": 0.6,
           "potency_multiplier": 0.1,
           "reach_tier": "canopy",
@@ -263,7 +262,7 @@
             "elevated_action_fraction": 0.1
           },
           "harvest_damage": 0.05,
-          "decay_days": 5.0,
+          "decay_days": 5,
           "can_dry": true
         }
       ]
@@ -286,14 +285,14 @@
           },
           "field_description": "Stout, dark brown branches bearing prominent leaf scars.",
           "game_description": "Strong, heavy wood that is excellent for structural components and sturdy tool handles.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 1000.0,
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 1000,
           "nutrition": {
-            "calories": 0.0,
-            "protein": 0.0,
-            "carbs": 0.0,
-            "fat": 0.0
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
           },
           "texture": "woody",
           "taste_notes": [],
@@ -301,17 +300,16 @@
             "earthy",
             "dry"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [
             "stiff_stick"
           ],
           "ingestion": null,
-          "potency_multiplier": 0.0,
+          "potency_multiplier": 0,
           "harvest_base_ticks": 2,
           "harvest_tool_modifiers": {
-            "axe": 3.0,
+            "axe": 3,
             "knife": 1.2
           },
           "harvest_yield": {
@@ -330,10 +328,10 @@
           "harvest_damage": 0.1,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 360.0,
+          "decay_days": 360,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         }
       ]
     },
@@ -354,15 +352,15 @@
             "end": "winter"
           },
           "field_description": "Thick, deeply furrowed dark bark forming an interlacing diamond pattern.",
-          "game_description": "Rich in tannins and juglone. Can be used for a dark dye or a medicinal tea.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 50.0,
+          "game_description": "Thick protective bark that can be stripped in sheets. Rich in tannins and juglone; not edible.",
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 50,
           "nutrition": {
-            "calories": 0.0,
-            "protein": 0.0,
-            "carbs": 0.0,
-            "fat": 0.0
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
           },
           "texture": "woody",
           "taste_notes": [
@@ -371,12 +369,13 @@
           "scent_notes": [
             "earthy"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
-          "craft_tags": [],
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
+          "craft_tags": [
+            "bark_sheet"
+          ],
           "ingestion": null,
-          "potency_multiplier": 1.0,
+          "potency_multiplier": 1,
           "harvest_base_ticks": 10,
           "harvest_tool_modifiers": {
             "axe": 1.5,
@@ -396,10 +395,146 @@
           "harvest_damage": 0.3,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 300.0,
+          "decay_days": 300,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
+        }
+      ]
+    },
+    {
+      "name": "inner_bark",
+      "available_life_stages": [
+        "sapling",
+        "mature_vegetative",
+        "mature_fruiting",
+        "mature_seed_set",
+        "mature_dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "spring_cambium",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "A moist, pale cambium layer just beneath the bark, with a sharp walnut scent.",
+          "game_description": "Most edible during spring sap flow, but still bitter and harsh. Carries juglone effects at lower potency than husk.",
+          "edibility_score": 0.12,
+          "edibility_harshness": 0.95,
+          "unit_weight_g": 20,
+          "nutrition": {
+            "calories": 16,
+            "protein": 0.2,
+            "carbs": 3.2,
+            "fat": 0.1
+          },
+          "texture": "moist fibrous",
+          "taste_notes": [
+            "bitter",
+            "astringent",
+            "woody"
+          ],
+          "scent_notes": [
+            "green wood",
+            "spicy",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 8,
+          "fiber_strength_modifier": 0.6,
+          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.8,
+          "harvest_base_ticks": 8,
+          "harvest_tool_modifiers": {
+            "axe": 1.5,
+            "knife": 1.4
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              3,
+              8
+            ]
+          },
+          "reach_tier": "ground",
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 3,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.25,
+          "raw_extraction_efficiency": 0.2,
+          "cooked_edibility_score": 0.18,
+          "cooked_harshness": 0.75,
+          "cooking_detoxifies": false
+        },
+        {
+          "id": "late_season_inner_bark",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "winter"
+          },
+          "field_description": "Drier, stringier inner bark strips with less sap and a stronger bitter walnut odor.",
+          "game_description": "Past cambium peak. Less edible, more fibrous, and chemically harsher than spring cambium.",
+          "edibility_score": 0.05,
+          "edibility_harshness": 1,
+          "unit_weight_g": 20,
+          "nutrition": {
+            "calories": 8,
+            "protein": 0.1,
+            "carbs": 1.6,
+            "fat": 0
+          },
+          "texture": "dry fibrous",
+          "taste_notes": [
+            "very bitter",
+            "astringent",
+            "woody"
+          ],
+          "scent_notes": [
+            "earthy",
+            "tannic",
+            "spicy"
+          ],
+          "average_fiber_length_cm": 12,
+          "fiber_strength_modifier": 0.8,
+          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 1.3,
+          "harvest_base_ticks": 8,
+          "harvest_tool_modifiers": {
+            "axe": 1.5,
+            "knife": 1.4
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              3,
+              8
+            ]
+          },
+          "reach_tier": "ground",
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 5,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.05,
+          "raw_extraction_efficiency": 0.05,
+          "cooked_edibility_score": 0.08,
+          "cooked_harshness": 0.9,
+          "cooking_detoxifies": false
         }
       ]
     },
@@ -422,23 +557,22 @@
           },
           "field_description": "A thick, deep taproot branching into dark, heavy lateral roots.",
           "game_description": "Tough, woody roots. Inedible and exceptionally difficult to dig up.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 500.0,
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 500,
           "nutrition": {
-            "calories": 0.0,
-            "protein": 0.0,
-            "carbs": 0.0,
-            "fat": 0.0
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
           },
           "texture": "woody",
           "taste_notes": [],
           "scent_notes": [
             "earthy"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 0.5,
@@ -458,10 +592,10 @@
           "regrowth_days": null,
           "regrowth_max_harvests": null,
           "dig_ticks_to_discover": 45,
-          "decay_days": 100.0,
+          "decay_days": 100,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         }
       ]
     },
@@ -480,11 +614,11 @@
           },
           "field_description": "A large, heavy, bright green sphere. The thick fleshy husk smells sharply of citrus and spice.",
           "game_description": "The thick green husk surrounds a hard shell and must be extracted before cracking. The green husk is highly toxic to eat but can be used as a strong medicinal poultice or dye. Extremely staining.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 100.0,
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 100,
           "nutrition": {
-            "calories": 33.0,
+            "calories": 33,
             "protein": 1.2,
             "carbs": 0.7,
             "fat": 3.3
@@ -498,12 +632,12 @@
                 {
                   "part": "husked_nut",
                   "yield_fraction": 0.25,
-                  "output_unit_weight_g": 25.0
+                  "output_unit_weight_g": 25
                 },
                 {
                   "part": "husk",
                   "yield_fraction": 0.75,
-                  "output_unit_weight_g": 75.0
+                  "output_unit_weight_g": 75
                 }
               ]
             }
@@ -517,12 +651,11 @@
             "pungent",
             "citrus"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
-          "potency_multiplier": 2.0,
+          "potency_multiplier": 2,
           "harvest_base_ticks": 2,
           "harvest_tool_modifiers": {},
           "harvest_yield": {
@@ -536,15 +669,15 @@
             ]
           },
           "reach_tier": "canopy",
-          "harvest_damage": 0.0,
+          "harvest_damage": 0,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 10.0,
+          "decay_days": 10,
           "can_dry": false,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0,
-          "cooked_edibility_score": 0.0,
-          "cooked_harshness": 1.0,
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0,
+          "cooked_edibility_score": 0,
+          "cooked_harshness": 1,
           "cooking_detoxifies": false
         },
         {
@@ -555,9 +688,9 @@
           },
           "field_description": "A dark brown to black, mushy or dried spherical husk. It smells pungent and earthy.",
           "game_description": "The black husk surrounds a hard shell. Must be extracted before cracking. The rotting husk stains intensely.",
-          "edibility_score": 0.0,
+          "edibility_score": 0,
           "edibility_harshness": 0.9,
-          "potency_multiplier": 1.0,
+          "potency_multiplier": 1,
           "reach_tier": "canopy",
           "harvest_yield": {
             "units_per_action": [
@@ -569,8 +702,8 @@
               30
             ]
           },
-          "harvest_damage": 0.0,
-          "decay_days": 20.0,
+          "harvest_damage": 0,
+          "decay_days": 20,
           "can_dry": true
         }
       ]
@@ -583,11 +716,11 @@
           "id": "whole",
           "field_description": "A very hard, heavily ridged, dark brown nut shell.",
           "game_description": "Extremely difficult to crack open. Requires a mortar and pestle or heavy tool. Contains calorie-dense, oily nut meat.",
-          "edibility_score": 0.0,
+          "edibility_score": 0,
           "edibility_harshness": 0.5,
-          "unit_weight_g": 25.0,
+          "unit_weight_g": 25,
           "nutrition": {
-            "calories": 33.0,
+            "calories": 33,
             "protein": 1.2,
             "carbs": 0.7,
             "fat": 3.3
@@ -601,12 +734,12 @@
                 {
                   "part": "walnut_meat",
                   "yield_fraction": 0.2,
-                  "output_unit_weight_g": 5.0
+                  "output_unit_weight_g": 5
                 },
                 {
                   "part": "nutshell",
                   "yield_fraction": 0.8,
-                  "output_unit_weight_g": 20.0
+                  "output_unit_weight_g": 20
                 }
               ]
             }
@@ -618,12 +751,11 @@
           "scent_notes": [
             "dry"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
-          "potency_multiplier": 0.0,
+          "potency_multiplier": 0,
           "harvest_base_ticks": null,
           "harvest_tool_modifiers": {},
           "harvest_yield": null,
@@ -631,10 +763,10 @@
           "regrowth_days": null,
           "regrowth_max_harvests": null,
           "can_squirrel_cache": true,
-          "decay_days": 300.0,
+          "decay_days": 300,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         }
       ]
     },
@@ -646,11 +778,11 @@
           "id": "raw",
           "field_description": "Rich, oily, intricately folded nut meat. Darker than most nuts.",
           "game_description": "Highly nutritious, oily, and calorie-dense. Excellent raw or cooked. Stores very well once extracted.",
-          "edibility_score": 1.0,
-          "edibility_harshness": 0.0,
-          "unit_weight_g": 5.0,
+          "edibility_score": 1,
+          "edibility_harshness": 0,
+          "unit_weight_g": 5,
           "nutrition": {
-            "calories": 33.0,
+            "calories": 33,
             "protein": 1.2,
             "carbs": 0.7,
             "fat": 3.3
@@ -665,22 +797,21 @@
             "nutty",
             "oily"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
-          "potency_multiplier": 0.0,
+          "potency_multiplier": 0,
           "harvest_base_ticks": null,
           "harvest_tool_modifiers": {},
           "harvest_yield": null,
           "harvest_damage": null,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 120.0,
+          "decay_days": 120,
           "can_dry": true,
-          "stew_nutrition_factor": 1.0,
-          "raw_extraction_efficiency": 1.0
+          "stew_nutrition_factor": 1,
+          "raw_extraction_efficiency": 1
         }
       ]
     },
@@ -692,14 +823,14 @@
           "id": "raw",
           "field_description": "Chunks of thick, fibrous green or black husk. Stains everything it touches a dark brown.",
           "game_description": "Highly astringent and toxic to consume. Can be used to make a medicinal poultice or dark dye.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 75.0,
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 75,
           "nutrition": {
-            "calories": 0.0,
-            "protein": 0.0,
-            "carbs": 0.0,
-            "fat": 0.0
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
           },
           "texture": "fleshy",
           "taste_notes": [
@@ -710,22 +841,21 @@
             "pungent",
             "citrus"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [],
           "ingestion": null,
-          "potency_multiplier": 2.0,
+          "potency_multiplier": 2,
           "harvest_base_ticks": null,
           "harvest_tool_modifiers": {},
           "harvest_yield": null,
           "harvest_damage": null,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 15.0,
+          "decay_days": 15,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         }
       ]
     },
@@ -737,14 +867,14 @@
           "id": "broken",
           "field_description": "Thick, woody, deeply ridged shell fragments.",
           "game_description": "Inedible. The hard woody fragments make decent, slow-burning tinder.",
-          "edibility_score": 0.0,
-          "edibility_harshness": 1.0,
-          "unit_weight_g": 20.0,
+          "edibility_score": 0,
+          "edibility_harshness": 1,
+          "unit_weight_g": 20,
           "nutrition": {
-            "calories": 0.0,
-            "protein": 0.0,
-            "carbs": 0.0,
-            "fat": 0.0
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
           },
           "texture": "hard",
           "taste_notes": [
@@ -753,24 +883,23 @@
           "scent_notes": [
             "dry"
           ],
-          "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,
-          "fiberous": false,
+          "average_fiber_length_cm": 0,
+          "fiber_strength_modifier": 0,
           "craft_tags": [
             "tinder"
           ],
           "ingestion": null,
-          "potency_multiplier": 0.0,
+          "potency_multiplier": 0,
           "harvest_base_ticks": null,
           "harvest_tool_modifiers": {},
           "harvest_yield": null,
           "harvest_damage": null,
           "regrowth_days": null,
           "regrowth_max_harvests": null,
-          "decay_days": 500.0,
+          "decay_days": 500,
           "can_dry": true,
-          "stew_nutrition_factor": 0.0,
-          "raw_extraction_efficiency": 0.0
+          "stew_nutrition_factor": 0,
+          "raw_extraction_efficiency": 0
         }
       ]
     }

@@ -69,6 +69,7 @@ import {
   CONTEXT_MENU_PASS_OUT_TICK_REASON,
   formatContextMenuActionWithTickCost,
 } from './ui/gameModeChrome/GameModeChromeDisplayLogic.js';
+import { listWorkbenchToolCraftStationEntries } from './ui/gameModeChrome/playerTileToolCraft.mjs';
 import { getTileContextMenuEntries } from './ui/gameModeChrome/TileContextMenuDisplayLogic.js';
 import DryingRackGrid from './ui/gameModeChrome/components/DryingRackGrid.jsx';
 import CarrotPartSpriteProbe from './ui/CarrotPartSpriteProbe.jsx';
@@ -252,7 +253,7 @@ function stationActionLabel(stationId) {
   if (stationId === 'mortar_pestle') return 'Grind Item...';
   if (stationId === 'sugar_boiling_station') return 'Boil Sap...';
   if (stationId === 'hide_frame') return 'Scrape/Dry Item...';
-  if (stationId === 'workbench') return 'Workbench Process...';
+  if (stationId === 'workbench') return 'Workbench (process & craft)...';
   if (stationId === 'drying_rack') return 'Dry Item...';
   return `Use ${formatTokenLabel(stationId)}...`;
 }
@@ -956,6 +957,21 @@ function resolveStationProcessTickCost(gameState, entry, quantity) {
     return null;
   }
   const qty = Math.max(1, Math.min(Number(entry.maxQuantity) || 1, Math.floor(Number(quantity) || 1)));
+  if (entry.actionKind === 'tool_craft') {
+    const recipeId = typeof entry.recipeId === 'string' ? entry.recipeId : '';
+    if (!recipeId) {
+      return null;
+    }
+    const validation = validateAction(gameState, {
+      actorId: 'player',
+      kind: 'tool_craft',
+      payload: { recipeId },
+    });
+    if (!validation.ok) {
+      return null;
+    }
+    return Number(validation.normalizedAction?.tickCost) || getActionTickCost('tool_craft', { recipeId });
+  }
   if (entry.actionKind === 'camp_drying_rack_add' || entry.actionKind === 'camp_drying_rack_add_inventory') {
     const payload = { itemId: entry.itemId, quantity: qty };
     const validation = validateAction(gameState, { actorId: 'player', kind: entry.actionKind, payload });
@@ -1654,6 +1670,23 @@ function App() {
       }
     };
 
+    if (stationProcessPanel.mode === 'pick_quantity' && stationProcessPanel.actionKind === 'tool_craft') {
+      const recipeId = typeof stationProcessPanel.recipeId === 'string' ? stationProcessPanel.recipeId : '';
+      if (recipeId) {
+        const label = typeof stationProcessPanel.label === 'string' && stationProcessPanel.label
+          ? stationProcessPanel.label
+          : `Craft ${formatTokenLabel(recipeId)}`;
+        return [{
+          source: stationProcessPanel.source || 'tool_recipe',
+          stationId,
+          recipeId,
+          actionKind: 'tool_craft',
+          maxQuantity: 1,
+          label,
+          toolCraftPayload: stationProcessPanel.toolCraftPayload,
+        }];
+      }
+    }
     if (stationProcessPanel.mode === 'pick_quantity' && stationProcessPanel.itemId && stationProcessPanel.processId) {
       return [{
         source: stationProcessPanel.source || 'inventory',
@@ -1679,6 +1712,11 @@ function App() {
     }
     for (const itemEntry of campStockpileEntries) {
       pushStockpileCandidate(itemEntry);
+    }
+    if (stationId === 'workbench') {
+      for (const craftEntry of listWorkbenchToolCraftStationEntries(gameState)) {
+        results.push(craftEntry);
+      }
     }
     return results;
   }, [campStockpileEntries, gameState, playerInventoryEntries, stationProcessPanel]);
@@ -2226,6 +2264,27 @@ function App() {
     if (entry?.actionKind === 'camp_drying_rack_add' || entry?.actionKind === 'camp_drying_rack_add_inventory') {
       submitPlayerAction(entry.actionKind, { itemId: entry.itemId, quantity: safeQuantity });
       setActionComposerStatus(`Submitted: dry ${formatTokenLabel(entry.itemId)} x${safeQuantity}`);
+      setStationProcessPanel(null);
+      setStationProcessQuantity(1);
+      return;
+    }
+    if (entry?.actionKind === 'tool_craft') {
+      const recipeId = typeof entry.recipeId === 'string' ? entry.recipeId : '';
+      if (!recipeId) {
+        setActionComposerStatus('Blocked: tool craft missing recipe.');
+        return;
+      }
+      const validation = validateAction(gameState, {
+        actorId: 'player',
+        kind: 'tool_craft',
+        payload: { recipeId },
+      });
+      if (!validation.ok) {
+        setActionComposerStatus(typeof validation.message === 'string' ? validation.message : 'Cannot craft.');
+        return;
+      }
+      submitPlayerAction('tool_craft', validation.normalizedAction.payload);
+      setActionComposerStatus(`Submitted: craft ${formatTokenLabel(recipeId)}`);
       setStationProcessPanel(null);
       setStationProcessQuantity(1);
       return;
@@ -3378,14 +3437,36 @@ function App() {
             {stationProcessPanel.mode === 'pick_item' ? (
               <>
                 {stationProcessCandidateEntries.length === 0 ? (
-                  <p className="iso-context-menu-empty">No processable items in inventory/stockpile.</p>
+                  <p className="iso-context-menu-empty">
+                    {stationProcessPanel.stationId === 'workbench'
+                      ? 'No process options or craftable tools (check inventory, stockpile, and unlocks).'
+                      : 'No processable items in inventory/stockpile.'}
+                  </p>
                 ) : (
                   stationProcessCandidateEntries.map((entry, idx) => (
                     <button
-                      key={`station-candidate-${entry.source}-${entry.itemId}-${entry.processId}-${idx}`}
+                      key={
+                        entry.actionKind === 'tool_craft' && entry.recipeId
+                          ? `station-candidate-tool-${entry.recipeId}-${idx}`
+                          : `station-candidate-${entry.source}-${entry.itemId}-${entry.processId}-${idx}`
+                      }
                       type="button"
                       className="iso-context-menu-action"
                       onClick={() => {
+                        if (entry.actionKind === 'tool_craft') {
+                          setStationProcessPanel({
+                            mode: 'pick_quantity',
+                            stationId: entry.stationId,
+                            source: entry.source,
+                            recipeId: entry.recipeId,
+                            actionKind: 'tool_craft',
+                            maxQuantity: 1,
+                            label: entry.label,
+                            toolCraftPayload: entry.toolCraftPayload,
+                          });
+                          setStationProcessQuantity(1);
+                          return;
+                        }
                         setStationProcessPanel({
                           mode: 'pick_quantity',
                           stationId: entry.stationId,
@@ -3504,7 +3585,9 @@ function App() {
                       {stationProcessCandidateEntries[0].actionKind === 'camp_drying_rack_add'
                       || stationProcessCandidateEntries[0].actionKind === 'camp_drying_rack_add_inventory'
                         ? 'Add to rack'
-                        : 'Process'}
+                        : stationProcessCandidateEntries[0].actionKind === 'tool_craft'
+                          ? 'Craft'
+                          : 'Process'}
                     </button>
                   </>
                 ) : (

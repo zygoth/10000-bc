@@ -12,6 +12,7 @@ import {
   validateAction,
 } from '../../game/simCore.mjs';
 import { annotateContextEntryTickBudget } from './GameModeChromeDisplayLogic.js';
+import { listPlayerTileToolCraftEntries } from './playerTileToolCraft.mjs';
 
 function inventoryQuantityForItem(player, itemId) {
   const stacks = player?.inventory?.stacks;
@@ -123,6 +124,23 @@ function appendTrapInteractionEntries({
 
   const autoRod = selectedTileEntity.autoRod?.active === true ? selectedTileEntity.autoRod : null;
   if (!autoRod) {
+    const vCheckLand = validateAction(gameState, { actorId: 'player', kind: 'trap_check', payload });
+    if (vCheckLand.ok) {
+      let checkLabel = 'Check trap';
+      if (selectedTileEntity.simpleSnare?.active === true) {
+        checkLabel = 'Check snare';
+      } else if (selectedTileEntity.deadfallTrap?.active === true) {
+        checkLabel = 'Check deadfall';
+      } else if (selectedTileEntity.fishTrap?.active === true) {
+        checkLabel = 'Check fish weir';
+      }
+      entries.push({
+        kind: 'trap_check',
+        label: checkLabel,
+        tickCost: Number(vCheckLand.normalizedAction?.tickCost) || getActionTickCost('trap_check', payload),
+        payload: vCheckLand.normalizedAction.payload,
+      });
+    }
     return;
   }
 
@@ -354,6 +372,19 @@ export function getTileContextMenuEntries({
     if (kind === 'inspect' && !hasInspectablePlant && !hasInspectableTrap) {
       continue;
     }
+    if (kind === 'dig') {
+      const basePayload = buildDefaultPayload(kind, baseContext);
+      const v = validateAction(gameState, { actorId: 'player', kind: 'dig', payload: basePayload });
+      if (v.ok) {
+        entries.push({
+          kind: 'dig',
+          label: 'dig',
+          tickCost: 0,
+          payload: basePayload,
+        });
+      }
+      continue;
+    }
     const payload = buildDefaultPayload(kind, baseContext);
     const v = validateAction(gameState, { actorId: 'player', kind, payload });
     if (v.ok) {
@@ -449,6 +480,12 @@ export function getTileContextMenuEntries({
         source: 'tile',
       },
     });
+  }
+
+  const px = Number.isInteger(playerActor?.x) ? playerActor.x : null;
+  const py = Number.isInteger(playerActor?.y) ? playerActor.y : null;
+  if (Number.isInteger(selectedTileX) && Number.isInteger(selectedTileY) && px === selectedTileX && py === selectedTileY) {
+    entries.push(...listPlayerTileToolCraftEntries(gameState, playerActor));
   }
 
   return entries.map((e) => annotateContextEntryTickBudget(e, playerActor));

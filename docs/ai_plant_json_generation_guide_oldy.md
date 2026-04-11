@@ -123,7 +123,6 @@ This document contains all information needed to generate valid plant object JSO
           "scent_notes": ["string"],
           "average_fiber_length_cm": 0.0,
           "fiber_strength_modifier": 0.0,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -522,7 +521,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - Defaults to `1.0` if omitted (full extraction, no cooking benefit)
 - Typical range: 0.0-1.4 (can go higher if needed)
 - **Values <1.0**: Incomplete extraction dominates (whole pods, unshelled nuts, roots requiring grinding)
-  - `0.0` = cannot be eaten by boiling alone (whole dry honey locust pods with beans inside, fiberous stems)
+  - `0.0` = cannot be eaten by boiling alone (whole dry honey locust pods with beans inside, fibrous stems)
   - `0.05-0.3` = technically edible but yields almost nothing (cracked acorns still needing leaching)
 - **Value =1.0**: Neutral (full extraction, no cooking benefit) - berries, fruit, already-digestible items
 - **Values >1.0**: Cooking benefit dominates (cooking unlocks additional calories)
@@ -597,7 +596,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - >1.0 = high quality cordage material
 - <1.0 = weak fiber
 
-**`fiberous`** (bool, required)
+**`fibrous`** (bool, required)
 - `true` if this sub-stage has usable fiber content
 - `false` for most food parts
 
@@ -1141,7 +1140,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["fresh", "grassy"],
           "average_fiber_length_cm": 8.0,
           "fiber_strength_modifier": 0.4,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1200,7 +1198,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["dry", "nutty"],
           "average_fiber_length_cm": 15.5,
           "fiber_strength_modifier": 0.8,
-          "fiberous": true,
           "craft_tags": ["stiff_stick"],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1244,7 +1241,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["nutty"],
           "average_fiber_length_cm": 0.0,
           "fiber_strength_modifier": 0.0,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1282,7 +1278,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["dry", "earthy"],
           "average_fiber_length_cm": 2.5,
           "fiber_strength_modifier": 0.8,
-          "fiberous": true,
           "craft_tags": ["weaving_material"],
           "ingestion": null,
           "potency_multiplier": null,

@@ -29,6 +29,8 @@ This document contains all information needed to generate valid plant object JSO
 - Processing steps create distinct output items in the stockpile
 - All pharmacological data lives in the `ingestion` object
 - ALL plant parts should be defined--roots, stalks, shoots, leaves, flowers, buds, fruits, seeds, etc.
+- For woody species, model bark layers explicitly when applicable: `outer_bark` for protective/structural bark and `inner_bark` for cambium/inner phloem behavior.
+- Cambium quality is seasonal. If edibility, texture, craft utility, or pharmacology changes through the year, represent that with multiple `inner_bark` sub-stages.
 - Ticks: a tick can be thought of as about a minute of real time for the purposes of harvesting stuff. Enough time to pick a handful of berries or strip a few small plants of leaves.
 - **CRITICAL: All day values use IN-GAME DAYS throughout this document** — 1 in-game day ≈ 8 real-world days, 40 in-game days per year. This applies to `min_age_days`, `viable_lifespan_days`, `decay_days`, `regrowth_days`, and all other day-based properties.
 - **Calendar system:** The year runs from day 1 (start of spring) to day 40 (end of winter). Days 1-10 = spring, 11-20 = summer, 21-30 = fall, 31-40 = winter. When setting `seasonal_window` ranges, remember that day 1 is the first day of spring.
@@ -130,7 +132,6 @@ This document contains all information needed to generate valid plant object JSO
           "scent_notes": ["string"],
           "average_fiber_length_cm": 0.0,
           "fiber_strength_modifier": 0.0,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -481,6 +482,12 @@ Each part represents a harvestable component (leaf, root, fruit, bark, etc.)
 - Open-ended; define whatever parts the plant has
 - **For trees:** Use `"branch"` for woody material, NOT `"twig"` — twigs are too small to be useful in-game
 - **For shrubs/bushes:** Use `"stem"` or `"shoot"` depending on age and flexibility
+- **For barked woody species:** Prefer explicit `"outer_bark"` and `"inner_bark"` parts instead of one generic `"bark"` part when biology supports distinct layers.
+
+**Tree bark modeling (outer bark + cambium):**
+- `outer_bark` models the protective outer layer (typically `bark_sheet` craft utility, non-food).
+- `inner_bark` models the living cambium/inner phloem layer and should carry seasonal food/fiber/toxicity behavior through sub-stages.
+- Keep them as separate parts with separate harvest economics (`harvest_yield`, `harvest_damage`, `reach_tier`, etc.). Harvesting one does not imply the other is absent.
 
 **`available_life_stages`** (array of strings, required)
 - Which life stages this part can be harvested from
@@ -504,6 +511,8 @@ Each sub-stage represents a seasonal state of a part (green → ripe → dry, et
 2. Fields that actually change from the first sub-stage (e.g., `edibility_score`, `texture`, `nutrition`, `harvest_yield`, `craft_tags`, etc.)
 
 All other fields are automatically copied from the first sub-stage. This makes it trivial to create seasonal variations - for example, a "tough" leaf sub-stage only needs to override `edibility_score`, `texture`, and descriptions while inheriting everything else from the "young" sub-stage.
+
+**Cambium seasonality requirement:** If `inner_bark`/cambium is described as changing through the year (for example sweet spring cambium, fibrous late-season bark, or a secondary edible window in fall), you must model those as separate sub-stages with different `seasonal_window` values and updated edible/ingestion fields.
 
 **`id`** (string, required)
 - Sub-stage identifier: `"green"`, `"ripe"`, `"dry"`, `"young"`, `"mature"`, `"tough"`, `"tender"`, etc.
@@ -590,7 +599,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - Defaults to `1.0` if omitted (full extraction, no cooking benefit)
 - Typical range: 0.0-1.4 (can go higher if needed)
 - **Values <1.0**: Incomplete extraction dominates (whole pods, unshelled nuts, roots requiring grinding)
-  - `0.0` = cannot be eaten by boiling alone (whole dry honey locust pods with beans inside, fiberous stems)
+  - `0.0` = cannot be eaten by boiling alone (whole dry honey locust pods with beans inside, fibrous stems)
   - `0.05-0.3` = technically edible but yields almost nothing (cracked acorns still needing leaching)
 - **Value =1.0**: Neutral (full extraction, no cooking benefit) - berries, fruit, already-digestible items
 - **Values >1.0**: Cooking benefit dominates (cooking unlocks additional calories)
@@ -666,7 +675,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - >1.0 = high quality cordage material
 - <1.0 = weak fiber
 
-**`fiberous`** (bool, required)
+**`fibrous`** (bool, required)
 - `true` if this sub-stage has usable fiber content
 - `false` for most food parts
 
@@ -679,6 +688,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - Sub-stage-specific pharmacology override
 - `null` to inherit from top-level plant `ingestion`
 - See [Pharmacological System](#pharmacological-system)
+- For cambium-heavy species, prefer inheritance + `potency_multiplier` tuning per seasonal sub-stage instead of duplicating full ingestion objects.
 
 **`potency_multiplier`** (float or null, required)
 - Concentration multiplier for inherited `ingestion` profile. Remember to set this to 0 if this is obviously edible (like cherries or berries).
@@ -686,6 +696,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - 3.0 = 3× more potent (divide dose thresholds by 3)
 - 0.1 = nearly inert
 - 0 = use this for obviously edible parts of the plant that don't inherit any medicinal properties
+- For `inner_bark`/cambium, use seasonal multipliers when chemistry changes with sap flow and tissue age. Example pattern: spring cambium lower harshness/potency, late-season cambium higher bitterness or stronger toxic profile for species such as black walnut.
 
 **`harvest_base_ticks`** (int, required)
 - Base time to harvest this sub-stage. Usually 1 unless it's more difficult than picking some berries or cutting a stalk
@@ -919,6 +930,8 @@ For `contact_rash` harvest injuries (e.g., wild parsnip leaves), use `health_hit
 
 The game generates cordage and bark cloth directly from parts tagged with `cordage_fiber` and `inner_bark_cloth`. The `inner_bark_cloth` tag is assigned only to woody inner bark species — it never appears on herbaceous plants regardless of fiber quality. When a woody inner bark sub-stage carries both tags, the player can use that part to make either cordage (twisted/braided fiber) or bark cloth (pounded felted material). No separate processing outputs or intermediate items are needed in the plant JSON — the craft tags and fiber properties handle everything. Basswood and elm inner bark are the canonical sources with both tags.
 
+For species where cambium quality shifts seasonally, apply these tags to the specific `inner_bark` sub-stages where fiber quality is actually present. A spring cambium sub-stage can be food-leaning while a later sub-stage is fiber-leaning.
+
 **Important:** 
 - Tags are assigned at sub-stage level, not part level
 - Same part can have different tags at different life stages (green willow shoot = `flexible_shoot`, dead dry branch = `stiff_stick`)
@@ -1073,6 +1086,9 @@ Plus anything else that makes sense for the plant.
 34. **Harvest injury shape:** If `on_harvest_injury` is present on a sub-stage, it must have the same shape as `on_tile_entry_injury` but with `tool_probability_modifiers` instead of `equipment_probability_modifiers`. Only one of `equipment_probability_modifiers` / `tool_probability_modifiers` appears per object — never both.
 35. **Blickey harvest flag:** `does_blickey_help_harvest: true` must only appear on fruit, berry, or small-seed sub-stages. Do not set it on roots, bark, stems, pods, or nuts-in-shell.
 36. **Squirrel cache flag:** `can_squirrel_cache: true` must appear on the specific harvestable or processing-output sub-stage that a squirrel would store (shelled nuts, extracted beans). Do not set it on pods, husks, or other container parts.
+37. **Tree bark completeness:** For barked tree species, model both protective outer bark and inner bark/cambium unless there is a documented species-specific reason not to. Prefer `outer_bark` + `inner_bark` over a single generic bark part.
+38. **Cambium seasonal encoding:** If descriptions claim cambium seasonality (edibility, texture, medicinality, toxicity, or fiber shift), that seasonality must be encoded in `inner_bark.sub_stages` with explicit `seasonal_window` and changed values. Do not describe seasonal cambium behavior without modeling it.
+39. **Cambium ingestion intent:** If top-level `ingestion` is non-null and `inner_bark` is harvestable, set intended cambium potency behavior explicitly per sub-stage (`potency_multiplier: null`, numeric value, or `0`). Do not leave medicinal/toxic intent ambiguous.
 
 ### Field Interdependencies
 
@@ -1296,7 +1312,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["fresh", "grassy"],
           "average_fiber_length_cm": 8.0,
           "fiber_strength_modifier": 0.4,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1325,7 +1340,7 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "id": "dry",
           "seasonal_window": {
             "start": "late_summer",
-            "end": "fall"
+            "end": "late_fall"
           },
           "field_description": "A hard brown pod, twisted and brittle, rattling audibly when shaken.",
           "game_description": "Contains high-protein beans. Slow to extract by hand; mortar and pestle speeds the process. Dried beans store well through winter.",
@@ -1363,7 +1378,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["dry", "nutty"],
           "average_fiber_length_cm": 15.5,
           "fiber_strength_modifier": 0.8,
-          "fiberous": true,
           "craft_tags": ["stiff_stick"],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1407,7 +1421,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["nutty"],
           "average_fiber_length_cm": 0.0,
           "fiber_strength_modifier": 0.0,
-          "fiberous": false,
           "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1446,7 +1459,6 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
           "scent_notes": ["dry", "earthy"],
           "average_fiber_length_cm": 2.5,
           "fiber_strength_modifier": 0.8,
-          "fiberous": true,
           "craft_tags": ["weaving_material"],
           "ingestion": null,
           "potency_multiplier": null,
@@ -1464,6 +1476,74 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
   ]
 }
 ```
+
+---
+
+### Cambium-Focused Tree Snippet
+
+Use this pattern for species where cambium quality changes by season:
+
+```json
+{
+  "name": "inner_bark",
+  "available_life_stages": ["mature"],
+  "sub_stages": [
+    {
+      "id": "spring_cambium",
+      "seasonal_window": { "start": "early_spring", "end": "late_spring" },
+      "field_description": "A moist pale cambium layer just inside the bark, pliable and faintly sweet-smelling.",
+      "game_description": "Cambium is most edible during spring sap flow. It can be eaten raw in small amounts or added to stew.",
+      "edibility_score": 0.22,
+      "edibility_harshness": 0.75,
+      "unit_weight_g": 1.0,
+      "nutrition": { "calories": 0.8, "protein": 0.02, "carbs": 0.17, "fat": 0.01 },
+      "raw_extraction_efficiency": 0.7,
+      "stew_nutrition_factor": 1.05,
+      "texture": "moist fibrous",
+      "taste_notes": ["mild", "slightly sweet", "woody"],
+      "scent_notes": ["fresh sap", "green wood"],
+      "average_fiber_length_cm": 14.0,
+      "fiber_strength_modifier": 0.9,
+      "craft_tags": ["cordage_fiber"],
+      "ingestion": null,
+      "potency_multiplier": 0.6,
+      "harvest_base_ticks": 8,
+      "harvest_tool_modifiers": { "knife": 1.2, "axe": 1.4 },
+      "harvest_yield": {
+        "units_per_action": [80, 160],
+        "actions_until_depleted": [2, 4],
+        "ground_action_fraction": 0.15
+      },
+      "reach_tier": "elevated",
+      "harvest_damage": 0.45,
+      "regrowth_days": null,
+      "regrowth_max_harvests": null,
+      "on_harvest_injury": null,
+      "does_blickey_help_harvest": false,
+      "can_squirrel_cache": false,
+      "decay_days": 3.0,
+      "can_dry": false
+    },
+    {
+      "id": "late_season_inner_bark",
+      "seasonal_window": { "start": "early_fall", "end": "late_fall" },
+      "field_description": "Paler strips are drier and stringier, with less sap sheen than spring cambium.",
+      "game_description": "Less edible and more harsh than spring cambium; better treated as fiber material. In toxic species, late-season bark can carry stronger effects.",
+      "edibility_score": 0.1,
+      "edibility_harshness": 1.0,
+      "raw_extraction_efficiency": 0.25,
+      "stew_nutrition_factor": 0.5,
+      "average_fiber_length_cm": 20.0,
+      "fiber_strength_modifier": 1.2,
+      "craft_tags": ["cordage_fiber", "inner_bark_cloth"],
+      "potency_multiplier": 1.2,
+      "decay_days": 5.0
+    }
+  ]
+}
+```
+
+This uses sub-stage inheritance: the second sub-stage only overrides changed fields.
 
 ---
 
@@ -1487,6 +1567,7 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
    - When in doubt, err toward more stages — a missed visual distinction is a missed forager cue
    - Add `field_description` to each life stage
 4. **Create parts**: Exhaustively model the plant's anatomy. If the real plant has leaves, a stem, and roots, you must generate a leaf, stem, and root part. Do not skip parts just because they lack special craft tags or pharmacology.
+   - For woody species, explicitly evaluate bark layers and include `outer_bark` plus `inner_bark` (cambium) when biologically appropriate.
 5. **Define sub-stages** for seasonal variations
    - Add both `field_description` (always visible) and `game_description` (post-ID)
    - **Important:** In `game_description`, state facts not value judgments ("high in protein" not "excellent food")
@@ -1499,7 +1580,9 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
    - Add `dig_ticks_to_discover` only on underground parts
    - Add `on_harvest_injury` on sub-stages with thorn/sting/rash hazards during harvest
    - Set `does_blickey_help_harvest: true` on fruit, berry, and small-seed sub-stages
-   - Set `can_squirrel_cache: true` on the specific harvestable or output sub-stage a squirrel would store (nuts, extracted beans)
+    - Set `can_squirrel_cache: true` on the specific harvestable or output sub-stage a squirrel would store (nuts, extracted beans)
+    - For `inner_bark`, model cambium seasonality directly: spring edible windows, any fall edible windows, and late-season fiber/toxicity shifts.
+    - If plant `ingestion` is non-null, explicitly set cambium sub-stage potency intent with `potency_multiplier` values.
 6. **Assign craft tags** based on material properties
 7. **Set nutrition values** realistically
 8. **Add pharmacology** if plant has medicinal/toxic properties
@@ -1515,15 +1598,22 @@ For plants with medicinal, toxic, or hallucinogenic properties, populate the `in
 - **Craft tags** are the primary way plants interact with crafting recipes
 - **Processing steps** create distinct stockpile items via `processing_outputs` array
 - **Sub-stage variations** allow realistic seasonal changes (green → ripe → dry)
+- **Cambium modeling** belongs in `inner_bark` sub-stages; use seasonal windows to encode when cambium is edible vs fibrous/harsh and how potency shifts in medicinal/toxic species
 - **Pharmacology** is optional but adds depth to medicinal and toxic plants
 - **Description fields** are split: `field_description` (always visible) vs `game_description` (post-ID only)
 - **Output-only parts** (processing products) have `available_life_stages: []` and omit `seasonal_window`
 
 ---
 
-**Document Version:** 5.0  
+**Document Version:** 5.1  
 **Last Updated:** Based on GDD v1.61  
 **Source:** 10000 BC Game Design Document
+
+**Major Changes in v5.1:**
+- Added explicit tree cambium guidance: model barked woody species with `outer_bark` + `inner_bark` where appropriate.
+- Added seasonal cambium requirements in sub-stage guidance and validation rules (edibility/fiber/toxicity shifts must be encoded, not just described).
+- Added cambium pharmacology guidance using inherited `ingestion` + per-sub-stage `potency_multiplier` (including black-walnut-style seasonal potency shifts).
+- Added cambium-focused tree snippet showing valid seasonal enums and sub-stage inheritance.
 
 **Major Changes in v5.0 (GDD v1.61):**
 - Added `on_tile_entry_injury` top-level field: fires when player steps onto a plant tile; supports `scratch`, `sting`, and `contact_rash` types with `equipment_probability_modifiers` (`gloves`, `coat`)

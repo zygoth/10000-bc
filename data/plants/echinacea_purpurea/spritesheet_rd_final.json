@@ -1,0 +1,361 @@
+{
+  "textures": [
+    {
+      "image": "spritesheet_rd_final",
+      "format": "RGBA8888",
+      "size": {
+        "w": 256,
+        "h": 256
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "echinacea_purpurea_seedling.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_vegetative.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_flowering.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_seed_set.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_root_mature.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_leaf_green.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_flower_fresh.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_stalk_green.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_stalk_dry.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_seed_head_dry.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_seed_extracted.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_seedling.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 128,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_vegetative.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 0,
+            "y": 192,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_flowering.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 64,
+            "y": 192,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_seed_set.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 128,
+            "y": 192,
+            "w": 64,
+            "h": 64
+          }
+        },
+        {
+          "filename": "echinacea_purpurea_root_mature.png",
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 64,
+            "h": 64
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          },
+          "frame": {
+            "x": 192,
+            "y": 192,
+            "w": 64,
+            "h": 64
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "CompositeFinalSheet",
+    "version": "1.0",
+    "replacements": {
+      "6": 2,
+      "8": 5,
+      "9": 13
+    },
+    "total_sprites": 16
+  }
+}

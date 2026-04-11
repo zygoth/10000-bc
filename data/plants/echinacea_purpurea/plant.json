@@ -1,0 +1,565 @@
+{
+  "id": "echinacea_purpurea",
+  "name": "Purple Coneflower",
+  "plant_family": "asteraceae",
+  "physical_description": "An herbaceous perennial with rough, somewhat hairy stems. It features striking large flower heads with drooping purple-to-pink ray petals surrounding a prominent, spiky, dome-shaped orange-brown central cone.",
+  "game_description": "A highly valued medicinal plant. The roots and flower heads can be chewed or made into teas and poultices to boost immunity, treat wounds, and reduce fever, though they cause a distinct numbing and tingling sensation in the mouth.",
+  "age_of_maturity": 5,
+  "scent": {
+    "strength": 0.3,
+    "primary_compound": "caryophyllene"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      6.0,
+      8.0
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.3,
+        0.9
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.2,
+        0.8
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.2,
+        0.7
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.4
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "mid_fall",
+    "end": "late_fall"
+  },
+  "dispersal": {
+    "method": "gravity",
+    "base_radius_tiles": 2,
+    "wind_radius_bonus": 2,
+    "water_dispersed": false,
+    "animal_dispersed": true,
+    "seeds_per_mature_plant": [
+      20,
+      60
+    ],
+    "germination_rate": 0.35,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": true,
+    "viable_lifespan_days": 150
+  },
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "poultice",
+        "tea",
+        "chew"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 15,
+      "peak_ticks": 60,
+      "duration_ticks": 240,
+      "processing_ticks": 480
+    },
+    "dose_response": [
+      {
+        "min_grams": 5,
+        "max_grams": 20,
+        "treatment_tag": "antibacterial_poultice",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "wound_infection",
+            "modifier": 1.5
+          }
+        ]
+      },
+      {
+        "min_grams": 21,
+        "max_grams": 40,
+        "treatment_tag": "fever_tea",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "fever",
+            "modifier": 2.0
+          }
+        ]
+      },
+      {
+        "min_grams": 41,
+        "max_grams": null,
+        "treatment_tag": "analgesic",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "pain",
+            "modifier": 1.5
+          },
+          {
+            "type": "tick_loss",
+            "value": 10
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small cluster of rough, dark green oval leaves low to the ground."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 5,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 15
+      },
+      "size": 3,
+      "field_description": "A sturdy herbaceous plant with rough, bristly stems and lance-shaped green leaves."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 16,
+      "seasonal_window": {
+        "start_day": 16,
+        "end_day": 25
+      },
+      "size": 4,
+      "field_description": "Tall, stiff stems topped with large flowers featuring drooping purple-pink petals and a prominent spiky orange-brown central cone."
+    },
+    {
+      "stage": "seed_set",
+      "min_age_days": 26,
+      "seasonal_window": {
+        "start_day": 26,
+        "end_day": 35
+      },
+      "size": 4,
+      "field_description": "The petals have wilted and dropped, leaving dark, stiff, and prickly dome-shaped seed heads atop drying stalks."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 36,
+      "seasonal_window": {
+        "start_day": 36,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "The above-ground foliage has died back to the soil line; only the fibrous roots remain alive underground."
+    }
+  ],
+  "parts": [
+    {
+      "name": "root",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A dark, fibrous, and somewhat woody root mass. When scraped, it smells pungent and slightly sweet.",
+          "game_description": "The most medically potent part of the coneflower. Can be chewed raw to numb the mouth or prepared into strong poultices and teas. Far too woody and harsh for food.",
+          "edibility_score": 0.05,
+          "edibility_harshness": 0.8,
+          "unit_weight_g": 35.0,
+          "nutrition": {
+            "calories": 4.0,
+            "protein": 0.1,
+            "carbs": 0.8,
+            "fat": 0.0
+          },
+          "texture": "woody",
+          "taste_notes": [
+            "bitter",
+            "numbing",
+            "pungent"
+          ],
+          "scent_notes": [
+            "earthy",
+            "spicy"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.2,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 3.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 25,
+          "decay_days": 15.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.1
+        }
+      ]
+    },
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "mid_fall"
+          },
+          "field_description": "A rough, slightly hairy dark green leaf with a lance-like shape.",
+          "game_description": "Contains mild medicinal properties. Unpleasant to eat due to its bristly texture, but can be added to stews in a pinch or used for weak tea.",
+          "edibility_score": 0.3,
+          "edibility_harshness": 0.2,
+          "unit_weight_g": 2.5,
+          "nutrition": {
+            "calories": 0.05,
+            "protein": 0.01,
+            "carbs": 0.01,
+            "fat": 0.0
+          },
+          "texture": "hairy",
+          "taste_notes": [
+            "green",
+            "mildly numbing"
+          ],
+          "scent_notes": [
+            "grassy"
+          ],
+          "average_fiber_length_cm": 1.5,
+          "fiber_strength_modifier": 0.1,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              4,
+              8
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.2,
+          "regrowth_days": 7,
+          "regrowth_max_harvests": 2,
+          "decay_days": 3.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.0,
+          "cooked_edibility_score": 0.6,
+          "cooked_harshness": 0.1
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "fresh",
+          "seasonal_window": {
+            "start": "mid_summer",
+            "end": "early_fall"
+          },
+          "field_description": "A large, showy flower head with purple-pink ray petals surrounding a stiff, spiky orange-brown cone.",
+          "game_description": "Potent medicine. Contains strong immune-boosting compounds and produces a strong tingling effect when chewed. Highly effective in teas.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.4,
+          "unit_weight_g": 8.0,
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 0.0,
+            "carbs": 0.3,
+            "fat": 0.0
+          },
+          "texture": "spiky",
+          "taste_notes": [
+            "numbing",
+            "floral",
+            "bitter"
+          ],
+          "scent_notes": [
+            "sweet",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 2.0,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 3.5,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "stalk",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "mid_spring",
+            "end": "early_fall"
+          },
+          "field_description": "A tough, bristly green stem supporting the plant.",
+          "game_description": "Tough and fibrous. Contains trace medicinal properties but is mostly useless for food or high-quality medicine.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 0.5,
+          "unit_weight_g": 20.0,
+          "nutrition": {
+            "calories": 2.0,
+            "protein": 0.0,
+            "carbs": 0.4,
+            "fat": 0.0
+          },
+          "texture": "fibrous",
+          "taste_notes": [
+            "green",
+            "bitter"
+          ],
+          "scent_notes": [
+            "grassy"
+          ],
+          "average_fiber_length_cm": 8.0,
+          "fiber_strength_modifier": 0.3,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": 5,
+          "harvest_tool_modifiers": {
+            "knife": 2.0
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.5,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 1,
+          "decay_days": 5.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.1
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "mid_fall",
+            "end": "winter"
+          },
+          "field_description": "A brittle, stiff brown stalk, completely dried out by the autumn air.",
+          "game_description": "A dry, dead plant stalk. Too brittle for construction, but works as passable tinder.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "brittle",
+          "taste_notes": [
+            "dusty"
+          ],
+          "scent_notes": [
+            "dry"
+          ],
+          "craft_tags": [
+            "tinder"
+          ],
+          "decay_days": 46.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "seed_head",
+      "available_life_stages": [
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "mid_fall",
+            "end": "late_fall"
+          },
+          "field_description": "A stiff, prickly, dark brown cone packed with small seeds.",
+          "game_description": "The dried flower cone. Can be crushed by hand to extract the small seeds, or used whole for weak medicinal effects.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 0.6,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 4.0,
+            "protein": 0.2,
+            "carbs": 0.6,
+            "fat": 0.1
+          },
+          "processing_options": [
+            {
+              "id": "extract_seeds",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "seed",
+                  "yield_fraction": 0.3,
+                  "output_unit_weight_g": 0.1
+                }
+              ]
+            }
+          ],
+          "texture": "prickly",
+          "taste_notes": [
+            "dusty",
+            "faintly numbing"
+          ],
+          "scent_notes": [
+            "dry",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 46.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.1
+        }
+      ]
+    },
+    {
+      "name": "seed",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "extracted",
+          "field_description": "Tiny, elongated dark seeds with a slightly rough texture.",
+          "game_description": "Small edible seeds. Very tedious to gather in bulk for calories, but they store exceptionally well.",
+          "edibility_score": 0.6,
+          "edibility_harshness": 0.1,
+          "unit_weight_g": 0.1,
+          "nutrition": {
+            "calories": 0.4,
+            "protein": 0.02,
+            "carbs": 0.04,
+            "fat": 0.02
+          },
+          "texture": "hard",
+          "taste_notes": [
+            "nutty"
+          ],
+          "scent_notes": [
+            "faint"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 150.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.2
+        }
+      ]
+    }
+  ]
+}

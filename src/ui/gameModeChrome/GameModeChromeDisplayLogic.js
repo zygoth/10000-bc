@@ -46,12 +46,16 @@ function contextMenuLabelOmitsTickSuffix(label) {
 /**
  * Action label with tick suffix, matching tile context menu (e.g. "Eat (2t)", "Inspect Drying Rack (0t)").
  * Labels ending with "..." (station sub-flows) show no suffix.
+ * `dig` has no suffix — duration comes from the post-menu prompt (parameterized action).
  */
 export function formatContextMenuActionWithTickCost(entry) {
   if (!entry || typeof entry !== 'object') {
     return '';
   }
   const label = typeof entry.label === 'string' ? entry.label : String(entry.kind || '');
+  if (entry.kind === 'dig') {
+    return label;
+  }
   if (contextMenuLabelOmitsTickSuffix(label)) {
     return label;
   }

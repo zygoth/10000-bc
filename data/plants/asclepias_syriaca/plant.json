@@ -1,0 +1,729 @@
+{
+  "id": "asclepias_syriaca",
+  "name": "Common Milkweed",
+  "plant_family": "apocynaceae",
+  "physical_description": "A stout, upright herbaceous perennial with large, thick, broad, oppositely arranged leaves. Exudes a thick white milky sap when broken. Globular clusters of complex pinkish-purple flowers bloom in summer. Produces large teardrop-shaped green pods that dry and split to release flat seeds with silky white tufts.",
+  "game_description": "A highly versatile plant offering food, high-quality fiber, and superb insulation. Young shoots, leaves, and green pods are excellent food when boiled, but cooking is absolutely required to neutralize the toxic, bitter sap. Mature parts are too toxic even when cooked. The dead winter stalks yield superior cordage fiber, and the pod fluff is unmatched tinder and coat insulation.",
+  "age_of_maturity": 10,
+  "scent": {
+    "strength": 0.6,
+    "primary_compound": "linalool"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.0,
+        1.0
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.3,
+        0.9
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.3,
+        0.8
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.3
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "mid_fall",
+    "end": "late_fall"
+  },
+  "dispersal": {
+    "method": "wind",
+    "base_radius_tiles": 20,
+    "wind_radius_bonus": 10,
+    "water_dispersed": false,
+    "animal_dispersed": false,
+    "seeds_per_mature_plant": [
+      100,
+      300
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": true,
+    "pioneer": true,
+    "viable_lifespan_days": 240
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "tea"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 20,
+      "peak_ticks": 60,
+      "duration_ticks": 120,
+      "processing_ticks": 240
+    },
+    "dose_response": [
+      {
+        "min_grams": 10,
+        "max_grams": 50,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 30
+          }
+        ]
+      },
+      {
+        "min_grams": 51,
+        "max_grams": null,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 10
+          },
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.2
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small green shoot with a few oval leaves."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 10,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 3,
+      "field_description": "Full plant from soil line to top: one stout unbranched green stem with large thick oval leaves in opposite pairs; vegetative milkweed with leaves and stem only, no buds, flowers, or pods."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 11,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 18
+      },
+      "size": 4,
+      "field_description": "A stout stalk with large leaves and drooping umbels of complex, sweet-smelling pinkish-purple flowers."
+    },
+    {
+      "stage": "fruiting",
+      "min_age_days": 19,
+      "seasonal_window": {
+        "start_day": 19,
+        "end_day": 24
+      },
+      "size": 4,
+      "field_description": "A tall stalk bearing large teardrop-shaped green pods covered in soft bumps."
+    },
+    {
+      "stage": "seed_set",
+      "min_age_days": 25,
+      "seasonal_window": {
+        "start_day": 25,
+        "end_day": 30
+      },
+      "size": 4,
+      "field_description": "The large pods have dried, turning brown and beginning to split down one side to reveal tightly packed seeds and white fluff."
+    },
+    {
+      "stage": "senescent",
+      "min_age_days": 31,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 35
+      },
+      "size": 3,
+      "field_description": "A dead, dry, greyish stalk standing in the wind. Empty, split pod husks cling to the top."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 36,
+      "seasonal_window": {
+        "start_day": 36,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "Nothing remains above ground; only the deep rhizomes wait beneath the soil."
+    }
+  ],
+  "parts": [
+    {
+      "name": "shoot",
+      "available_life_stages": [
+        "vegetative"
+      ],
+      "sub_stages": [
+        {
+          "id": "young",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "mid_spring"
+          },
+          "field_description": "A single short tender thick green shoot emerging straight from visible soil with only small folded baby leaves at the tip; one young sprout, not a mature branched plant.",
+          "game_description": "Highly toxic and nauseating raw, but transforms into an excellent, mild vegetable when cooked in a stew.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "unit_weight_g": 25.0,
+          "nutrition": {
+            "calories": 7.5,
+            "protein": 0.8,
+            "carbs": 1.2,
+            "fat": 0.1
+          },
+          "texture": "tender",
+          "taste_notes": [
+            "bitter",
+            "milky"
+          ],
+          "scent_notes": [
+            "fresh",
+            "green"
+          ],
+          "average_fiber_length_cm": 5.0,
+          "fiber_strength_modifier": 0.5,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.5,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 1,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.85,
+          "cooked_harshness": 0.1
+        }
+      ]
+    },
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "young",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "early_summer"
+          },
+          "field_description": "Thick, downy, bright green leaves. A milky latex wells up immediately when torn.",
+          "game_description": "Toxic raw, but the youngest leaves become edible and nutritious if cooked.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "unit_weight_g": 3.0,
+          "nutrition": {
+            "calories": 1.0,
+            "protein": 0.1,
+            "carbs": 0.2,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [
+            "bitter"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.3,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              15
+            ],
+            "actions_until_depleted": [
+              3,
+              6
+            ]
+          },
+          "harvest_damage": 0.2,
+          "regrowth_days": 10,
+          "regrowth_max_harvests": 2,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.7,
+          "cooked_harshness": 0.2
+        },
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "mid_summer",
+            "end": "mid_fall"
+          },
+          "field_description": "Large, dark green, somewhat leathery leaves that snap crisply, leaking copious white sap.",
+          "game_description": "Too tough, bitter, and highly toxic to eat, even when cooked extensively.",
+          "cooked_edibility_score": 0.0,
+          "cooked_harshness": 1.0,
+          "potency_multiplier": 3.0,
+          "texture": "leathery",
+          "cooking_detoxifies": false
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "fresh",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "mid_summer"
+          },
+          "field_description": "A dense, heavy umbel of intricate pink and purple star-like flowers. Intensely fragrant.",
+          "game_description": "The flower clusters can be cooked down into a sweet, slightly thick addition to stews.",
+          "edibility_score": 0.3,
+          "edibility_harshness": 0.5,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 3.0,
+            "protein": 0.1,
+            "carbs": 0.6,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [
+            "sweet",
+            "floral"
+          ],
+          "scent_notes": [
+            "sweet",
+            "overpowering"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 2.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.2,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.85,
+          "cooked_harshness": 0.1
+        }
+      ]
+    },
+    {
+      "name": "pod",
+      "available_life_stages": [
+        "fruiting",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "early_fall"
+          },
+          "field_description": "A firm, pale green pod shaped like a teardrop, covered in soft, fleshy spikes. Small immature seeds inside.",
+          "game_description": "Firm and entirely inedible raw, but cooking the green pods transforms them into a mild, tender food similar to okra.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "unit_weight_g": 25.0,
+          "nutrition": {
+            "calories": 8.0,
+            "protein": 0.5,
+            "carbs": 1.5,
+            "fat": 0.1
+          },
+          "texture": "firm",
+          "taste_notes": [
+            "bitter"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.2,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {
+            "knife": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              2,
+              6
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 4.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.9,
+          "cooked_harshness": 0.05
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "mid_fall",
+            "end": "late_fall"
+          },
+          "field_description": "A large, brown, splitting pod packed tightly with hundreds of flat seeds and brilliant white, silky fluff.",
+          "game_description": "The dry pod has no food value, but breaking it open yields exceptional tinder and insulation material from the fluff.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 20.0,
+          "nutrition": {
+            "calories": 30.0,
+            "protein": 1.0,
+            "carbs": 3.0,
+            "fat": 1.0
+          },
+          "processing_options": [
+            {
+              "id": "extract_fluff",
+              "ticks": 20,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "seed",
+                  "yield_fraction": 0.3,
+                  "output_unit_weight_g": 0.1
+                },
+                {
+                  "part": "fluff",
+                  "yield_fraction": 0.2,
+                  "output_unit_weight_g": 0.1
+                },
+                {
+                  "part": "pod_husk",
+                  "yield_fraction": 0.5,
+                  "output_unit_weight_g": 10.0
+                }
+              ]
+            }
+          ],
+          "texture": "dry",
+          "taste_notes": [
+            "dusty"
+          ],
+          "scent_notes": [
+            "dusty"
+          ],
+          "decay_days": 90.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0,
+          "cooking_detoxifies": false,
+          "cooked_edibility_score": 0.0,
+          "cooked_harshness": 1.0
+        }
+      ]
+    },
+    {
+      "name": "stalk",
+      "available_life_stages": [
+        "senescent"
+      ],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "early_winter",
+            "end": "winter"
+          },
+          "field_description": "A tall, dead, greyish-white stalk. The outer skin is beginning to peel away in long, incredibly strong silver threads.",
+          "game_description": "Inedible. The dried winter stalk contains some of the strongest natural bast fibers available, perfect for twisting into durable cordage.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 50.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "woody",
+          "taste_notes": [],
+          "scent_notes": [
+            "dry"
+          ],
+          "average_fiber_length_cm": 25.0,
+          "fiber_strength_modifier": 1.8,          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5,
+            "axe": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "seed_set",
+        "senescent",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "rhizome",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A deeply buried, tough, creeping pale rhizome that rapidly oozes white latex when cut.",
+          "game_description": "Extremely bitter, woody, and intensely toxic. Provides no food or utility.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 40.0,
+          "nutrition": {
+            "calories": 20.0,
+            "protein": 0.5,
+            "carbs": 4.0,
+            "fat": 0.2
+          },
+          "texture": "woody",
+          "taste_notes": [
+            "acrid",
+            "bitter"
+          ],
+          "scent_notes": [
+            "earthy",
+            "pungent"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.4,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 5.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 25,
+          "decay_days": 15.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "seed",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "A small, flat, reddish-brown seed.",
+          "game_description": "Toxic and bitter, offering almost no calories. Not worth eating.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.1,
+          "nutrition": {
+            "calories": 0.5,
+            "protein": 0.01,
+            "carbs": 0.05,
+            "fat": 0.02
+          },
+          "texture": "hard",
+          "taste_notes": [
+            "bitter"
+          ],
+          "scent_notes": [],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 3.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 90.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "fluff",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "A brilliantly white, incredibly soft and weightless bundle of silky fibers.",
+          "game_description": "Inedible, but serves as peerless insulation for coats and catches a spark beautifully as tinder.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.1,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [],
+          "scent_notes": [],
+          "average_fiber_length_cm": 4.0,
+          "fiber_strength_modifier": 0.1,          "craft_tags": [
+            "insulation_material",
+            "tinder"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "pod_husk",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "One empty dry brittle curved brown milkweed pod shell after seeds have gone; no seeds, no white fluff, no seed mass visible.",
+          "game_description": "Inedible and largely useless, though it could be burned.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "papery",
+          "taste_notes": [],
+          "scent_notes": [
+            "dusty"
+          ],
+          "average_fiber_length_cm": 1.0,
+          "fiber_strength_modifier": 0.1,          "craft_tags": [
+            "tinder"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    }
+  ]
+}

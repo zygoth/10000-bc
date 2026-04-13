@@ -84,6 +84,22 @@ const ITEM_CATALOG_SOURCE = [
     },
   },
   {
+    id: 'pemmican',
+    name: 'Pemmican',
+    category: 'food',
+    unit_weight_g: 100,
+    decay_days: 40,
+    can_dry: false,
+    can_freeze: true,
+    field_edibility_score: 0.95,
+    nutrition: {
+      calories: 400,
+      protein: 20,
+      carbs: 5,
+      fat: 30,
+    },
+  },
+  {
     id: 'branch',
     name: 'Branch',
     category: 'intermediate',

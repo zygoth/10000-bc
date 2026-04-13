@@ -353,6 +353,9 @@ function normalizeInventory(inventory) {
       head: equipmentRaw?.head && typeof equipmentRaw.head === 'object'
         ? { ...equipmentRaw.head }
         : null,
+      basket: equipmentRaw?.basket && typeof equipmentRaw.basket === 'object'
+        ? { ...equipmentRaw.basket }
+        : null,
     },
   };
 }
@@ -392,6 +395,9 @@ function normalizeActors(actors, width, height) {
       natureSightAnimalSpeciesId: null,
       natureSightFishSpeciesId: null,
       visionRewardCounts: { plant: 0, tech: 0, sight: 0 },
+      sledAttached: false,
+      sledAttachedAtDay: null,
+      sledAttachedAtDayTick: null,
       inventory: normalizeInventory(null),
     },
     partner: {
@@ -414,6 +420,9 @@ function normalizeActors(actors, width, height) {
       natureSightAnimalSpeciesId: null,
       natureSightFishSpeciesId: null,
       visionRewardCounts: { plant: 0, tech: 0, sight: 0 },
+      sledAttached: false,
+      sledAttachedAtDay: null,
+      sledAttachedAtDayTick: null,
       inventory: normalizeInventory(null),
       taskQueue: normalizeTaskQueue(null),
     },
@@ -447,6 +456,18 @@ function normalizeActors(actors, width, height) {
       tickBudgetBase: Number.isFinite(Number(actor?.tickBudgetBase)) ? Math.max(0, Number(actor.tickBudgetBase)) : base.tickBudgetBase,
       tickBudgetCurrent: Number.isFinite(Number(actor?.tickBudgetCurrent)) ? Number(actor.tickBudgetCurrent) : base.tickBudgetCurrent,
       overdraftTicks: Number.isFinite(Number(actor?.overdraftTicks)) ? Math.max(0, Math.floor(Number(actor.overdraftTicks))) : base.overdraftTicks,
+      sledAttached: actor?.sledAttached === true,
+      sledAttachedAtDay: Number.isInteger(actor?.sledAttachedAtDay)
+        ? actor.sledAttachedAtDay
+        : base.sledAttachedAtDay,
+      sledAttachedAtDayTick: Number.isInteger(actor?.sledAttachedAtDayTick)
+        ? actor.sledAttachedAtDayTick
+        : base.sledAttachedAtDayTick,
+      sledCargo: {
+        stacks: Array.isArray(actor?.sledCargo?.stacks)
+          ? actor.sledCargo.stacks.map((entry) => ({ ...(entry || {}) }))
+          : [],
+      },
       visionNextDayTickPenalty: Number.isInteger(actor?.visionNextDayTickPenalty)
         ? Math.max(0, actor.visionNextDayTickPenalty)
         : base.visionNextDayTickPenalty,
@@ -802,6 +823,9 @@ function normalizeTileForLoad(tile) {
   const fallbackLegacyBand = legacyBandForWaterType(legacyWaterType);
   const normalized = {
     ...tile,
+    baseShade: 0,
+    shade: 0,
+    effectiveShadeForOccupant: 0,
     waterType: normalizedWaterType,
     markerStick: tile?.markerStick === true,
     dormantSeeds: normalizeDormantSeeds(tile.dormantSeeds),

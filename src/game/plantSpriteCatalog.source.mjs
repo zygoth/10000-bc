@@ -1,4 +1,235 @@
 const PLANT_SPRITE_CATALOG_SOURCE = {
+  "asclepias_syriaca": {
+    "imagePath": "/plant_sprites/asclepias_syriaca.png",
+    "atlasWidth": 320,
+    "atlasHeight": 320,
+    "lifeStageFrames": {
+      "seedling": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 47
+      },
+      "vegetative": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 59
+      },
+      "flowering": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 58
+      },
+      "fruiting": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 58
+      },
+      "seed_set": {
+        "x": 256,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 59
+      },
+      "senescent": {
+        "x": 0,
+        "y": 64,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 59
+      }
+    },
+    "partSubStageFrames": {
+      "shoot": {
+        "young": {
+          "x": 64,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 54
+        }
+      },
+      "leaf": {
+        "young": {
+          "x": 128,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 58
+        },
+        "mature": {
+          "x": 192,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 57
+        }
+      },
+      "flower": {
+        "fresh": {
+          "x": 256,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 57
+        }
+      },
+      "pod": {
+        "green": {
+          "x": 0,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 57
+        },
+        "dry": {
+          "x": 64,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 58
+        }
+      },
+      "stalk": {
+        "dry": {
+          "x": 128,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 58
+        }
+      },
+      "root": {
+        "rhizome": {
+          "x": 192,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 58
+        }
+      },
+      "seed": {
+        "dry": {
+          "x": 256,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 53
+        }
+      },
+      "fluff": {
+        "dry": {
+          "x": 0,
+          "y": 192,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 54
+        }
+      },
+      "pod_husk": {
+        "dry": {
+          "x": 64,
+          "y": 192,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 58
+        }
+      }
+    }
+  },
   "daucus_carota": {
     "imagePath": "/plant_sprites/daucus_carota.png",
     "atlasWidth": 256,
@@ -158,6 +389,159 @@ const PLANT_SPRITE_CATALOG_SOURCE = {
           "offsetY": 0,
           "anchorX": 32,
           "anchorY": 60
+        }
+      }
+    }
+  },
+  "echinacea_purpurea": {
+    "imagePath": "/plant_sprites/echinacea_purpurea.png",
+    "atlasWidth": 256,
+    "atlasHeight": 256,
+    "lifeStageFrames": {
+      "seedling": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 47
+      },
+      "vegetative": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 54
+      },
+      "flowering": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 62
+      },
+      "seed_set": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64,
+        "sourceW": 64,
+        "sourceH": 64,
+        "offsetX": 0,
+        "offsetY": 0,
+        "anchorX": 32,
+        "anchorY": 61
+      }
+    },
+    "partSubStageFrames": {
+      "root": {
+        "mature": {
+          "x": 0,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 61
+        }
+      },
+      "leaf": {
+        "green": {
+          "x": 64,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 47
+        }
+      },
+      "flower": {
+        "fresh": {
+          "x": 128,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 52
+        }
+      },
+      "stalk": {
+        "green": {
+          "x": 192,
+          "y": 64,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 54
+        },
+        "dry": {
+          "x": 0,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 60
+        }
+      },
+      "seed_head": {
+        "dry": {
+          "x": 64,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 54
+        }
+      },
+      "seed": {
+        "extracted": {
+          "x": 128,
+          "y": 128,
+          "w": 64,
+          "h": 64,
+          "sourceW": 64,
+          "sourceH": 64,
+          "offsetX": 0,
+          "offsetY": 0,
+          "anchorX": 32,
+          "anchorY": 44
         }
       }
     }

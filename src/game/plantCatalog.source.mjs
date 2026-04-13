@@ -781,7 +781,7 @@ const PLANT_CATALOG_SOURCE = [
           "start_day": 1,
           "end_day": 15
         },
-        "size": 3,
+        "size": 4,
         "field_description": "A tall, solid green stem covered in fine hairs rises from the lacy rosette of leaves."
       },
       {
@@ -791,7 +791,7 @@ const PLANT_CATALOG_SOURCE = [
           "start_day": 16,
           "end_day": 25
         },
-        "size": 3,
+        "size": 4,
         "field_description": "The hairy stem is topped with flat umbels of small white flowers, featuring a single dark purple flower in the center."
       },
       {
@@ -801,7 +801,7 @@ const PLANT_CATALOG_SOURCE = [
           "start_day": 26,
           "end_day": 35
         },
-        "size": 3,
+        "size": 4,
         "field_description": "The flower umbels have folded inward to form a concave 'bird's nest' shape, holding small bristly seeds. The stalk is browning."
       }
     ],
@@ -2800,11 +2800,11 @@ const PLANT_CATALOG_SOURCE = [
             "harvest_yield": {
               "units_per_action": [
                 1,
-                2
+                1
               ],
               "actions_until_depleted": [
                 1,
-                3
+                1
               ]
             },
             "harvest_damage": 0.8,
@@ -2836,6 +2836,16 @@ const PLANT_CATALOG_SOURCE = [
               "dusty"
             ],
             "potency_multiplier": 0.1,
+            "harvest_yield": {
+              "units_per_action": [
+                1,
+                1
+              ],
+              "actions_until_depleted": [
+                1,
+                1
+              ]
+            },
             "harvest_damage": 0.1,
             "regrowth_days": null,
             "regrowth_max_harvests": null,

@@ -339,6 +339,31 @@ export function getTileContextMenuEntries({
     });
   }
 
+  // Expand sled attach from ground: one action per sled stack on tile.
+  for (let wi = 0; wi < selectedTileWorldItems.length; wi += 1) {
+    const raw = selectedTileWorldItems[wi];
+    const item = selectedTileWorldItemEntries[wi];
+    if (!raw || !item || item.itemId !== 'tool:sled') {
+      continue;
+    }
+    const payload = {
+      x: selectedTileX,
+      y: selectedTileY,
+      source: 'ground',
+    };
+    const v = validateAction(gameState, { actorId: 'player', kind: 'sled_attach', payload });
+    if (!v.ok) {
+      continue;
+    }
+    entries.push({
+      kind: 'sled_attach',
+      label: 'Attach sled',
+      tickCost: Number(v.normalizedAction?.tickCost) || getActionTickCost('sled_attach', payload),
+      payload,
+    });
+    break;
+  }
+
   // All other context actions (not move, not harvest, not item_pickup — those are handled above)
   const hasInspectablePlant = Array.isArray(selectedTileEntity?.plantIds) && selectedTileEntity.plantIds.some((plantId) => {
     const plant = gameState?.plants?.[plantId];
@@ -388,16 +413,24 @@ export function getTileContextMenuEntries({
     const payload = buildDefaultPayload(kind, baseContext);
     const v = validateAction(gameState, { actorId: 'player', kind, payload });
     if (v.ok) {
-      entries.push({
-        kind,
-        label: kind === 'water_drink'
+        entries.push({
+          kind,
+          label: kind === 'water_drink'
           ? 'Drink from water'
           : kind === 'marker_place'
             ? 'Place marker stick'
             : kind === 'marker_remove'
               ? 'Remove marker stick'
+              : kind === 'sled_attach'
+                ? 'Attach sled'
+                : kind === 'sled_detach'
+                  ? 'Detach sled'
               : kind.replace(/_/g, ' '),
-        tickCost: Number(v.normalizedAction?.tickCost) || getActionTickCost(kind, payload),
+        tickCost: Number(v.normalizedAction?.tickCost)
+          || getActionTickCost(
+            kind,
+            kind === 'move' ? { ...payload, sledAttached: playerActor?.sledAttached === true } : payload,
+          ),
         payload,
       });
     }
@@ -490,4 +523,3 @@ export function getTileContextMenuEntries({
 
   return entries.map((e) => annotateContextEntryTickBudget(e, playerActor));
 }
-

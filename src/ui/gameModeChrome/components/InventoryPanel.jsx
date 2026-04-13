@@ -118,6 +118,13 @@ export default function InventoryPanel({
   worldItemPickupDisabledReason = null,
   stockpileWithdrawDisabled = false,
   stockpileWithdrawDisabledReason = null,
+  sledPanelVisible = false,
+  sledAttached = false,
+  sledPanelSubtitle = '',
+  sledStacks = [],
+  selectedSledItemId = '',
+  setSelectedSledItemId,
+  onRunSledQuickAction,
   onRunQuickAction,
 }) {
   const [stockpileSortMode, setStockpileSortMode] = useState('spoilage');
@@ -437,6 +444,57 @@ export default function InventoryPanel({
             {worldItemPickupDisabled && worldItemPickupDisabledReason ? (
               <p className="hud-empty-note hud-pickup-blocked-note">{worldItemPickupDisabledReason}</p>
             ) : null}
+          </div>
+        </>
+      ) : null}
+
+      {sledPanelVisible ? (
+        <>
+          <h4>Sled {sledAttached ? '(Attached)' : ''}</h4>
+          {sledPanelSubtitle ? <p className="hud-empty-note">{sledPanelSubtitle}</p> : null}
+          <div className="inventory-grid" role="listbox" aria-label="Sled items">
+            {Array.isArray(sledStacks) && sledStacks.length > 0 ? (
+              sledStacks.map((entry) => (
+                <button
+                  key={`sled-${entry.itemId}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedSledItemId === entry.itemId}
+                  className={`inventory-slot ${selectedSledItemId === entry.itemId ? 'selected' : ''}`}
+                  onClick={() => setSelectedSledItemId?.(entry.itemId)}
+                  title={gridEntryTooltip(entry, formatWeightLabel)}
+                >
+                  <InventorySlotSpriteStack
+                    sprite={entry.inventorySprite}
+                    fallbackLabel={entry.name}
+                    isFullyDried={entry.isFullyDried === true}
+                    spoilageProgress={entry.spoilageProgress}
+                  />
+                  <span className="slot-overlay">
+                    <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
+                    <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="hud-empty-note">No items in sled</p>
+            )}
+          </div>
+          <div className="hud-item-btns">
+            <button
+              type="button"
+              onClick={() => onRunSledQuickAction?.('add')}
+              disabled={!selectedInventoryEntry}
+            >
+              Add from Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => onRunSledQuickAction?.('remove')}
+              disabled={!selectedSledItemId}
+            >
+              Take from Sled
+            </button>
           </div>
         </>
       ) : null}

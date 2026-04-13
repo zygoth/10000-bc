@@ -181,5 +181,115 @@ describe('Tools: craft → use → UI surfacing (e2e headless)', () => {
     expect(place.payload.x).toBe(water.x);
     expect(place.payload.y).toBe(water.y);
   });
-});
 
+  test('basket: carrying basket expands inventory capacity without equip action', () => {
+    let state = buildBaseGameState(62131, { width: 28, height: 28 });
+    boostPlayerForTests(state);
+    applyAllResearchUnlocks(state);
+    const ax = state.camp.anchorX;
+    const ay = state.camp.anchorY;
+    withPlayerAt(state, ax, ay);
+    state = prepareStateForToolRecipeCraft(state, 'basket');
+    state = advanceToolCraft(state, 'basket');
+
+    const matrix = buildInventoryQuickActionsMatrix({
+      gameState: state,
+      playerActor: state.actors.player,
+      playerInventoryEntries: [{ itemId: 'tool:basket', quantity: 1, name: 'basket' }],
+      selectedTileX: ax,
+      selectedTileY: ay,
+      selectedTileEntity: tileAt(state, ax, ay),
+      selectedStockpileItemId: null,
+      selectedStockpileQuantity: 1,
+      selectedWorldItemId: null,
+      selectedWorldItemQuantity: 1,
+      selectedConditionInstanceId: null,
+      selectedVisionItemId: null,
+      selectedVisionCategory: null,
+      selectedNatureOverlay: 'calorie_heatmap',
+      formatTokenLabel: fmtToken,
+      stationActionLabel: stationLabel,
+    });
+    const actions = matrix[0] || [];
+    const equip = actions.find((e) => e.kind === 'equip_item' && e.payload?.itemId === 'tool:basket');
+    expect(equip).toBeUndefined();
+
+    const carried = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'pickup-basket-e2e',
+          actorId: 'player',
+          kind: 'item_pickup',
+          payload: {
+            x: ax,
+            y: ay,
+            itemId: 'tool:basket',
+            quantity: 1,
+          },
+        },
+      ],
+    });
+    expect(carried.actors.player.inventory.maxCarryWeightKg).toBe(25);
+    expect(carried.actors.player.inventory.gridWidth).toBe(7);
+  });
+
+  test('sled: right-clicking ground sled and inventory sled surfaces attach; attach makes move cost 2', () => {
+    let state = buildBaseGameState(62132, { width: 28, height: 28 });
+    boostPlayerForTests(state);
+    applyAllResearchUnlocks(state);
+    const pair = landWithCardinalRiverNeighborInCamp(state);
+    const { land } = pair;
+    withPlayerAt(state, land.x, land.y);
+    state = prepareStateForToolRecipeCraft(state, 'sled');
+    state = advanceToolCraft(state, 'sled');
+
+    const entries = getTileContextMenuEntriesForTest(state, {
+      player: state.actors.player,
+      selectedTileX: land.x,
+      selectedTileY: land.y,
+      selectedTileEntity: land,
+    });
+    expect(entries.some((e) => e.kind === 'sled_attach')).toBe(true);
+
+    const matrix = buildInventoryQuickActionsMatrix({
+      gameState: state,
+      playerActor: state.actors.player,
+      playerInventoryEntries: [{ itemId: 'tool:sled', quantity: 1, name: 'sled' }],
+      selectedTileX: land.x,
+      selectedTileY: land.y,
+      selectedTileEntity: land,
+      selectedStockpileItemId: null,
+      selectedStockpileQuantity: 1,
+      selectedWorldItemId: null,
+      selectedWorldItemQuantity: 1,
+      selectedConditionInstanceId: null,
+      selectedVisionItemId: null,
+      selectedVisionCategory: null,
+      selectedNatureOverlay: 'calorie_heatmap',
+      formatTokenLabel: fmtToken,
+      stationActionLabel: stationLabel,
+    });
+    const inventoryActions = matrix[0] || [];
+    expect(inventoryActions.some((e) => e.kind === 'sled_attach')).toBe(true);
+
+    const attached = advanceTick(state, {
+      actions: [
+        {
+          actionId: 'attach-sled-e2e',
+          actorId: 'player',
+          kind: 'sled_attach',
+          payload: { x: land.x, y: land.y },
+        },
+      ],
+    });
+    expect(attached.actors.player.sledAttached).toBe(true);
+
+    const move = validateAction(attached, {
+      actorId: 'player',
+      kind: 'move',
+      payload: { dx: 0, dy: 1 },
+    });
+    expect(move.ok).toBe(true);
+    expect(move.normalizedAction.tickCost).toBe(2);
+  });
+});

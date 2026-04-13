@@ -1,6 +1,7 @@
 import { PLANT_BY_ID, PLANT_CATALOG, getSeason, isDayInWindow } from './plantCatalog.mjs';
 import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
 import { scaledUnitsPerHarvestActionMidpoint } from './harvestYieldResolve.mjs';
+import { resolvePatchCapacity } from './plantPatchLayout.mjs';
 import { findPartAndSubStage, ensureHarvestEntryState } from './harvestEntryState.mjs';
 import { GROUND_FUNGUS_CATALOG, GROUND_FUNGUS_BY_ID, isDayInSeasonWindow } from './groundFungusCatalog.mjs';
 import { LOG_FUNGUS_CATALOG, LOG_FUNGUS_BY_ID, isDayInLogWindow } from './logFungusCatalog.mjs';
@@ -8,6 +9,7 @@ import { ANIMAL_BY_ID } from './animalCatalog.mjs';
 import { ITEM_BY_ID } from './itemCatalog.mjs';
 import { applyActorInventoryRelocation } from './inventoryRelocate.mjs';
 import {
+  buildDefaultCampStockpileStackFields,
   landCarcassUnitWeightKgFromSpecies,
   resolveInnerBarkUnitWeightKgForItem,
 } from './stockpileDefaultStackOptions.mjs';
@@ -140,6 +142,7 @@ import {
   WORLD_GROUND_DRYNESS_PER_DAY,
   THIRST_ACTIVITY_DRAIN_PER_TICK,
   HUNGER_DRAIN_PER_TICK,
+  HUNGER_DAILY_CALORIES,
   NIGHTLY_DEBRIEF_START_TICK,
   TEMPERATURE_DECAY_MULTIPLIER_BY_BAND,
   THIRST_TEMPERATURE_MODIFIER_BY_BAND,
@@ -167,6 +170,7 @@ import {
   normalizeStackFootprintValueImpl,
   removeActorInventoryItemImpl,
 } from './advanceTick/inventory.mjs';
+
 import {
   addActorInventoryItemWithOverflowDropImpl,
   addWorldItemNearbyImpl,
@@ -214,6 +218,11 @@ import {
   generateBeehivesInternalImpl,
   rollBeehiveYieldForDayImpl,
 } from './advanceDay/beehiveSystems.mjs';
+
+const STARTER_PEMMICAN_ITEM_ID = 'pemmican';
+const STARTER_PEMMICAN_DAYS = 10;
+const STARTER_PEMMICAN_ACTOR_COUNT = 2;
+
 export { getAnimalDensityAtTile, getFishDensityAtTile };
 const DEADFALL_CANDIDATE_SPECIES_IDS = Object.values(ANIMAL_BY_ID || {})
   .filter((species) => {
@@ -263,11 +272,21 @@ function hasActorInventoryItem(actor, itemId, quantity = 1) {
 
 function ensureInventoryEquipment(inventory) {
   if (!inventory || typeof inventory !== 'object') {
-    return { gloves: null, coat: null, head: null };
+    return {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
 
   if (!inventory.equipment || typeof inventory.equipment !== 'object') {
-    inventory.equipment = { gloves: null, coat: null, head: null };
+    inventory.equipment = {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
 
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
@@ -278,6 +297,9 @@ function ensureInventoryEquipment(inventory) {
   }
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'head')) {
     inventory.equipment.head = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'basket')) {
+    inventory.equipment.basket = null;
   }
 
   return inventory.equipment;
@@ -1275,6 +1297,44 @@ function defaultCampState(width, height) {
       chosenVisionRewards: [],
     },
   };
+}
+
+export function applyStarterPemmicanSupply(state) {
+  if (!state?.camp || typeof state.camp !== 'object') {
+    return state;
+  }
+  if (!state.camp.stockpile || typeof state.camp.stockpile !== 'object') {
+    state.camp.stockpile = { stacks: [] };
+  }
+  if (!Array.isArray(state.camp.stockpile.stacks)) {
+    state.camp.stockpile.stacks = [];
+  }
+
+  const pemmicanCalories = Number(ITEM_BY_ID[STARTER_PEMMICAN_ITEM_ID]?.nutrition?.calories);
+  if (!Number.isFinite(pemmicanCalories) || pemmicanCalories <= 0) {
+    return state;
+  }
+  const targetCalories = HUNGER_DAILY_CALORIES * STARTER_PEMMICAN_ACTOR_COUNT * STARTER_PEMMICAN_DAYS;
+  const targetQuantity = Math.max(1, Math.ceil(targetCalories / pemmicanCalories));
+
+  const stacks = state.camp.stockpile.stacks;
+  const idx = stacks.findIndex((entry) => entry?.itemId === STARTER_PEMMICAN_ITEM_ID);
+  if (idx >= 0) {
+    const current = Math.max(0, Math.floor(Number(stacks[idx]?.quantity) || 0));
+    stacks[idx] = {
+      ...stacks[idx],
+      ...buildDefaultCampStockpileStackFields(STARTER_PEMMICAN_ITEM_ID),
+      itemId: STARTER_PEMMICAN_ITEM_ID,
+      quantity: Math.max(current, targetQuantity),
+    };
+  } else {
+    stacks.push({
+      itemId: STARTER_PEMMICAN_ITEM_ID,
+      quantity: targetQuantity,
+      ...buildDefaultCampStockpileStackFields(STARTER_PEMMICAN_ITEM_ID),
+    });
+  }
+  return state;
 }
 
 function ensureTickSystems(state) {
@@ -2619,7 +2679,12 @@ function cloneActorInventoryForPreview(actor) {
       gridHeight: 4,
       maxCarryWeightKg: 15,
       stacks: [],
-      equipment: { gloves: null, coat: null, head: null },
+      equipment: {
+        gloves: null,
+        coat: null,
+        head: null,
+        basket: null,
+      },
     };
   }
   return {
@@ -2627,7 +2692,12 @@ function cloneActorInventoryForPreview(actor) {
     stacks: Array.isArray(inv.stacks) ? inv.stacks.map((s) => ({ ...(s || {}) })) : [],
     equipment: inv.equipment && typeof inv.equipment === 'object'
       ? { ...inv.equipment }
-      : { gloves: null, coat: null, head: null },
+      : {
+        gloves: null,
+        coat: null,
+        head: null,
+        basket: null,
+      },
   };
 }
 
@@ -3293,14 +3363,16 @@ function rangeRollInt(range, fallback = 1) {
   return Math.max(1, Math.round((low + high) / 2));
 }
 
-function perActionVitalityDamage(subStage, entry) {
+function perActionVitalityDamage(subStage, entry, species = null, plant = null) {
   const harvestDamage = Number(subStage?.harvest_damage);
   if (!Number.isFinite(harvestDamage) || harvestDamage <= 0) {
     return 0;
   }
 
   const budget = Math.max(1, Number(entry?.initialActionsRoll) || 1);
-  return harvestDamage / budget;
+  const patchScale = resolvePatchCapacity(species, plant);
+  const scaledDamage = harvestDamage / Math.max(1, patchScale);
+  return scaledDamage / budget;
 }
 
 function advanceActiveSubStageRegrowth(plantInstance, species, dayOfYear) {

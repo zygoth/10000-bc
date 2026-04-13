@@ -23,7 +23,6 @@ export const TECH_RESEARCHABLE_UNLOCK_KEYS = [
   'unlock_tool_fish_trap_weir',
   'unlock_tool_fishing_rod',
   'unlock_tool_auto_rod',
-  'unlock_tool_wooden_platform',
   'unlock_tool_sled',
   'unlock_tool_waterskin',
   'unlock_tool_coat',
@@ -144,12 +143,6 @@ const TECH_RESEARCH_META = {
     baseTicks: 200,
     maxVariance: 0.25,
     tags: ['food_acquisition'],
-  },
-  unlock_tool_wooden_platform: {
-    label: 'Wooden Platform',
-    baseTicks: 250,
-    maxVariance: 0.25,
-    tags: ['food_acquisition', 'land_harvest'],
   },
   unlock_tool_sled: {
     label: 'Sled',

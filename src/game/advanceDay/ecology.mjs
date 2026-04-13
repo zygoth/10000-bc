@@ -168,9 +168,8 @@ export function recalculateDynamicShade(state) {
   for (let index = 0; index < state.tiles.length; index += 1) {
     const tile = state.tiles[index];
     if (!Number.isFinite(tile.baseShade)) {
-      tile.baseShade = Math.max(0, Math.min(1, Number.isFinite(tile.shade) ? tile.shade : 0.2));
+      tile.baseShade = 0;
     }
-
     tile.shade = Math.max(0, Math.min(1, tile.baseShade + shadeAccumulation[index]));
     const occupantSize = occupantSizeByTile[index];
     tile.effectiveShadeForOccupant = occupantSize >= 9 ? Math.min(tile.shade, 0.6) : tile.shade;

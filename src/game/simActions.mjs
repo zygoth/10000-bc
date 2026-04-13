@@ -74,6 +74,10 @@ const ACTION_KINDS = [
   'tool_craft',
   'equip_item',
   'unequip_item',
+  'sled_attach',
+  'sled_detach',
+  'sled_stow_add',
+  'sled_stow_remove',
   'partner_task_set',
   'partner_queue_reorder',
   'debrief_enter',
@@ -131,6 +135,10 @@ const ACTION_TICK_COST = {
   tool_craft: 1,
   equip_item: 1,
   unequip_item: 1,
+  sled_attach: 1,
+  sled_detach: 1,
+  sled_stow_add: 1,
+  sled_stow_remove: 1,
   // Queuing partner work is nightly planning; must not spend player ticks or advance dayTick (see actionRunner).
   partner_task_set: 0,
   partner_queue_reorder: 0,
@@ -144,6 +152,9 @@ const ACTION_TICK_COST = {
   nature_sight_overlay_set: 1,
   inventory_relocate_stack: 0,
 };
+
+const MOVE_BASE_TICK_COST = 1;
+const MOVE_SLED_ATTACHED_TICK_COST = 2;
 
 const EQUIPPABLE_ITEM_TO_SLOT = {
   'tool:gloves': 'gloves',
@@ -3634,11 +3645,21 @@ function hasInventoryItem(actor, itemId) {
 
 function ensureInventoryEquipment(inventory) {
   if (!inventory || typeof inventory !== 'object') {
-    return { gloves: null, coat: null, head: null };
+    return {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
 
   if (!inventory.equipment || typeof inventory.equipment !== 'object') {
-    inventory.equipment = { gloves: null, coat: null, head: null };
+    inventory.equipment = {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
 
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
@@ -3649,6 +3670,9 @@ function ensureInventoryEquipment(inventory) {
   }
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'head')) {
     inventory.equipment.head = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'basket')) {
+    inventory.equipment.basket = null;
   }
 
   return inventory.equipment;
@@ -3967,6 +3991,217 @@ function validateUnequipItemAction(state, action, actor) {
         ...action.payload,
         equipmentSlot: slot,
         itemId: equipped.itemId,
+      },
+    },
+  };
+}
+
+function validateSledAttachAction(state, action, actor) {
+  const target = resolveTargetCoordinates(state, actor, action.payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return { ok: false, code: 'sled_attach_out_of_bounds', message: 'sled_attach target is out of bounds' };
+  }
+  if (!isInteractionTargetInRange(actor, target)) {
+    return {
+      ok: false,
+      code: 'interaction_out_of_range',
+      message: 'sled_attach target must be on current or adjacent tile',
+    };
+  }
+  if (actor?.sledAttached === true) {
+    return {
+      ok: false,
+      code: 'sled_already_attached',
+      message: 'sled_attach requires sled to be detached',
+    };
+  }
+  const hasSledInInventory = hasInventoryItem(actor, 'tool:sled');
+  let hasSledOnTargetTile = false;
+  if (!hasSledInInventory) {
+    const tileKey = `${target.x},${target.y}`;
+    const stacks = Array.isArray(state?.worldItemsByTile?.[tileKey]) ? state.worldItemsByTile[tileKey] : [];
+    hasSledOnTargetTile = stacks.some((stack) => stack?.itemId === 'tool:sled' && (Number(stack?.quantity) || 0) > 0);
+  }
+  if (!hasSledInInventory && !hasSledOnTargetTile) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'sled_attach requires tool:sled in inventory or on target tile',
+      requiredItemId: 'tool:sled',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        x: target.x,
+        y: target.y,
+        source: hasSledInInventory ? 'inventory' : 'ground',
+      },
+    },
+  };
+}
+
+function validateSledDetachAction(state, action, actor) {
+  if (actor?.sledAttached !== true) {
+    return {
+      ok: false,
+      code: 'sled_not_attached',
+      message: 'sled_detach requires an attached sled',
+    };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...(action.payload && typeof action.payload === 'object' ? action.payload : {}),
+      },
+    },
+  };
+}
+
+function resolveGroundSledContext(state, actor, payload) {
+  const target = resolveTargetCoordinates(state, actor, payload);
+  if (!target || !inBounds(state, target.x, target.y)) {
+    return null;
+  }
+  if (!isInteractionTargetInRange(actor, target)) {
+    return null;
+  }
+  const tile = getTile(state, target.x, target.y);
+  const tileKey = `${target.x},${target.y}`;
+  const stacks = Array.isArray(state?.worldItemsByTile?.[tileKey]) ? state.worldItemsByTile[tileKey] : [];
+  const hasSledItem = stacks.some((stack) => stack?.itemId === 'tool:sled' && (Number(stack?.quantity) || 0) > 0);
+  const hasStash = tile?.sledStash?.active === true;
+  if (!hasSledItem && !hasStash) {
+    return null;
+  }
+  return { x: target.x, y: target.y };
+}
+
+function validateSledStowAddAction(state, action, actor) {
+  const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+  const requestedQty = Number.isInteger(action.payload?.quantity)
+    ? action.payload.quantity
+    : Math.floor(Number(action.payload?.quantity || 1));
+  if (!itemId || itemId === 'tool:sled' || requestedQty <= 0) {
+    return {
+      ok: false,
+      code: 'invalid_sled_stow_add_payload',
+      message: 'sled_stow_add requires payload.itemId (not tool:sled) and positive quantity',
+    };
+  }
+  if (!hasInventoryItem(actor, itemId)) {
+    return {
+      ok: false,
+      code: 'insufficient_item_quantity',
+      message: 'sled_stow_add requires item in inventory',
+      requiredItemId: itemId,
+    };
+  }
+
+  const source = typeof action.payload?.source === 'string' ? action.payload.source : (actor?.sledAttached === true ? 'attached' : 'ground');
+  if (source === 'attached') {
+    if (actor?.sledAttached !== true) {
+      return { ok: false, code: 'sled_not_attached', message: 'sled_stow_add attached source requires attached sled' };
+    }
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: { ...action.payload, itemId, quantity: requestedQty, source: 'attached' },
+      },
+    };
+  }
+
+  const ground = resolveGroundSledContext(state, actor, action.payload);
+  if (!ground) {
+    return { ok: false, code: 'missing_ground_sled', message: 'sled_stow_add ground source requires adjacent tile with sled' };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        itemId,
+        quantity: requestedQty,
+        source: 'ground',
+        x: ground.x,
+        y: ground.y,
+      },
+    },
+  };
+}
+
+function validateSledStowRemoveAction(state, action, actor) {
+  const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+  const requestedQty = Number.isInteger(action.payload?.quantity)
+    ? action.payload.quantity
+    : Math.floor(Number(action.payload?.quantity || 1));
+  if (!itemId || requestedQty <= 0) {
+    return {
+      ok: false,
+      code: 'invalid_sled_stow_remove_payload',
+      message: 'sled_stow_remove requires payload.itemId and positive quantity',
+    };
+  }
+
+  const source = typeof action.payload?.source === 'string' ? action.payload.source : (actor?.sledAttached === true ? 'attached' : 'ground');
+  if (source === 'attached') {
+    if (actor?.sledAttached !== true) {
+      return { ok: false, code: 'sled_not_attached', message: 'sled_stow_remove attached source requires attached sled' };
+    }
+    const stacks = Array.isArray(actor?.sledCargo?.stacks) ? actor.sledCargo.stacks : [];
+    const stack = findPreferredStackByItem(stacks, itemId, requestedQty);
+    if ((Number(stack?.quantity) || 0) <= 0) {
+      return { ok: false, code: 'insufficient_item_quantity', message: 'sled_stow_remove requires item in sled cargo', requiredItemId: itemId };
+    }
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: { ...action.payload, itemId, quantity: requestedQty, source: 'attached' },
+      },
+    };
+  }
+
+  const ground = resolveGroundSledContext(state, actor, action.payload);
+  if (!ground) {
+    return { ok: false, code: 'missing_ground_sled', message: 'sled_stow_remove ground source requires adjacent tile with sled' };
+  }
+  const tile = getTile(state, ground.x, ground.y);
+  const stacks = Array.isArray(tile?.sledStash?.stacks) ? tile.sledStash.stacks : [];
+  const stack = findPreferredStackByItem(stacks, itemId, requestedQty);
+  if ((Number(stack?.quantity) || 0) <= 0) {
+    return { ok: false, code: 'insufficient_item_quantity', message: 'sled_stow_remove requires item in sled cargo', requiredItemId: itemId };
+  }
+  return {
+    ok: true,
+    code: null,
+    message: 'ok',
+    normalizedAction: {
+      ...action,
+      payload: {
+        ...action.payload,
+        itemId,
+        quantity: requestedQty,
+        source: 'ground',
+        x: ground.x,
+        y: ground.y,
       },
     },
   };
@@ -6119,6 +6354,9 @@ function validatePartnerTaskSetAction(state, action) {
 }
 
 export function getActionTickCost(kind, payload = {}) {
+  if (kind === 'move' && payload?.sledAttached === true && !Number.isInteger(Number(payload?.tickCost))) {
+    return MOVE_SLED_ATTACHED_TICK_COST;
+  }
   return normalizeTickCost(kind, payload);
 }
 
@@ -6187,12 +6425,18 @@ function validateMoveAction(state, action, actor) {
     return { ok: false, code: 'move_blocked_tile', message: 'move target must not be a rock tile' };
   }
 
+  const requestedTickCost = Number(action.tickCost);
+  const normalizedMoveTickCost = actor?.sledAttached === true
+    ? Math.max(MOVE_SLED_ATTACHED_TICK_COST, Number.isInteger(requestedTickCost) ? requestedTickCost : MOVE_BASE_TICK_COST)
+    : requestedTickCost;
+
   return {
     ok: true,
     code: null,
     message: 'ok',
     normalizedAction: {
       ...action,
+      tickCost: normalizedMoveTickCost,
       payload: {
         ...action.payload,
         dx,
@@ -6324,6 +6568,14 @@ export function validateAction(state, rawAction, options = {}) {
     validationResult = validateEquipItemAction(state, action, actor);
   } else if (action.kind === 'unequip_item') {
     validationResult = validateUnequipItemAction(state, action, actor);
+  } else if (action.kind === 'sled_attach') {
+    validationResult = validateSledAttachAction(state, action, actor);
+  } else if (action.kind === 'sled_detach') {
+    validationResult = validateSledDetachAction(state, action, actor);
+  } else if (action.kind === 'sled_stow_add') {
+    validationResult = validateSledStowAddAction(state, action, actor);
+  } else if (action.kind === 'sled_stow_remove') {
+    validationResult = validateSledStowRemoveAction(state, action, actor);
   } else if (action.kind === 'partner_task_set') {
     validationResult = validatePartnerTaskSetAction(state, action);
   } else if (action.kind === 'partner_queue_reorder') {
@@ -6457,6 +6709,10 @@ export function defaultActors(width, height) {
         tech: 0,
         sight: 0,
       },
+      sledAttached: false,
+      sledAttachedAtDay: null,
+      sledAttachedAtDayTick: null,
+      sledCargo: { stacks: [] },
       inventory: {
         gridWidth: 6,
         gridHeight: 4,
@@ -6466,6 +6722,7 @@ export function defaultActors(width, height) {
           gloves: null,
           coat: null,
           head: null,
+          basket: null,
         },
       },
     },
@@ -6493,6 +6750,10 @@ export function defaultActors(width, height) {
         tech: 0,
         sight: 0,
       },
+      sledAttached: false,
+      sledAttachedAtDay: null,
+      sledAttachedAtDayTick: null,
+      sledCargo: { stacks: [] },
       inventory: {
         gridWidth: 6,
         gridHeight: 4,
@@ -6502,6 +6763,7 @@ export function defaultActors(width, height) {
           gloves: null,
           coat: null,
           head: null,
+          basket: null,
         },
       },
       taskQueue: {
@@ -6540,6 +6802,18 @@ export function cloneActors(actors) {
           tech: 0,
           sight: 0,
         },
+      sledAttached: actor?.sledAttached === true,
+      sledAttachedAtDay: Number.isInteger(actor?.sledAttachedAtDay)
+        ? actor.sledAttachedAtDay
+        : null,
+      sledAttachedAtDayTick: Number.isInteger(actor?.sledAttachedAtDayTick)
+        ? actor.sledAttachedAtDayTick
+        : null,
+      sledCargo: {
+        stacks: Array.isArray(actor?.sledCargo?.stacks)
+          ? actor.sledCargo.stacks.map((entry) => ({ ...(entry || {}) }))
+          : [],
+      },
       inventory: actor?.inventory
         ? {
           ...actor.inventory,
@@ -6555,6 +6829,9 @@ export function cloneActors(actors) {
               : null,
             head: actor.inventory?.equipment?.head
               ? { ...actor.inventory.equipment.head }
+              : null,
+            basket: actor.inventory?.equipment?.basket
+              ? { ...actor.inventory.equipment.basket }
               : null,
           },
         }

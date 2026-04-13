@@ -7,6 +7,7 @@ import {
   applyHarvestAction,
   advanceDay,
   advanceTick,
+  applyStarterPemmicanSupply,
   canGenerateAnimalZones,
   canGenerateBeehives,
   canGenerateFishPopulations,
@@ -38,6 +39,7 @@ import {
   isTechResearchDisplayComplete,
 } from '../../src/game/techForestGen.mjs';
 import { TOOL_RECIPES } from '../../src/game/simActions.mjs';
+import { HUNGER_DAILY_CALORIES } from '../../src/game/simCore.constants.mjs';
 import waterGenModule from '../../src/game/waterGen.js';
 import { normalizeStackFootprintValueImpl } from '../../src/game/advanceTick/inventory.mjs';
 
@@ -1274,6 +1276,22 @@ function runEarthwormGroundDecayEscapesTest() {
 
   const inventoryRotting = next.actors.player.inventory.stacks.find((stack) => stack.itemId === 'rotting_organic');
   assert.ok(inventoryRotting, 'inventory earthworm should decay via standard rotting flow');
+}
+
+function runStarterPemmicanStockpileTest() {
+  const base = createInitialGameState(1776, { width: 30, height: 30 });
+  const state = applyStarterPemmicanSupply(advanceDay(base, 2));
+  const pemmicanItem = ITEM_BY_ID.pemmican;
+  assert.ok(pemmicanItem, 'item catalog should include pemmican');
+  const pemmicanCalories = Number(pemmicanItem.nutrition?.calories);
+  assert.ok(Number.isFinite(pemmicanCalories) && pemmicanCalories > 0, 'pemmican should define positive calories');
+
+  const expectedQuantity = Math.ceil((HUNGER_DAILY_CALORIES * 2 * 10) / pemmicanCalories);
+  const stacks = Array.isArray(state?.camp?.stockpile?.stacks) ? state.camp.stockpile.stacks : [];
+  const stack = stacks.find((entry) => entry?.itemId === 'pemmican');
+
+  assert.ok(stack, 'new game should include starter pemmican stockpile');
+  assert.equal(stack.quantity, expectedQuantity, 'starter pemmican quantity should cover 10 days for both actors');
 }
 
 function pickDryablePlantItemId() {
@@ -5561,11 +5579,12 @@ function runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest() {
   pretendPartnerCampMaintenanceDoneForDay(state);
   const { techForest } = state;
   const ladderKey = 'unlock_tool_ladder';
-  const shovelKey = 'unlock_tool_shovel';
-  const rodKey = 'unlock_tool_fishing_rod';
+  const ladderParentKey = techForest.byUnlockKey[ladderKey].parentUnlockKey;
+  assert.ok(typeof ladderParentKey === 'string' && ladderParentKey.length > 0);
 
-  assert.equal(techForest.byUnlockKey[ladderKey].parentUnlockKey, rodKey);
-  assert.equal(techForest.byUnlockKey[shovelKey].parentUnlockKey, ladderKey);
+  const ladderChildEntry = Object.entries(techForest.byUnlockKey).find(([, node]) => node?.parentUnlockKey === ladderKey);
+  assert.ok(ladderChildEntry, 'test requires at least one ladder child in current tech forest seed');
+  const [ladderChildKey] = ladderChildEntry;
 
   state.techUnlocks[ladderKey] = true;
   state.techUnlockVisionGranted = { [ladderKey]: true };
@@ -5579,37 +5598,37 @@ function runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest() {
     'vision-granted ladder should appear display-complete',
   );
   assert.equal(
-    isTechResearchDisplayComplete(techForest, state.techUnlocks, shovelKey, {
+    isTechResearchDisplayComplete(techForest, state.techUnlocks, ladderChildKey, {
       visionGranted: state.techUnlockVisionGranted,
       partnerResearched: state.techUnlockPartnerResearch,
     }),
     false,
-    'shovel should not appear display-complete from ladder vision alone',
+    'ladder child should not appear display-complete from ladder vision alone',
   );
 
   assert.equal(
     getTechForestStrictPrerequisiteBlocker(techForest, state.techUnlocks, ladderKey),
-    rodKey,
-    'vision ladder only: strict chain from ladder still blocked at fishing rod',
+    ladderParentKey,
+    'vision ladder only: strict chain from ladder remains blocked at its actual parent',
   );
 
-  const shovelTicks = techForest.byUnlockKey[shovelKey].researchTicks;
-  const blockedShovel = validateAction(state, {
+  const childTicks = techForest.byUnlockKey[ladderChildKey].researchTicks;
+  const blockedChild = validateAction(state, {
     actorId: 'player',
     kind: 'partner_task_set',
     payload: {
       task: {
         kind: TECH_RESEARCH_TASK_KIND,
-        ticksRequired: shovelTicks,
-        meta: { unlockKey: shovelKey },
+        ticksRequired: childTicks,
+        meta: { unlockKey: ladderChildKey },
       },
     },
   });
-  assert.equal(blockedShovel.ok, false, 'shovel research must require full ancestor chain');
-  assert.equal(blockedShovel.code, 'tech_prerequisite_missing');
-  assert.equal(blockedShovel.unlockKey, rodKey);
+  assert.equal(blockedChild.ok, false, 'child research must require full ancestor chain');
+  assert.equal(blockedChild.code, 'tech_prerequisite_missing');
+  assert.equal(blockedChild.unlockKey, ladderParentKey);
 
-  state.techUnlocks[rodKey] = true;
+  state.techUnlocks[ladderParentKey] = true;
   assert.equal(
     getTechForestStrictPrerequisiteBlocker(techForest, state.techUnlocks, ladderKey),
     null,
@@ -5626,20 +5645,20 @@ function runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest() {
   assert.equal(visionParentBlock.reason, 'vision_parent');
   assert.equal(visionParentBlock.blockerKey, ladderKey);
 
-  const blockedShovelVisionGap = validateAction(state, {
+  const blockedChildVisionGap = validateAction(state, {
     actorId: 'player',
     kind: 'partner_task_set',
     payload: {
       task: {
         kind: TECH_RESEARCH_TASK_KIND,
-        ticksRequired: shovelTicks,
-        meta: { unlockKey: shovelKey },
+        ticksRequired: childTicks,
+        meta: { unlockKey: ladderChildKey },
       },
     },
   });
-  assert.equal(blockedShovelVisionGap.ok, false, 'shovel stays blocked while ladder is vision-only');
-  assert.equal(blockedShovelVisionGap.code, 'tech_prerequisite_missing');
-  assert.equal(blockedShovelVisionGap.unlockKey, ladderKey);
+  assert.equal(blockedChildVisionGap.ok, false, 'child stays blocked while ladder is vision-only');
+  assert.equal(blockedChildVisionGap.code, 'tech_prerequisite_missing');
+  assert.equal(blockedChildVisionGap.unlockKey, ladderKey);
 
   const ladderTicks = techForest.byUnlockKey[ladderKey].researchTicks;
   const solidifyLadder = validateAction(state, {
@@ -5656,18 +5675,18 @@ function runTechVisionLadderDoesNotOpenShovelResearchWithoutChainTest() {
   assert.equal(solidifyLadder.ok, true, 'partner should queue camp research to solidify vision-granted ladder');
 
   state.techUnlockPartnerResearch = { [ladderKey]: true };
-  const okShovel = validateAction(state, {
+  const okChild = validateAction(state, {
     actorId: 'player',
     kind: 'partner_task_set',
     payload: {
       task: {
         kind: TECH_RESEARCH_TASK_KIND,
-        ticksRequired: shovelTicks,
-        meta: { unlockKey: shovelKey },
+        ticksRequired: childTicks,
+        meta: { unlockKey: ladderChildKey },
       },
     },
   });
-  assert.equal(okShovel.ok, true, 'shovel validates after ladder has partner research credit');
+  assert.equal(okChild.ok, true, 'ladder child validates after ladder has partner research credit');
 }
 
 
@@ -6504,6 +6523,161 @@ function runEquipUnequipActionsTest() {
   assert.ok(hatStack, 'unequip_item should restore sun_hat to inventory stacks');
   assert.equal(Number(hatStack.footprintW), 1, 'unequipped sun_hat stack should preserve 1x1 footprint width');
   assert.equal(Number(hatStack.footprintH), 1, 'unequipped sun_hat stack should preserve 1x1 footprint height');
+
+  const basketState = createInitialGameState(4279, { width: 20, height: 20 });
+  const basketPlayer = basketState.actors.player;
+  basketPlayer.inventory.stacks = [];
+  basketPlayer.inventory.maxCarryWeightKg = 15;
+  const basketTileKey = `${basketPlayer.x},${basketPlayer.y}`;
+  basketState.worldItemsByTile[basketTileKey] = [{ itemId: 'tool:basket', quantity: 1, footprintW: 2, footprintH: 2 }];
+
+  const basketPickedUp = advanceTick(basketState, {
+    actions: [
+      {
+        actionId: 'pickup-basket',
+        actorId: 'player',
+        kind: 'item_pickup',
+        payload: {
+          x: basketPlayer.x,
+          y: basketPlayer.y,
+          itemId: 'tool:basket',
+          quantity: 1,
+        },
+      },
+    ],
+  });
+  assert.equal(
+    basketPickedUp.actors.player.inventory.maxCarryWeightKg,
+    25,
+    'carrying basket should raise carry capacity to 25kg',
+  );
+  assert.equal(
+    basketPickedUp.actors.player.inventory.gridWidth,
+    7,
+    'carrying basket should expand inventory grid width',
+  );
+
+  const basketDropped = advanceTick(basketPickedUp, {
+    actions: [
+      {
+        actionId: 'drop-basket',
+        actorId: 'player',
+        kind: 'item_drop',
+        payload: {
+          x: basketPlayer.x,
+          y: basketPlayer.y,
+          itemId: 'tool:basket',
+          quantity: 1,
+        },
+      },
+    ],
+  });
+  const basketStack = basketDropped.actors.player.inventory.stacks.find((entry) => entry.itemId === 'tool:basket');
+  assert.ok(!basketStack, 'dropping basket should remove it from inventory stacks');
+  assert.equal(
+    basketDropped.actors.player.inventory.maxCarryWeightKg,
+    15,
+    'not carrying basket should restore base carry capacity',
+  );
+  assert.equal(
+    basketDropped.actors.player.inventory.gridWidth,
+    6,
+    'not carrying basket should restore base inventory grid width',
+  );
+}
+
+function runSledAttachDetachMoveCostTest() {
+  const state = createInitialGameState(4280, { width: 20, height: 20 });
+  const player = state.actors.player;
+  const originX = Number(player.x);
+  const originY = Number(player.y);
+  const nextTile = findAdjacentTileMatching(state, { x: originX, y: originY }, (tile) => tile && !tile.rockType);
+  assert.ok(nextTile, 'test requires adjacent traversable tile for sled move-cost checks');
+
+  player.inventory.stacks = [{ itemId: 'tool:sled', quantity: 1, footprintW: 2, footprintH: 2 }];
+  player.inventory.maxCarryWeightKg = 15;
+
+  const attachPreview = validateAction(state, {
+    actorId: 'player',
+    kind: 'sled_attach',
+    payload: { x: originX, y: originY },
+  });
+  assert.equal(attachPreview.ok, true, 'sled_attach should validate with sled in inventory');
+
+  const attached = advanceTick(state, {
+    actions: [
+      {
+        actionId: 'attach-sled',
+        actorId: 'player',
+        kind: 'sled_attach',
+        payload: { x: originX, y: originY },
+      },
+    ],
+  });
+  assert.equal(attached.actors.player.sledAttached, true, 'sled_attach should set actor sledAttached true');
+  assert.equal(attached.actors.player.inventory.maxCarryWeightKg, 45, 'attached sled should add +30kg carry capacity');
+
+  const moveDx = nextTile.x - originX;
+  const moveDy = nextTile.y - originY;
+  const moveWithSled = validateAction(attached, {
+    actorId: 'player',
+    kind: 'move',
+    payload: { dx: moveDx, dy: moveDy },
+  });
+  assert.equal(moveWithSled.ok, true, 'move should validate while sled is attached');
+  assert.equal(moveWithSled.normalizedAction.tickCost, 2, 'move should cost 2 ticks while sled is attached');
+
+  const groundState = createInitialGameState(4281, { width: 20, height: 20 });
+  const groundPlayer = groundState.actors.player;
+  const groundKey = `${groundPlayer.x},${groundPlayer.y}`;
+  groundState.worldItemsByTile[groundKey] = [{ itemId: 'tool:sled', quantity: 1, footprintW: 2, footprintH: 2 }];
+  const attachGroundPreview = validateAction(groundState, {
+    actorId: 'player',
+    kind: 'sled_attach',
+    payload: { x: groundPlayer.x, y: groundPlayer.y, source: 'ground' },
+  });
+  assert.equal(attachGroundPreview.ok, true, 'sled_attach should validate with sled on selected ground tile');
+  const groundAttached = advanceTick(groundState, {
+    actions: [
+      {
+        actionId: 'attach-sled-ground',
+        actorId: 'player',
+        kind: 'sled_attach',
+        payload: { x: groundPlayer.x, y: groundPlayer.y, source: 'ground' },
+      },
+    ],
+  });
+  assert.equal(groundAttached.actors.player.sledAttached, true, 'ground sled attach should set attached state');
+  const remainingGroundSled = Array.isArray(groundAttached.worldItemsByTile[groundKey])
+    ? groundAttached.worldItemsByTile[groundKey].find((entry) => entry.itemId === 'tool:sled')
+    : null;
+  assert.ok(!remainingGroundSled, 'ground sled attach should remove sled stack from tile');
+
+  const detached = advanceTick(attached, {
+    actions: [
+      {
+        actionId: 'detach-sled',
+        actorId: 'player',
+        kind: 'sled_detach',
+        payload: {},
+      },
+    ],
+  });
+  assert.equal(detached.actors.player.sledAttached, false, 'sled_detach should set actor sledAttached false');
+  assert.equal(detached.actors.player.inventory.maxCarryWeightKg, 15, 'detached sled should remove +30kg carry capacity bonus');
+  const detachKey = `${detached.actors.player.x},${detached.actors.player.y}`;
+  const sledStack = Array.isArray(detached.worldItemsByTile[detachKey])
+    ? detached.worldItemsByTile[detachKey].find((entry) => entry.itemId === 'tool:sled')
+    : null;
+  assert.ok(sledStack, 'sled_detach should place tool:sled onto ground near actor');
+
+  const moveNoSled = validateAction(detached, {
+    actorId: 'player',
+    kind: 'move',
+    payload: { dx: moveDx, dy: moveDy },
+  });
+  assert.equal(moveNoSled.ok, true, 'move should validate after sled detaches');
+  assert.equal(moveNoSled.normalizedAction.tickCost, 1, 'move should return to 1 tick when sled is detached');
 }
 
 function runEquippedGlovesHarvestInjuryBehaviorTest() {
@@ -9575,6 +9749,9 @@ function runNoUnsuitableSeedlingGerminationTest() {
 function runDisturbanceAwareGerminationTest() {
   const speciesId = 'urtica_dioica';
   const species = PLANT_BY_ID[speciesId];
+  const originalShadeTolerance = Array.isArray(species?.soil?.shade?.tolerance_range)
+    ? [...species.soil.shade.tolerance_range]
+    : null;
 
   function setupState(seed, disturbed) {
     const state = createInitialGameState(seed, { width: 20, height: 20 });
@@ -9599,27 +9776,36 @@ function runDisturbanceAwareGerminationTest() {
     return state;
   }
 
-  withSpeciesDispersalOverride(
-    speciesId,
-    {
-      germination_rate: 1,
-      requires_disturbance: true,
-      pioneer: true,
-      viable_lifespan_days: 500,
-    },
-    () => {
-      const blocked = advanceDay(setupState(99101, false), 3);
-      const blockedPlants = Object.values(blocked.plants).filter((plant) => plant.speciesId === speciesId).length;
-      assert.ok(blockedPlants > 0, 'requires_disturbance species should still have a small germination chance on undisturbed tiles');
+  try {
+    if (species?.soil?.shade && Array.isArray(species.soil.shade.tolerance_range)) {
+      species.soil.shade.tolerance_range = [0, 1];
+    }
+    withSpeciesDispersalOverride(
+      speciesId,
+      {
+        germination_rate: 1,
+        requires_disturbance: true,
+        pioneer: true,
+        viable_lifespan_days: 500,
+      },
+      () => {
+        const blocked = advanceDay(setupState(99101, false), 3);
+        const blockedPlants = Object.values(blocked.plants).filter((plant) => plant.speciesId === speciesId).length;
+        assert.ok(blockedPlants > 0, 'requires_disturbance species should still have a small germination chance on undisturbed tiles');
 
-      const allowed = advanceDay(setupState(99101, true), 3);
-      const allowedPlants = Object.values(allowed.plants).filter((plant) => plant.speciesId === speciesId).length;
-      assert.ok(
-        allowedPlants > blockedPlants,
-        'disturbed tiles should produce materially more germination than undisturbed tiles for requires_disturbance species',
-      );
-    },
-  );
+        const allowed = advanceDay(setupState(99101, true), 3);
+        const allowedPlants = Object.values(allowed.plants).filter((plant) => plant.speciesId === speciesId).length;
+        assert.ok(
+          allowedPlants > blockedPlants,
+          'disturbed tiles should produce materially more germination than undisturbed tiles for requires_disturbance species',
+        );
+      },
+    );
+  } finally {
+    if (species?.soil?.shade && originalShadeTolerance) {
+      species.soil.shade.tolerance_range = originalShadeTolerance;
+    }
+  }
 }
 
 function runVitalityStressAndRecoveryTest() {
@@ -10082,6 +10268,8 @@ function runBiennialStageExhaustionDeathTest() {
 function runIncrementalHarvestVitalityDamageTest() {
   const speciesId = 'daucus_carota';
   const species = PLANT_BY_ID[speciesId];
+  const originalMaxPlantsPerTile = species.maxPlantsPerTile;
+  species.maxPlantsPerTile = 1;
   const state = createInitialGameState(99311, { width: 20, height: 20 });
   state.dayOfYear = 6;
   state.plants = {};
@@ -10128,32 +10316,38 @@ function runIncrementalHarvestVitalityDamageTest() {
   };
   hostTile.plantIds = ['harvest_candidate'];
 
-  const firstBurst = applyHarvestAction(state, 'harvest_candidate', 'stem', 'green', { actions: 2 });
-  assert.equal(firstBurst.appliedActions, 2, 'should apply requested harvest actions while sub-stage has actions');
-  assert.equal(firstBurst.depleted, false, 'sub-stage should remain active before all actions are consumed');
-  assert.ok(
-    Math.abs(state.plants.harvest_candidate.vitality - 0.6) < 1e-9,
-    'non-regrowing stage should apply vitality damage incrementally per harvest action',
-  );
+  try {
+    const firstBurst = applyHarvestAction(state, 'harvest_candidate', 'stem', 'green', { actions: 2 });
+    assert.equal(firstBurst.appliedActions, 2, 'should apply requested harvest actions while sub-stage has actions');
+    assert.equal(firstBurst.depleted, false, 'sub-stage should remain active before all actions are consumed');
+    assert.ok(
+      Math.abs(state.plants.harvest_candidate.vitality - 0.6) < 1e-9,
+      'non-regrowing stage should apply vitality damage incrementally per harvest action',
+    );
 
-  const secondBurst = applyHarvestAction(state, 'harvest_candidate', 'stem', 'green', { actions: 2 });
-  assert.equal(secondBurst.appliedActions, 2, 'remaining actions should be harvestable');
-  assert.equal(secondBurst.depleted, true, 'sub-stage should report depletion when actions reach zero');
-  assert.ok(
-    Math.abs(state.plants.harvest_candidate.vitality - 0.2) < 1e-9,
-    'total vitality loss across all actions should match harvest_damage budget',
-  );
-  assert.equal(
-    state.plants.harvest_candidate.activeSubStages.some((entry) => entry.partName === 'stem' && entry.subStageId === 'green'),
-    false,
-    'non-regrowing sub-stage should be removed after final depletion',
-  );
+    const secondBurst = applyHarvestAction(state, 'harvest_candidate', 'stem', 'green', { actions: 2 });
+    assert.equal(secondBurst.appliedActions, 2, 'remaining actions should be harvestable');
+    assert.equal(secondBurst.depleted, true, 'sub-stage should report depletion when actions reach zero');
+    assert.ok(
+      Math.abs(state.plants.harvest_candidate.vitality - 0.2) < 1e-9,
+      'total vitality loss across all actions should match harvest_damage budget',
+    );
+    assert.equal(
+      state.plants.harvest_candidate.activeSubStages.some((entry) => entry.partName === 'stem' && entry.subStageId === 'green'),
+      false,
+      'non-regrowing sub-stage should be removed after final depletion',
+    );
+  } finally {
+    species.maxPlantsPerTile = originalMaxPlantsPerTile;
+  }
 }
 
 function runRegrowthSeasonalBudgetVitalityTest() {
   const speciesId = 'urtica_dioica';
   const species = PLANT_BY_ID[speciesId];
   const originalLongevity = species.longevity;
+  const originalMaxPlantsPerTile = species.maxPlantsPerTile;
+  species.maxPlantsPerTile = 1;
   const state = createInitialGameState(99312, { width: 20, height: 20 });
   state.dayOfYear = 1;
   state.plants = {};
@@ -10219,6 +10413,7 @@ function runRegrowthSeasonalBudgetVitalityTest() {
     );
   } finally {
     species.longevity = originalLongevity;
+    species.maxPlantsPerTile = originalMaxPlantsPerTile;
   }
 }
 
@@ -10925,6 +11120,10 @@ function runSeedLifecycleTest() {
 
 function runDynamicShadeTest() {
   const state = createInitialGameState(7777, { width: 50, height: 50 });
+  for (const tile of state.tiles) {
+    tile.baseShade = 0;
+    tile.shade = 0;
+  }
   const advanced = advanceDay(state, 30);
 
   const invalidShade = advanced.tiles.find((tile) => tile.shade < 0 || tile.shade > 1);
@@ -10956,6 +11155,52 @@ function runDynamicShadeTest() {
       'very large trees should cap own-tile effective shade for future stress/death checks',
     );
   }
+
+  const hasAdjacentShadeSource = (tile) => {
+    for (let oy = -2; oy <= 2; oy += 1) {
+      for (let ox = -2; ox <= 2; ox += 1) {
+        if (ox === 0 && oy === 0) {
+          continue;
+        }
+        const nx = tile.x + ox;
+        const ny = tile.y + oy;
+        if (nx < 0 || ny < 0 || nx >= advanced.width || ny >= advanced.height) {
+          continue;
+        }
+        const neighbor = getTileAt(advanced, nx, ny);
+        if (!neighbor) {
+          continue;
+        }
+        if (neighbor.rockType) {
+          return true;
+        }
+        if (Array.isArray(neighbor.plantIds) && neighbor.plantIds.length > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const phantomShadeTile = advanced.tiles.find((tile) => {
+    const shade = Number(tile.shade) || 0;
+    if (shade <= 0.01) {
+      return false;
+    }
+    if (Array.isArray(tile.plantIds) && tile.plantIds.length > 0) {
+      return false;
+    }
+    if (tile.rockType) {
+      return false;
+    }
+    return !hasAdjacentShadeSource(tile);
+  });
+
+  assert.equal(
+    phantomShadeTile,
+    undefined,
+    'shade should only exist near plants/rocks and not appear on empty unsourced tiles',
+  );
 }
 
 function runIncompatibleSnapshotRejectionTest() {
@@ -11627,6 +11872,7 @@ function main() {
     ['carcass butcher requires knife and yields subparts', runCarcassButcherRequiresKnifeAndYieldsSubpartsTest],
     ['fell tree validation rules', runFellTreeValidationRulesTest],
     ['fell tree runtime and pole yield', runFellTreeRuntimeAndPoleYieldTest],
+    ['sled attach/detach move-cost', runSledAttachDetachMoveCostTest],
     ['sap tap snapshot round-trip', runSapTapSnapshotRoundTripTest],
     ['auto rod snapshot round-trip', runAutoRodSnapshotRoundTripTest],
     ['thread spinner partner task tick reduction', runThreadSpinnerPartnerTaskTickReductionTest],
@@ -11669,6 +11915,7 @@ function main() {
     ['fish carcass not field edible and no clean processing', runFishCarcassNotFieldEdibleAndNoCleanProcessTest],
     ['dig earthworm spawn and frozen block', runDigEarthwormSpawnAndFrozenBlockTest],
     ['earthworm ground decay escapes', runEarthwormGroundDecayEscapesTest],
+    ['starter pemmican stockpile', runStarterPemmicanStockpileTest],
     ['axe harvest modifier applies', runAxeHarvestModifierAppliesTest],
     ['axe knife harvest modifier precedence', runAxeKnifeHarvestModifierPrecedenceTest],
     ['eat filled sap vessel returns empty container', runEatFilledSapVesselReturnsEmptyContainerTest],

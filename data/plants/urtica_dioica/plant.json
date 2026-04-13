@@ -316,11 +316,11 @@
           "harvest_yield": {
             "units_per_action": [
               1,
-              2
+              1
             ],
             "actions_until_depleted": [
               1,
-              3
+              1
             ]
           },
           "harvest_damage": 0.8,
@@ -352,6 +352,16 @@
             "dusty"
           ],
           "potency_multiplier": 0.1,
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
           "harvest_damage": 0.1,
           "regrowth_days": null,
           "regrowth_max_harvests": null,

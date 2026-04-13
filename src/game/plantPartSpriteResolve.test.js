@@ -4,6 +4,7 @@ import {
 } from './plantSpriteCatalog.mjs';
 import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
 import { resolvePlantPartSpriteFrame } from './plantPartSpriteResolve.mjs';
+import { scaledHarvestActionsCap, scaledUnitsPerHarvestActionMidpoint } from './harvestYieldResolve.mjs';
 
 /** Atlas rects from `spritesheet_rd_final` / `plantSpriteCatalog.source.mjs` for daucus_carota. */
 const DAUCUS_SEEDLING_RECT = { x: 0, y: 0, w: 64, h: 64 };
@@ -85,5 +86,25 @@ describe('resolvePlantPartSpriteFrame — wild carrot harvest item IDs', () => {
     expect(frameSummary(rootSprite)).toEqual(expect.objectContaining(DAUCUS_ROOT_FIRST_YEAR_RECT));
     expect(frameSummary(rootSecond)).toEqual(expect.objectContaining(DAUCUS_ROOT_SECOND_YEAR_RECT));
     expect(frameSummary(stemSprite)).toEqual(expect.objectContaining(DAUCUS_STEM_GREEN_RECT));
+  });
+});
+
+describe('harvest scaling with max_plants_per_tile', () => {
+  it('keeps units per action unchanged while scaling action cap', () => {
+    const species = {
+      ageOfMaturity: 10,
+      maxPlantsPerTile: 4,
+      lifeStages: [{ stage: 'seedling', size: 1 }],
+    };
+    const plant = { age: 10, stageName: 'seedling' };
+    const subStage = {
+      harvest_yield: {
+        units_per_action: [2, 2],
+        actions_until_depleted: [5, 5],
+      },
+    };
+
+    expect(scaledUnitsPerHarvestActionMidpoint(subStage, species, plant)).toBe(2);
+    expect(scaledHarvestActionsCap(subStage, species, plant)).toBe(20);
   });
 });

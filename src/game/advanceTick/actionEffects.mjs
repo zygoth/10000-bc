@@ -84,6 +84,95 @@ export function applyActionEffectImpl(state, action, deps) {
     return Number(candidate.x) === campX && Number(candidate.y) === campY;
   };
 
+  const recalcActorCarryCapacity = (candidate) => {
+    if (!candidate?.inventory || typeof candidate.inventory !== 'object') {
+      return;
+    }
+    const equipment = ensureInventoryEquipment(candidate.inventory);
+    const stacks = Array.isArray(candidate?.inventory?.stacks) ? candidate.inventory.stacks : [];
+    let maxCarry = 15;
+    let gridWidth = 6;
+    const hasBasket = stacks.some((stack) => stack?.itemId === 'tool:basket' && (Number(stack?.quantity) || 0) > 0);
+    if (hasBasket || equipment?.basket?.itemId === 'tool:basket') {
+      maxCarry = 25;
+      gridWidth = 7;
+    }
+    if (candidate?.sledAttached === true) {
+      maxCarry += 30;
+    }
+    candidate.inventory.maxCarryWeightKg = maxCarry;
+    candidate.inventory.gridWidth = gridWidth;
+  };
+
+  const normalizeSledStacks = (candidate) => {
+    if (!candidate || typeof candidate !== 'object') {
+      return [];
+    }
+    if (!candidate.sledCargo || typeof candidate.sledCargo !== 'object') {
+      candidate.sledCargo = { stacks: [] };
+    }
+    if (!Array.isArray(candidate.sledCargo.stacks)) {
+      candidate.sledCargo.stacks = [];
+    }
+    candidate.sledCargo.stacks = candidate.sledCargo.stacks
+      .filter((entry) => entry?.itemId && (Number(entry?.quantity) || 0) > 0)
+      .map((entry) => ({ ...(entry || {}) }));
+    return candidate.sledCargo.stacks;
+  };
+
+  const addToSledStacks = (candidate, itemId, quantity, options = null) => {
+    const qty = Math.max(1, Math.floor(Number(quantity) || 0));
+    if (!itemId || qty <= 0) {
+      return 0;
+    }
+    const stacks = normalizeSledStacks(candidate);
+    const existing = findPreferredStackByItem(stacks, itemId, qty);
+    if (existing && Number(existing.quantity) > 0) {
+      existing.quantity = Math.floor(Number(existing.quantity) || 0) + qty;
+      return qty;
+    }
+    const footprintW = normalizeStackFootprintValue(options?.footprintW);
+    const footprintH = normalizeStackFootprintValue(options?.footprintH);
+    stacks.push({
+      itemId,
+      quantity: qty,
+      footprintW,
+      footprintH,
+      ...(Number.isFinite(Number(options?.freshness)) ? { freshness: Number(options.freshness) } : {}),
+      ...(Number.isFinite(Number(options?.decayDaysRemaining)) ? { decayDaysRemaining: Number(options.decayDaysRemaining) } : {}),
+      ...(Number.isFinite(Number(options?.dryness)) ? { dryness: Number(options.dryness) } : {}),
+      ...(Number.isFinite(Number(options?.tanninRemaining)) ? { tanninRemaining: Number(options.tanninRemaining) } : {}),
+      ...(Number.isFinite(Number(options?.unitWeightKg)) ? { unitWeightKg: Number(options.unitWeightKg) } : {}),
+    });
+    return qty;
+  };
+
+  const removeFromSledStacks = (candidate, itemId, quantity) => {
+    const qty = Math.max(1, Math.floor(Number(quantity) || 0));
+    if (!itemId || qty <= 0) {
+      return { consumed: 0 };
+    }
+    const stacks = normalizeSledStacks(candidate);
+    const stack = findPreferredStackByItem(stacks, itemId, qty);
+    const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+    if (available <= 0) {
+      return { consumed: 0 };
+    }
+    const consumed = Math.min(available, qty);
+    const meta = {
+      freshness: Number(stack?.freshness),
+      decayDaysRemaining: Number(stack?.decayDaysRemaining),
+      dryness: Number(stack?.dryness),
+      tanninRemaining: Number(stack?.tanninRemaining),
+      unitWeightKg: Number(stack?.unitWeightKg),
+      footprintW: Number(stack?.footprintW),
+      footprintH: Number(stack?.footprintH),
+    };
+    stack.quantity = available - consumed;
+    candidate.sledCargo.stacks = stacks.filter((entry) => (Number(entry?.quantity) || 0) > 0);
+    return { consumed, ...meta };
+  };
+
   const refillActorWaterskinsToSafe = (candidate) => {
     const stacks = Array.isArray(candidate?.inventory?.stacks) ? candidate.inventory.stacks : null;
     if (!stacks) {
@@ -295,6 +384,7 @@ export function applyActionEffectImpl(state, action, deps) {
       day: Number(state.totalDaysSimulated) || 0,
       dayTick: Number(state.dayTick) || 0,
     };
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -336,6 +426,7 @@ export function applyActionEffectImpl(state, action, deps) {
       day: Number(state.totalDaysSimulated) || 0,
       dayTick: Number(state.dayTick) || 0,
     };
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -803,6 +894,7 @@ export function applyActionEffectImpl(state, action, deps) {
       footprintW,
       footprintH,
     });
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -1051,6 +1143,7 @@ export function applyActionEffectImpl(state, action, deps) {
       footprintW: extracted.footprintW,
       footprintH: extracted.footprintH,
     });
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -1920,6 +2013,7 @@ export function applyActionEffectImpl(state, action, deps) {
       footprintH: normalizeStackFootprintValue(action.payload?.outputFootprintH),
       unitWeightKg: Number(action.payload?.outputUnitWeightKg),
     });
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -1967,6 +2061,7 @@ export function applyActionEffectImpl(state, action, deps) {
       equippedAtDay: Number(state.totalDaysSimulated) || 0,
       equippedAtDayTick: Number(state.dayTick) || 0,
     };
+    recalcActorCarryCapacity(actor);
     return;
   }
 
@@ -1987,11 +2082,180 @@ export function applyActionEffectImpl(state, action, deps) {
     }
 
     equipment[slot] = null;
+    recalcActorCarryCapacity(actor);
     const footprint = resolveItemFootprint(itemId);
     addActorInventoryItemWithOverflowDrop(state, actor, itemId, 1, {
       footprintW: footprint.footprintW,
       footprintH: footprint.footprintH,
     });
+    return;
+  }
+
+  if (action.kind === 'sled_attach') {
+    const source = typeof action.payload?.source === 'string' ? action.payload.source : 'inventory';
+    let consumed = 0;
+    if (source === 'ground') {
+      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+      if (inBounds(targetX, targetY, state.width, state.height)) {
+        const extracted = removeWorldItemAtTile(state, targetX, targetY, 'tool:sled', 1);
+        consumed = Math.max(0, Math.floor(Number(extracted?.consumed) || 0));
+      }
+    } else {
+      consumed = removeActorInventoryItem(actor, 'tool:sled', 1);
+    }
+    if (consumed <= 0) {
+      return;
+    }
+    actor.sledAttached = true;
+    actor.sledAttachedAtDay = Number(state.totalDaysSimulated) || 0;
+    actor.sledAttachedAtDayTick = Number(state.dayTick) || 0;
+    if (!actor.sledCargo || typeof actor.sledCargo !== 'object') {
+      actor.sledCargo = { stacks: [] };
+    }
+    recalcActorCarryCapacity(actor);
+    return;
+  }
+
+  if (action.kind === 'sled_detach') {
+    if (actor?.sledAttached !== true) {
+      return;
+    }
+    actor.sledAttached = false;
+    actor.sledAttachedAtDay = null;
+    actor.sledAttachedAtDayTick = null;
+    recalcActorCarryCapacity(actor);
+    addWorldItemNearby(state, Number(actor.x) || 0, Number(actor.y) || 0, 'tool:sled', 1, {
+      footprintW: 2,
+      footprintH: 2,
+    });
+    const cargoStacks = Array.isArray(actor?.sledCargo?.stacks) ? actor.sledCargo.stacks : [];
+    for (const stack of cargoStacks) {
+      if (!stack?.itemId || (Number(stack?.quantity) || 0) <= 0) {
+        continue;
+      }
+      addWorldItemNearby(state, Number(actor.x) || 0, Number(actor.y) || 0, stack.itemId, Number(stack.quantity) || 0, {
+        freshness: Number(stack?.freshness),
+        decayDaysRemaining: Number(stack?.decayDaysRemaining),
+        dryness: Number(stack?.dryness),
+        tanninRemaining: Number(stack?.tanninRemaining),
+        unitWeightKg: Number(stack?.unitWeightKg),
+        footprintW: Number(stack?.footprintW),
+        footprintH: Number(stack?.footprintH),
+      });
+    }
+    actor.sledCargo = { stacks: [] };
+    const hereTile = inBounds(Number(actor.x) || 0, Number(actor.y) || 0, state.width, state.height)
+      ? state.tiles[tileIndex(Number(actor.x) || 0, Number(actor.y) || 0, state.width)]
+      : null;
+    if (hereTile && typeof hereTile === 'object') {
+      hereTile.sledStash = null;
+    }
+    return;
+  }
+
+  if (action.kind === 'sled_stow_add') {
+    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+    const quantity = Number.isInteger(action.payload?.quantity)
+      ? action.payload.quantity
+      : Math.floor(Number(action.payload?.quantity || 1));
+    if (!itemId || quantity <= 0) {
+      return;
+    }
+    const extracted = extractActorInventoryItemWithMetadata(actor, itemId, quantity);
+    if (!extracted || extracted.quantity <= 0) {
+      return;
+    }
+    if (action.payload?.source === 'attached') {
+      addToSledStacks(actor, itemId, extracted.quantity, extracted);
+      recalcActorCarryCapacity(actor);
+      return;
+    }
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      addActorInventoryItem(actor, itemId, extracted.quantity, extracted);
+      return;
+    }
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile) {
+      addActorInventoryItem(actor, itemId, extracted.quantity, extracted);
+      return;
+    }
+    if (!tile.sledStash || typeof tile.sledStash !== 'object') {
+      tile.sledStash = { active: true, stacks: [] };
+    }
+    if (!Array.isArray(tile.sledStash.stacks)) {
+      tile.sledStash.stacks = [];
+    }
+    const existing = findPreferredStackByItem(tile.sledStash.stacks, itemId, extracted.quantity);
+    if (existing && Number(existing.quantity) > 0) {
+      existing.quantity = Math.floor(Number(existing.quantity) || 0) + extracted.quantity;
+    } else {
+      tile.sledStash.stacks.push({
+        itemId,
+        quantity: extracted.quantity,
+        freshness: extracted.freshness,
+        decayDaysRemaining: extracted.decayDaysRemaining,
+        dryness: extracted.dryness,
+        tanninRemaining: extracted.tanninRemaining,
+        unitWeightKg: extracted.unitWeightKg,
+        footprintW: extracted.footprintW,
+        footprintH: extracted.footprintH,
+      });
+    }
+    recalcActorCarryCapacity(actor);
+    return;
+  }
+
+  if (action.kind === 'sled_stow_remove') {
+    const itemId = typeof action.payload?.itemId === 'string' ? action.payload.itemId : '';
+    const quantity = Number.isInteger(action.payload?.quantity)
+      ? action.payload.quantity
+      : Math.floor(Number(action.payload?.quantity || 1));
+    if (!itemId || quantity <= 0) {
+      return;
+    }
+    if (action.payload?.source === 'attached') {
+      const extracted = removeFromSledStacks(actor, itemId, quantity);
+      if ((Number(extracted?.consumed) || 0) <= 0) {
+        return;
+      }
+      addActorInventoryItem(actor, itemId, extracted.consumed, extracted);
+      recalcActorCarryCapacity(actor);
+      return;
+    }
+    const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+    const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+    if (!inBounds(targetX, targetY, state.width, state.height)) {
+      return;
+    }
+    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    if (!tile?.sledStash?.active || !Array.isArray(tile.sledStash.stacks)) {
+      return;
+    }
+    const stack = findPreferredStackByItem(tile.sledStash.stacks, itemId, quantity);
+    const available = Math.max(0, Math.floor(Number(stack?.quantity) || 0));
+    if (available <= 0) {
+      return;
+    }
+    const consumed = Math.min(available, quantity);
+    stack.quantity = available - consumed;
+    const meta = {
+      freshness: Number(stack?.freshness),
+      decayDaysRemaining: Number(stack?.decayDaysRemaining),
+      dryness: Number(stack?.dryness),
+      tanninRemaining: Number(stack?.tanninRemaining),
+      unitWeightKg: Number(stack?.unitWeightKg),
+      footprintW: Number(stack?.footprintW),
+      footprintH: Number(stack?.footprintH),
+    };
+    tile.sledStash.stacks = tile.sledStash.stacks.filter((entry) => (Number(entry?.quantity) || 0) > 0);
+    if (tile.sledStash.stacks.length <= 0) {
+      tile.sledStash.active = false;
+    }
+    addActorInventoryItem(actor, itemId, consumed, meta);
+    recalcActorCarryCapacity(actor);
     return;
   }
 

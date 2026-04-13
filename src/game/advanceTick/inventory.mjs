@@ -12,6 +12,7 @@ export function ensureActorInventoryImpl(actor, deps) {
         gloves: null,
         coat: null,
         head: null,
+        basket: null,
       },
     };
     return;

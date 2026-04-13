@@ -1,4 +1,6 @@
 ﻿/** Floor for harvest yield scale so immature plants still have a non-zero budget. */
+import { resolvePatchCapacity } from './plantPatchLayout.mjs';
+
 export const HARVEST_YIELD_MIN_SCALE = 0.1;
 
 function plantAgeDays(plant) {
@@ -60,7 +62,8 @@ export function catalogHarvestActionsMidpoint(subStage) {
 export function scaledHarvestActionsCap(subStage, species, plant) {
   const fullMid = catalogHarvestActionsMidpoint(subStage);
   const scale = harvestYieldScaleFactor(plant, species, subStage);
-  return Math.max(1, Math.round(fullMid * scale));
+  const patchScale = resolvePatchCapacity(species, plant);
+  return Math.max(1, Math.round(fullMid * scale * patchScale));
 }
 
 export function unitsPerHarvestActionCatalogMidpoint(subStage) {

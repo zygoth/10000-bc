@@ -18,7 +18,9 @@ import TechForestOverlay from './components/TechForestOverlay.jsx';
 
 function GameModeChromePanel({
   onSwitchToDebug,
-  onNewGameFromSettings,
+  onReturnToTitleScreen,
+  onSaveGame,
+  onLoadGame,
   showAnchorDebug,
   onToggleAnchorDebug,
   metrics,
@@ -71,6 +73,13 @@ function GameModeChromePanel({
   onDryingRackRemove,
   selectedWorldItemId,
   setSelectedWorldItemId,
+  sledPanelVisible = false,
+  sledAttached = false,
+  sledPanelSubtitle = '',
+  sledStacks = [],
+  selectedSledItemId = '',
+  setSelectedSledItemId,
+  onRunSledQuickAction,
   worldItemPickupDisabled = false,
   worldItemPickupDisabledReason = null,
   stockpileWithdrawDisabled = false,
@@ -156,7 +165,9 @@ function GameModeChromePanel({
         isOpen={isPauseMenuOpen}
         onClosePauseMenu={onClosePauseMenu}
         onSwitchToDebug={onSwitchToDebug}
-        onNewGameFromSettings={onNewGameFromSettings}
+        onReturnToTitleScreen={onReturnToTitleScreen}
+        onSaveGame={onSaveGame}
+        onLoadGame={onLoadGame}
         showAnchorDebug={showAnchorDebug}
         onToggleAnchorDebug={onToggleAnchorDebug}
       />
@@ -240,6 +251,13 @@ function GameModeChromePanel({
         selectedTileWorldItems={selectedTileWorldItems}
         selectedWorldItemId={selectedWorldItemId}
         setSelectedWorldItemId={setSelectedWorldItemId}
+        sledPanelVisible={sledPanelVisible}
+        sledAttached={sledAttached}
+        sledPanelSubtitle={sledPanelSubtitle}
+        sledStacks={sledStacks}
+        selectedSledItemId={selectedSledItemId}
+        setSelectedSledItemId={setSelectedSledItemId}
+        onRunSledQuickAction={onRunSledQuickAction}
         worldItemPickupDisabled={worldItemPickupDisabled}
         worldItemPickupDisabledReason={worldItemPickupDisabledReason}
         stockpileWithdrawDisabled={stockpileWithdrawDisabled}
@@ -310,4 +328,3 @@ function GameModeChromePanel({
 }
 
 export default GameModeChromePanel;
-

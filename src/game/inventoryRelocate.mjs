@@ -2,10 +2,20 @@ import { ensureActorInventoryImpl, normalizeStackFootprintValueImpl } from './ad
 
 function ensureInventoryEquipment(inventory) {
   if (!inventory || typeof inventory !== 'object') {
-    return { gloves: null, coat: null, head: null };
+    return {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
   if (!inventory.equipment || typeof inventory.equipment !== 'object') {
-    inventory.equipment = { gloves: null, coat: null, head: null };
+    inventory.equipment = {
+      gloves: null,
+      coat: null,
+      head: null,
+      basket: null,
+    };
   }
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'gloves')) {
     inventory.equipment.gloves = null;
@@ -15,6 +25,9 @@ function ensureInventoryEquipment(inventory) {
   }
   if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'head')) {
     inventory.equipment.head = null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(inventory.equipment, 'basket')) {
+    inventory.equipment.basket = null;
   }
   return inventory.equipment;
 }

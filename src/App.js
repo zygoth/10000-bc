@@ -3,6 +3,7 @@ import './App.css';
 import {
   advanceTick,
   advanceDay,
+  applyStarterPemmicanSupply,
   canGenerateAnimalZones,
   canGenerateBeehives,
   canGenerateFishPopulations,
@@ -52,6 +53,12 @@ import { isActorWithinCampFootprint } from './game/campFootprint.mjs';
 import { advanceStateToNextMorning } from './game/debriefDayTransition.mjs';
 import { formatPlantPartLabel, parsePlantPartItemId } from './game/plantPartDescriptors.mjs';
 import { getSeason, PLANT_CATALOG, PLANT_BY_ID } from './game/plantCatalog.mjs';
+import {
+  patchSpriteScaleForCapacity,
+  resolvePatchCapacity,
+  resolvePatchLayout,
+  stageSizeForPlant,
+} from './game/plantPatchLayout.mjs';
 import { getLandTrapBaitItemId, SIMPLE_SNARE_TARGET_SPECIES_ID } from './game/trapBaitLand.mjs';
 import GameModeChrome from './ui/gameModeChrome/GameModeChromePanel.jsx';
 import {
@@ -77,6 +84,8 @@ import {
   computeOccupantAnchorYFromTileTop,
   computeTileTopCenterYFromGroundAnchor,
 } from './ui/isoProjection.js';
+import TitleScreen from './ui/title/TitleScreen.jsx';
+import { generateWorldStartState } from './game/worldStart.mjs';
 
 const OBSERVER_VIEWPORT_WIDTH = 15;
 const OBSERVER_VIEWPORT_HEIGHT = 10;
@@ -1055,6 +1064,7 @@ function App() {
   const [seedToolSet, setSeedToolSet] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedToolSet);
   const [seedStationBuildMaterials, setSeedStationBuildMaterials] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedStationBuildMaterials);
   const [seedCraftingProcessInputs, setSeedCraftingProcessInputs] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedCraftingProcessInputs);
+  const [appMode, setAppMode] = useState('title');
   const [gameState, setGameState] = useState(() => applyAutoUnlockGenerations(createInitialGameState(10000, { width: 80, height: 80 })));
   const [cameraX, setCameraX] = useState(32);
   const [cameraY, setCameraY] = useState(35);
@@ -1064,12 +1074,17 @@ function App() {
   const [selectedAnimalSpeciesId, setSelectedAnimalSpeciesId] = useState(() => LAND_ANIMAL_SPECIES[0]?.id || '');
   const [selectedFishSpeciesId, setSelectedFishSpeciesId] = useState(() => FISH_SPECIES[0]?.id || '');
   const [snapshotStatus, setSnapshotStatus] = useState('');
+  const [titleStatus, setTitleStatus] = useState('');
+  const [generationStatus, setGenerationStatus] = useState('idle');
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationDetail, setGenerationDetail] = useState('');
   const [isDraggingObserver, setIsDraggingObserver] = useState(false);
   const [windowSize, setWindowSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
     height: typeof window === 'undefined' ? 720 : window.innerHeight,
   }));
   const fileInputRef = useRef(null);
+  const titleFileInputRef = useRef(null);
   const dragStartRef = useRef(null);
   const dragCameraStartRef = useRef(null);
   const actionLogSeenCountRef = useRef(0);
@@ -1089,6 +1104,7 @@ function App() {
   const [selectedInventoryStackIndex, setSelectedInventoryStackIndex] = useState(null);
   const [selectedStockpileItemId, setSelectedStockpileItemId] = useState('');
   const [selectedWorldItemId, setSelectedWorldItemId] = useState('');
+  const [selectedSledItemId, setSelectedSledItemId] = useState('');
   const [selectedConditionInstanceId, setSelectedConditionInstanceId] = useState('');
   const [selectedVisionItemId, setSelectedVisionItemId] = useState('');
   const [selectedVisionCategory, setSelectedVisionCategory] = useState('');
@@ -1181,7 +1197,11 @@ function App() {
     : Math.max(0, Math.floor(Number(playerActor?.natureSightDaysRemaining) || 0));
   const playerEquipment = playerActor?.inventory?.equipment && typeof playerActor.inventory.equipment === 'object'
     ? playerActor.inventory.equipment
-    : { gloves: null, coat: null, head: null };
+    : {
+      gloves: null,
+      coat: null,
+      head: null,
+    };
   const playerInventoryStacks = useMemo(
     () => (Array.isArray(playerActor?.inventory?.stacks) ? playerActor.inventory.stacks : []),
     [playerActor?.inventory?.stacks],
@@ -1356,6 +1376,56 @@ function App() {
     () => selectedTileWorldItems.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
     [selectedTileWorldItems],
   );
+  const adjacentSledTile = useMemo(() => {
+    if (!playerActor) {
+      return null;
+    }
+    const px = Number(playerActor.x);
+    const py = Number(playerActor.y);
+    if (!Number.isInteger(px) || !Number.isInteger(py)) {
+      return null;
+    }
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const x = px + dx;
+        const y = py + dy;
+        const key = tileKey(x, y);
+        const worldStacks = key && Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
+        const hasSledItem = worldStacks.some((stack) => stack?.itemId === 'tool:sled' && (Number(stack?.quantity) || 0) > 0);
+        const tile = getTileAt(gameState, x, y);
+        const hasSledStash = tile?.sledStash?.active === true;
+        if (hasSledItem || hasSledStash) {
+          return { x, y, tile };
+        }
+      }
+    }
+    return null;
+  }, [gameState, playerActor]);
+
+  const sledPanelVisible = playerActor?.sledAttached === true || Boolean(adjacentSledTile);
+  const sledPanelSource = playerActor?.sledAttached === true ? 'attached' : (adjacentSledTile ? 'ground' : null);
+  const sledPanelStacksRaw = useMemo(() => {
+    if (playerActor?.sledAttached === true) {
+      return Array.isArray(playerActor?.sledCargo?.stacks) ? playerActor.sledCargo.stacks : [];
+    }
+    if (!adjacentSledTile?.tile?.sledStash?.active) {
+      return [];
+    }
+    return Array.isArray(adjacentSledTile.tile.sledStash.stacks) ? adjacentSledTile.tile.sledStash.stacks : [];
+  }, [adjacentSledTile, playerActor]);
+  const sledPanelStacks = useMemo(
+    () => sledPanelStacksRaw.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
+    [sledPanelStacksRaw],
+  );
+  const sledPanelSubtitle = useMemo(() => {
+    if (playerActor?.sledAttached === true) {
+      return 'Attached to player';
+    }
+    if (adjacentSledTile) {
+      return `Ground sled at (${adjacentSledTile.x}, ${adjacentSledTile.y})`;
+    }
+    return '';
+  }, [adjacentSledTile, playerActor]);
   const selectedInventoryItemId = useMemo(() => {
     if (!Number.isInteger(selectedInventoryStackIndex) || selectedInventoryStackIndex < 0) {
       return '';
@@ -1980,6 +2050,18 @@ function App() {
   }, [selectedTileWorldItems, selectedWorldItemId]);
 
   useEffect(() => {
+    if (!sledPanelVisible) {
+      setSelectedSledItemId('');
+      return;
+    }
+    if (!selectedSledItemId && sledPanelStacks.length > 0) {
+      setSelectedSledItemId(sledPanelStacks[0].itemId || '');
+    } else if (selectedSledItemId && !sledPanelStacks.some((entry) => entry.itemId === selectedSledItemId)) {
+      setSelectedSledItemId(sledPanelStacks[0]?.itemId || '');
+    }
+  }, [sledPanelVisible, sledPanelStacks, selectedSledItemId]);
+
+  useEffect(() => {
     if (!selectedConditionInstanceId && medicineRequests.length > 0) {
       setSelectedConditionInstanceId(medicineRequests[0].conditionInstanceId || '');
     } else if (
@@ -2167,17 +2249,19 @@ function App() {
     return visible;
   }, [cameraAnchorElevationPx, cameraX, cameraY, gameState, rendererMode, windowSize.height, windowSize.width]);
 
-  const buildNewGameState = useCallback(() => {
+  const buildNewGameState = useCallback((options = {}) => {
     const parsed = Number.parseInt(seedInput, 10);
     const safeSeed = Number.isFinite(parsed) ? parsed : 10000;
-    const parsedWidth = Number.parseInt(mapWidthInput, 10);
-    const parsedHeight = Number.parseInt(mapHeightInput, 10);
-    const safeWidth = Number.isFinite(parsedWidth) ? parsedWidth : 80;
-    const safeHeight = Number.isFinite(parsedHeight) ? parsedHeight : 80;
+    const safeWidth = 80;
+    const safeHeight = 80;
     const parsedPreSimDays = Number.parseInt(preSimDaysInput, 10);
-    const preSimDays = Number.isFinite(parsedPreSimDays) ? Math.max(0, parsedPreSimDays) : 0;
+    const defaultPreSimDays = Number.isFinite(parsedPreSimDays) ? Math.max(0, parsedPreSimDays) : 0;
+    const preSimDays = Number.isFinite(options.preSimDaysOverride)
+      ? Math.max(0, Math.floor(options.preSimDaysOverride))
+      : defaultPreSimDays;
     const base = createInitialGameState(safeSeed, { width: safeWidth, height: safeHeight });
     const preSimulated = preSimDays > 0 ? advanceDay(base, preSimDays) : base;
+    applyStarterPemmicanSupply(preSimulated);
     const bootstrapped = applyManualTestBootstrap(preSimulated, {
       enabled: enableManualTestBootstrap,
       seedAllResearch,
@@ -2189,8 +2273,6 @@ function App() {
     return applyAutoUnlockGenerations(bootstrapped);
   }, [
     enableManualTestBootstrap,
-    mapHeightInput,
-    mapWidthInput,
     preSimDaysInput,
     seedAllResearch,
     seedAllStations,
@@ -2213,6 +2295,82 @@ function App() {
       setRendererMode('game');
     }
   }, [buildNewGameState, preSimDaysInput, viewportHeight, viewportWidth]);
+
+  const applyLoadedState = useCallback((loadedState, options = {}) => {
+    const renderer = options.rendererMode === 'observer' ? 'observer' : 'game';
+    setGameState(loadedState);
+    setCameraX(Math.max(0, Math.floor((loadedState.width - viewportWidth) / 2)));
+    setCameraY(Math.max(0, Math.floor((loadedState.height - viewportHeight) / 2)));
+    setSelectedGameTile({ x: loadedState.camp.anchorX, y: loadedState.camp.anchorY });
+    setRendererMode(renderer);
+    setAppMode('running');
+  }, [viewportHeight, viewportWidth]);
+
+  const parseLoadedGameStateFromText = useCallback((text) => {
+    const parsed = JSON.parse(text);
+    const normalized = parsed && typeof parsed === 'object' && parsed.state ? parsed.state : parsed;
+    return applyAutoUnlockGenerations(deserializeGameState(JSON.stringify(normalized)));
+  }, []);
+
+  const startWorldGeneration = useCallback(async (targetRendererMode = 'game') => {
+    const parsedSeed = Number.parseInt(seedInput, 10);
+    const safeSeed = Number.isFinite(parsedSeed) ? parsedSeed : 10000;
+    setAppMode('title');
+    setGenerationStatus('generating');
+    setGenerationProgress(0);
+    setGenerationDetail('Preparing world...');
+    setTitleStatus('');
+    try {
+      const generated = await generateWorldStartState({
+        seed: safeSeed,
+        prehistoryDays: 1000,
+        maxWaterDistance: 10,
+        onProgress: (progressEvent) => {
+          setGenerationProgress(Number(progressEvent?.progress) || 0);
+          setGenerationDetail([
+            progressEvent?.stage || 'Generating',
+            progressEvent?.detail || '',
+          ].filter(Boolean).join(' - '));
+        },
+      });
+      const bootstrapped = applyManualTestBootstrap(generated, {
+        enabled: enableManualTestBootstrap,
+        seedAllResearch,
+        seedAllStations,
+        seedToolSet,
+        seedStationBuildMaterials,
+        seedCraftingProcessInputs,
+      });
+      const nextState = applyAutoUnlockGenerations(bootstrapped);
+      applyLoadedState(nextState, { rendererMode: targetRendererMode });
+      setSnapshotStatus(`new game ready (seed ${nextState.seed}, prehistory 1000 day(s))`);
+      setTitleStatus('');
+    } catch (error) {
+      setTitleStatus(`world generation failed: ${error.message}`);
+      setAppMode('title');
+    } finally {
+      setGenerationStatus('idle');
+    }
+  }, [
+    applyLoadedState,
+    enableManualTestBootstrap,
+    seedAllResearch,
+    seedAllStations,
+    seedCraftingProcessInputs,
+    seedStationBuildMaterials,
+    seedToolSet,
+    seedInput,
+  ]);
+
+  const openDebugQuick = useCallback(() => {
+    const nextState = buildNewGameState({ preSimDaysOverride: 0 });
+    applyLoadedState(nextState, { rendererMode: 'observer' });
+    setSnapshotStatus(`debug world ready (seed ${nextState.seed}, pre-sim 0 day(s))`);
+    setTitleStatus('');
+    setGenerationStatus('idle');
+    setGenerationProgress(0);
+    setGenerationDetail('');
+  }, [applyLoadedState, buildNewGameState, preSimDaysInput]);
 
   const runSteps = (steps) => {
     setGameState((prev) => applyAutoUnlockGenerations(advanceDay(cloneGameStateForUpdate(prev), steps)));
@@ -2455,6 +2613,62 @@ function App() {
     playerInventoryEntries,
     playerInventoryStacks,
     selectedInventoryStackIndex,
+    submitPlayerAction,
+  ]);
+
+  const runSledQuickAction = useCallback((mode) => {
+    if (!sledPanelVisible || !playerActor) {
+      return;
+    }
+    if (mode === 'add') {
+      if (!selectedInventoryItemId) {
+        setActionComposerStatus('Blocked: select an inventory item to add to sled.');
+        return;
+      }
+      const payload = {
+        itemId: selectedInventoryItemId,
+        quantity: Math.max(1, Math.floor(Number(selectedInventoryQuantity) || 1)),
+        source: sledPanelSource,
+        ...(sledPanelSource === 'ground' && adjacentSledTile
+          ? { x: adjacentSledTile.x, y: adjacentSledTile.y }
+          : {}),
+      };
+      submitPlayerAction('sled_stow_add', payload);
+      setActionComposerStatus('Submitted: sled_stow_add');
+      return;
+    }
+    if (mode === 'remove') {
+      if (!selectedSledItemId) {
+        setActionComposerStatus('Blocked: select a sled item to remove.');
+        return;
+      }
+      const payload = {
+        itemId: selectedSledItemId,
+        quantity: Math.max(
+          1,
+          Math.floor(
+            Number(
+              sledPanelStacks.find((entry) => entry.itemId === selectedSledItemId)?.quantity,
+            ) || 1,
+          ),
+        ),
+        source: sledPanelSource,
+        ...(sledPanelSource === 'ground' && adjacentSledTile
+          ? { x: adjacentSledTile.x, y: adjacentSledTile.y }
+          : {}),
+      };
+      submitPlayerAction('sled_stow_remove', payload);
+      setActionComposerStatus('Submitted: sled_stow_remove');
+    }
+  }, [
+    adjacentSledTile,
+    playerActor,
+    selectedInventoryItemId,
+    selectedInventoryQuantity,
+    selectedSledItemId,
+    sledPanelStacks,
+    sledPanelSource,
+    sledPanelVisible,
     submitPlayerAction,
   ]);
 
@@ -2827,6 +3041,22 @@ function App() {
     setSnapshotStatus('snapshot saved');
   };
 
+  const returnToTitleScreenWithAutoSave = useCallback(() => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      state: gameState,
+      metrics,
+    };
+    try {
+      window.localStorage.setItem('10000bc_autosave_snapshot', serializeGameState(payload));
+      setTitleStatus('progress auto-saved locally before returning to title');
+    } catch (error) {
+      setTitleStatus(`auto-save failed before returning to title: ${error.message}`);
+    }
+    setIsPauseMenuOpen(false);
+    setAppMode('title');
+  }, [gameState, metrics]);
+
   const handleLoadSnapshot = async (event) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -2835,17 +3065,40 @@ function App() {
 
     try {
       const text = await file.text();
-      const loadedState = applyAutoUnlockGenerations(deserializeGameState(text));
-      setGameState(loadedState);
-      setCameraX(Math.max(0, Math.floor((loadedState.width - viewportWidth) / 2)));
-      setCameraY(Math.max(0, Math.floor((loadedState.height - viewportHeight) / 2)));
+      const loadedState = parseLoadedGameStateFromText(text);
+      const rendererAfterLoad = appMode === 'title' ? 'game' : rendererMode;
+      applyLoadedState(loadedState, { rendererMode: rendererAfterLoad });
       setSnapshotStatus(`loaded ${file.name}`);
+      setTitleStatus('');
     } catch (error) {
       setSnapshotStatus(`load failed: ${error.message}`);
+      if (appMode === 'title') {
+        setTitleStatus(`load failed: ${error.message}`);
+      }
     }
 
     event.target.value = '';
   };
+
+  if (appMode === 'title') {
+    return (
+      <TitleScreen
+        onStartNewGame={() => {
+          startWorldGeneration('game');
+        }}
+        onLoadGame={() => titleFileInputRef.current?.click()}
+        onOpenDebug={() => {
+          openDebugQuick();
+        }}
+        generationStatus={generationStatus}
+        generationProgress={generationProgress}
+        generationDetail={generationDetail}
+        titleStatus={titleStatus}
+        loadInputRef={titleFileInputRef}
+        onLoadFileChange={handleLoadSnapshot}
+      />
+    );
+  }
 
   const activeOverlayMode = rendererMode === 'game' ? 'moisture' : overlayMode;
 
@@ -2917,6 +3170,17 @@ function App() {
         const sprite = plant
           ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
           : (tile.deadLog ? getDeadLogSpriteFrame() : getRockSpriteFrame(tile.rockType));
+        const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
+        const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
+        const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
+        const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
+        const spriteCopies = (plant && sprite && patchCapacity > 1)
+          ? resolvePatchLayout(patchCapacity, `${worldX},${worldY}:${plant.id}`, {
+            radiusPx: Math.max(6, rendererLayout.tilePx * 0.22),
+            minSpacingPx: Math.max(4, rendererLayout.tilePx * 0.12),
+            jitterPx: Math.max(0, rendererLayout.tilePx * 0.03),
+          })
+          : [{ x: 0, y: 0, depthY: 0 }];
         const hasOccupant = Boolean(plant || tile.deadLog || tile.rockType);
         const logMushroomSymbol = tile.deadLog
           ? ((tile.deadLog.fungi || [])
@@ -2947,13 +3211,20 @@ function App() {
             )}
           >
             {sprite ? (
-              <span
-                className="plant-sprite"
-                style={spriteStyle(sprite, rendererLayout.tilePx, rendererLayout.spriteScaleMode)}
-                aria-hidden="true"
-              />
+              spriteCopies.map((copy, copyIndex) => (
+                <span
+                  key={`sprite-copy-${worldX}-${worldY}-${copyIndex}`}
+                  className="plant-sprite"
+                  style={{
+                    ...spriteStyle(sprite, rendererLayout.tilePx, rendererLayout.spriteScaleMode),
+                    transform: `translate(${Math.round(copy.x)}px, ${Math.round(copy.y)}px) scale(${patchScale})`,
+                    transformOrigin: '50% 70%',
+                  }}
+                  aria-hidden="true"
+                />
+              ))
             ) : (
-              <span className="plant-symbol">{symbol}</span>
+              <span className="plant-symbol plant-symbol-fallback">{symbol}</span>
             )}
             {combinedOverlaySymbol ? (
               <span className="mushroom-overlay-symbol">{combinedOverlaySymbol}</span>
@@ -3005,6 +3276,17 @@ function App() {
             const occupantSprite = plant
               ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
               : deadLogSprite;
+            const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
+            const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
+            const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
+            const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
+            const occupantCopies = (plant && occupantSprite && patchCapacity > 1)
+              ? resolvePatchLayout(patchCapacity, `iso:${worldX},${worldY}:${plant.id}`, {
+                radiusPx: Math.max(8, ISO_TILE_HALF_WIDTH_PX * 0.24),
+                minSpacingPx: Math.max(5, ISO_TILE_HALF_WIDTH_PX * 0.1),
+                jitterPx: 2,
+              })
+              : [{ x: 0, y: 0, depthY: 0 }];
             const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
             const zone = tile.groundFungusZone;
             const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
@@ -3039,6 +3321,9 @@ function App() {
             const dirtSprite = !tile.waterType ? getTerrainSpriteFrame('dirt') : null;
             const waterSprite = tile.waterType ? getTerrainSpriteFrame('water') : null;
             const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
+            const missingTerrainSprites = tile.waterType
+              ? !waterSprite
+              : (!dirtSprite && !grassSprite);
             const topFaceReferenceSprite = grassSprite || dirtSprite || waterSprite || null;
             const topFaceReferenceAnchorY = (
               topFaceReferenceSprite?.frame?.anchorY
@@ -3124,6 +3409,15 @@ function App() {
                     )}
                   />
                 ) : null}
+                {missingTerrainSprites ? (
+                  <span
+                    className={`iso-layer iso-layer-ground-fallback ${tile.waterType ? 'iso-layer-ground-fallback-water' : 'iso-layer-ground-fallback-land'}`}
+                    style={{
+                      left: `${screenX}px`,
+                      top: `${groundY}px`,
+                    }}
+                  />
+                ) : null}
                 {rockSprite ? (
                   <span
                     className="iso-layer iso-layer-rock"
@@ -3136,17 +3430,31 @@ function App() {
                   />
                 ) : null}
                 {occupantSprite ? (
+                  occupantCopies.map((copy, copyIndex) => (
+                    <span
+                      key={`iso-occupant-${worldX}-${worldY}-${copyIndex}`}
+                      className="iso-layer iso-layer-occupant"
+                      style={anchoredSpriteStyle(
+                        occupantSprite,
+                        plantOrLogScale * patchScale,
+                        screenX + copy.x,
+                        occupantAnchorY + copy.y,
+                        null,
+                        deadLogSprite ? { anchorYOffsetPx: ISO_TILE_HEIGHT_PX } : null,
+                      )}
+                    />
+                  ))
+                ) : null}
+                {!occupantSprite && plant ? (
                   <span
-                    className="iso-layer iso-layer-occupant"
-                    style={anchoredSpriteStyle(
-                      occupantSprite,
-                      plantOrLogScale,
-                      screenX,
-                      occupantAnchorY,
-                      null,
-                      deadLogSprite ? { anchorYOffsetPx: ISO_TILE_HEIGHT_PX } : null,
-                    )}
-                  />
+                    className="iso-entity-token"
+                    style={{
+                      left: `${screenX}px`,
+                      top: `${tileTopCenterY - 12 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX}px`,
+                    }}
+                  >
+                    {plant.speciesId[0]?.toUpperCase() || '?'}
+                  </span>
                 ) : null}
                 {showAnchorDebug ? (
                   <span
@@ -3256,7 +3564,9 @@ function App() {
           </section>
           <GameModeChrome
           onSwitchToDebug={() => setRendererMode('observer')}
-          onNewGameFromSettings={() => initializeFromSeed(true)}
+          onReturnToTitleScreen={returnToTitleScreenWithAutoSave}
+          onSaveGame={downloadSnapshot}
+          onLoadGame={() => fileInputRef.current?.click()}
           showAnchorDebug={showAnchorDebug}
           onToggleAnchorDebug={() => setShowAnchorDebug((prev) => !prev)}
           metrics={metrics}
@@ -3313,6 +3623,13 @@ function App() {
           onDryingRackRemove={(slotIndex) => submitPlayerAction('camp_drying_rack_remove', { slotIndex, quantity: 1 })}
           selectedWorldItemId={selectedWorldItemId}
           setSelectedWorldItemId={setSelectedWorldItemId}
+          sledPanelVisible={sledPanelVisible}
+          sledAttached={playerActor?.sledAttached === true}
+          sledPanelSubtitle={sledPanelSubtitle}
+          sledStacks={sledPanelStacks}
+          selectedSledItemId={selectedSledItemId}
+          setSelectedSledItemId={setSelectedSledItemId}
+          onRunSledQuickAction={runSledQuickAction}
           worldItemPickupDisabled={selectedWorldItemPickupUi.disabled}
           worldItemPickupDisabledReason={selectedWorldItemPickupUi.reason}
           stockpileWithdrawDisabled={selectedStockpileWithdrawUi.disabled}
@@ -3627,6 +3944,13 @@ function App() {
             </button>
           </div>
         ) : null}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          onChange={handleLoadSnapshot}
+          style={{ display: 'none' }}
+        />
         </main>
         <CarrotPartSpriteProbe />
       </>

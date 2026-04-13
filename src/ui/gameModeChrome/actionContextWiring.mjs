@@ -54,6 +54,8 @@ export function inferTileContextActions(tile) {
       'trap_place_snare',
       'trap_place_deadfall',
       'auto_rod_place',
+      'sled_attach',
+      'sled_detach',
       'tap_insert_spout',
       'tap_remove_spout',
       'tap_place_vessel',
@@ -253,6 +255,9 @@ export function buildDefaultPayload(kind, context) {
     case 'tap_retrieve_vessel':
     case 'leaching_basket_retrieve':
       return sharedTilePayload;
+    case 'sled_attach':
+    case 'sled_detach':
+      return sharedTilePayload;
     case 'harvest':
       if (tile?.plantIds?.length > 0) {
         return {
@@ -382,12 +387,15 @@ export function buildDefaultPayload(kind, context) {
   }
 }
 
-const INVENTORY_QUICK_ACTION_KINDS = ['eat', 'item_drop', 'equip_item', 'camp_stockpile_add', 'camp_drying_rack_add_inventory'];
+const INVENTORY_QUICK_ACTION_KINDS = ['eat', 'item_drop', 'equip_item', 'sled_attach', 'camp_stockpile_add', 'camp_drying_rack_add_inventory'];
 
 const INVENTORY_QUICK_LABEL_BY_KIND = {
   eat: 'Eat',
   item_drop: 'Drop',
   equip_item: 'Equip',
+  sled_attach: 'Attach sled',
+  sled_stow_add: 'Move to Sled',
+  sled_stow_remove: 'Take from Sled',
   camp_stockpile_add: 'Move to Stockpile',
   camp_drying_rack_add_inventory: 'Move to Drying Rack',
 };
@@ -451,6 +459,52 @@ export function buildInventoryQuickActionsMatrix(params) {
         }, playerActor);
       })
       .filter(Boolean);
+
+    const hasSledAccess = playerActor?.sledAttached === true || (() => {
+      const px = Number(playerActor?.x);
+      const py = Number(playerActor?.y);
+      if (!Number.isInteger(px) || !Number.isInteger(py)) {
+        return false;
+      }
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const x = px + dx;
+          const y = py + dy;
+          const key = `${x},${y}`;
+          const worldStacks = Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
+          const hasGroundSled = worldStacks.some((stack) => stack?.itemId === 'tool:sled' && (Number(stack?.quantity) || 0) > 0);
+          const tile = Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(gameState?.width) && Number.isInteger(gameState?.height)
+            && x >= 0 && y >= 0 && x < gameState.width && y < gameState.height
+            ? gameState.tiles?.[(y * gameState.width) + x]
+            : null;
+          if (hasGroundSled || tile?.sledStash?.active === true) {
+            return true;
+          }
+        }
+      }
+      return false;
+    })();
+
+    if (hasSledAccess) {
+      const addPayload = {
+        itemId: itemEntry.itemId,
+        quantity: Math.max(1, Number(itemEntry.quantity) || 1),
+        source: playerActor?.sledAttached === true ? 'attached' : 'ground',
+      };
+      const addValidation = validateAction(gameState, {
+        actorId: 'player',
+        kind: 'sled_stow_add',
+        payload: addPayload,
+      });
+      if (addValidation.ok) {
+        actions.push(annotateContextEntryTickBudget({
+          kind: 'sled_stow_add',
+          label: INVENTORY_QUICK_LABEL_BY_KIND.sled_stow_add,
+          payload: addValidation.normalizedAction?.payload || addPayload,
+          tickCost: Number(addValidation.normalizedAction?.tickCost) || getActionTickCost('sled_stow_add', addPayload),
+        }, playerActor));
+      }
+    }
     const processOptions = resolveProcessOptionsForItemInApp(itemEntry.itemId);
     const stationsAdded = new Set();
     for (const option of processOptions) {

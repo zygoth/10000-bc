@@ -189,6 +189,9 @@ function normalizePlant(rawPlant) {
     soil: normalizedSoil,
     seedingWindow: normalizeSeasonalWindow(rawPlant.seeding_window),
     dispersal: rawPlant.dispersal,
+    maxPlantsPerTile: Number.isFinite(Number(rawPlant.max_plants_per_tile))
+      ? Math.max(1, Math.floor(Number(rawPlant.max_plants_per_tile)))
+      : null,
     parts: normalizedParts,
     ingestion: rawPlant.ingestion && typeof rawPlant.ingestion === 'object'
       ? { ...rawPlant.ingestion }

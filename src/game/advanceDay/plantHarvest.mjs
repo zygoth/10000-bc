@@ -130,7 +130,7 @@ export function applyHarvestActionImpl(state, plantId, partName, subStageId, opt
     );
     appliedActions += 1;
 
-    const actionDamage = perActionVitalityDamage(subStage, entry);
+    const actionDamage = perActionVitalityDamage(subStage, entry, species, plant);
     if (actionDamage > 0) {
       plant.vitality = clamp01(plant.vitality - actionDamage);
       entry.vitalityDamageAppliedThisSeason += actionDamage;

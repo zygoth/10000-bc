@@ -15,6 +15,7 @@ import {
 } from './stockpileDefaultStackOptions.mjs';
 import { applyEnvironmentalVitality, recalculateDynamicShade } from './advanceDay/ecology.mjs';
 import { clonePlant, cloneTile, createEmptyRecentDispersal } from './simState.mjs';
+import { createTickWorkingState } from './simCore.shared.mjs';
 import {
   cloneActors,
   defaultActors,
@@ -3179,7 +3180,8 @@ export function generateGroundFungusZones(state) {
 }
 
 export function advanceTick(state, options = {}) {
-  return advanceTickImpl(state, options, {
+  const workingState = createTickWorkingState(state, cloneTile, clonePlant, cloneActors);
+  return advanceTickImpl(workingState, options, {
     advanceDay: (innerState, steps, dayOpts) => advanceDay(innerState, steps, dayOpts || {}),
     applyItemDecayAndDryingTick,
     ensureTickSystems,
@@ -4594,7 +4596,7 @@ function resolveDefaultFishSpeciesId() {
   return null;
 }
 
-export function getMetrics(state) {
+function buildMetricsScalarSlice(state) {
   const sun = Number(state.dailySunExposure);
   return {
     year: state.year,
@@ -4606,7 +4608,22 @@ export function getMetrics(state) {
     dailyWindVector: state.dailyWindVector
       ? { ...state.dailyWindVector }
       : { x: 0, y: 0, strength: 0, strengthLabel: 'calm', angleRadians: 0 },
-    totalPlants: Object.keys(state.plants).length,
+    totalPlants: Object.keys(state.plants || {}).length,
+  };
+}
+
+/** HUD-safe metrics without O(tiles) dormant scan or full species tally (play mode). */
+export function getMetricsLight(state) {
+  return {
+    ...buildMetricsScalarSlice(state),
+    totalDormantSeeds: 0,
+    speciesCounts: {},
+  };
+}
+
+export function getMetrics(state) {
+  return {
+    ...buildMetricsScalarSlice(state),
     totalDormantSeeds: countDormantSeeds(state),
     speciesCounts: gatherSpeciesCounts(state),
   };

@@ -10,8 +10,9 @@ export function buildAdvanceOneTick(hooks) {
 export function advanceTickImpl(state, options = {}, hooks) {
   let nextState = hooks.advanceDay(state, 0);
   hooks.ensureTickSystems(nextState);
-  return runActionQueue(nextState, options, {
+  const result = runActionQueue(nextState, options, {
     ...hooks,
     advanceOneTick: buildAdvanceOneTick(hooks),
   });
+  return result;
 }

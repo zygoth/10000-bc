@@ -23,6 +23,10 @@ import {
 } from '../trapBaitLand.mjs';
 
 export function applyActionEffectImpl(state, action, deps) {
+  // Copy-on-write helpers for tick working state
+  const getTile = (x, y) => state.getMutableTile ? state.getMutableTile(x, y) : state.tiles[tileIndex(x, y, state.width)];
+  const getPlant = (id) => state.getMutablePlant ? state.getMutablePlant(id) : state.plants[id];
+
   const {
     inBounds,
     tileIndex,
@@ -311,7 +315,7 @@ export function applyActionEffectImpl(state, action, deps) {
     if (!inBounds(nextX, nextY, state.width, state.height)) {
       return;
     }
-    const destinationTile = state.tiles[tileIndex(nextX, nextY, state.width)];
+    const destinationTile = getTile(nextX, nextY);
     if (!destinationTile || isRockTile(destinationTile)) {
       return;
     }
@@ -498,7 +502,7 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
 
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    const tile = getTile(targetX, targetY);
     const inDeepWater = tile?.waterType && tile.waterDepth !== 'shallow';
     if (!tile || inDeepWater || isRockTile(tile)) {
       return;
@@ -508,16 +512,22 @@ export function applyActionEffectImpl(state, action, deps) {
     tile.dormantSeeds = {};
 
     const plantsToRemove = (tile.plantIds || []).filter((plantId) => {
-      const plant = state.plants[plantId];
+      const plant = getPlant(plantId);
       if (!plant?.alive) return false;
       const species = PLANT_BY_ID[plant.speciesId];
       const stage = species?.lifeStages?.find((s) => s.stage === plant.stageName);
       return Number.isFinite(stage?.size) && stage.size <= 4;
     });
     for (const plantId of plantsToRemove) {
-      if (state.plants[plantId]) {
-        state.plants[plantId].alive = false;
-        delete state.plants[plantId];
+      const plant = getPlant(plantId);
+      if (plant) {
+        plant.alive = false;
+        if (state.getMutablePlant) {
+          state.plants = { ...state.plants };
+          delete state.plants[plantId];
+        } else {
+          delete state.plants[plantId];
+        }
       }
     }
     if (plantsToRemove.length > 0) {
@@ -2277,7 +2287,7 @@ export function applyActionEffectImpl(state, action, deps) {
       : Math.floor(Number(action.payload?.poleYield || 0));
     const normalizedPoleYield = Math.max(0, poleYield);
 
-    const tile = state.tiles[tileIndex(targetX, targetY, state.width)];
+    const tile = getTile(targetX, targetY);
     const speciesId = typeof plant.speciesId === 'string' ? plant.speciesId : 'unknown';
 
     if (normalizedPoleYield > 0) {
@@ -2299,7 +2309,12 @@ export function applyActionEffectImpl(state, action, deps) {
         : [];
       tile.disturbed = true;
     }
-    delete state.plants[plantId];
+    if (state.getMutablePlant) {
+      state.plants = { ...state.plants };
+      delete state.plants[plantId];
+    } else {
+      delete state.plants[plantId];
+    }
 
     actor.lastFellTree = {
       plantId,

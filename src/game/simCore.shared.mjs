@@ -1,3 +1,5 @@
+import { tileIndex } from './simWorld.mjs';
+
 export function cloneAnimalDensityByZone(input) {
   if (!input || typeof input !== 'object') {
     return {};
@@ -27,6 +29,55 @@ export function cloneWorldItemsByTile(input) {
   return Object.fromEntries(
     Object.entries(input).map(([key, stacks]) => [key, Array.isArray(stacks) ? stacks.map((stack) => ({ ...(stack || {}) })) : []]),
   );
+}
+
+/** Rebind tick COW accessors after `advanceDay` clones `tiles`/`plants` onto a new state object. */
+export function refreshTickWorkingMutators(state, clonePlant) {
+  const mutablePlantIds = new Set();
+  state.getMutableTile = (x, y) => {
+    const index = tileIndex(x, y, state.width);
+    return state.tiles[index];
+  };
+  state.getMutablePlant = (plantId) => {
+    if (!mutablePlantIds.has(plantId)) {
+      state.plants = { ...state.plants };
+      state.plants[plantId] = clonePlant(state.plants[plantId]);
+      mutablePlantIds.add(plantId);
+    }
+    return state.plants[plantId];
+  };
+}
+
+export function createTickWorkingState(state, cloneTile, clonePlant, cloneActors) {
+  const workingState = {
+    ...state,
+    plants: state.plants || {}, // Share plants initially
+    tiles: state.tiles || [], // Share tiles initially
+    actors: cloneActors(state?.actors),
+    camp: cloneCampState(state?.camp, Math.floor(state.width / 2), Math.floor(state.height / 2)),
+    worldItemsByTile: cloneWorldItemsByTile(state?.worldItemsByTile),
+    pendingActionQueue: Array.isArray(state?.pendingActionQueue)
+      ? state.pendingActionQueue.map((action) => ({ ...(action || {}) }))
+      : [],
+    currentDayActionLog: Array.isArray(state?.currentDayActionLog)
+      ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
+      : [],
+  };
+
+  // Temporary fix for backwards compatibility - eager clone tiles/plants until all mutators migrate
+  workingState.tiles = Array.isArray(workingState.tiles) ? workingState.tiles.map(cloneTile) : [];
+  workingState.plants = Object.fromEntries(Object.entries(state.plants || {}).map(([id, p]) => [id, clonePlant(p)]));
+  // advanceDay(_, 0) used to shallow-clone these maps; tick actions mutate them and must not alias
+  // the committed gameState (tests and snapshots compare before/after references).
+  workingState.animalDensityByZone = cloneAnimalDensityByZone(state?.animalDensityByZone);
+  workingState.fishDensityByTile = cloneFishDensityByTile(state?.fishDensityByTile);
+  if (state?.animalZoneGrid && typeof state.animalZoneGrid === 'object') {
+    workingState.animalZoneGrid = { ...state.animalZoneGrid };
+  }
+
+  refreshTickWorkingMutators(workingState, clonePlant);
+
+  return workingState;
 }
 
 export function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {

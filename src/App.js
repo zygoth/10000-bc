@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import './App.css';
 import {
   advanceTick,
@@ -22,6 +24,7 @@ import {
   getActionTickCost,
   getGroundFungusById,
   getMetrics,
+  getMetricsLight,
   getCampStockpileStackForWithdrawPreview,
   getItemPickupInventoryBlockReason,
   getTileAt,
@@ -1123,7 +1126,11 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const metrics = useMemo(() => getMetrics(gameState), [gameState]);
+  const metrics = useMemo(() => (
+    rendererMode === 'observer'
+      ? getMetrics(gameState)
+      : getMetricsLight(gameState)
+  ), [rendererMode, gameState]);
   const recentDispersalSummary = useMemo(() => {
     const totalsByMethod = gameState.recentDispersal?.totalsByMethod || {};
     const entries = Object.entries(totalsByMethod).sort((a, b) => b[1] - a[1]);
@@ -1244,7 +1251,7 @@ function App() {
 
   const setMealPlanIngredients = useCallback((nextIngredients) => {
     const ingredients = Array.isArray(nextIngredients) ? nextIngredients : [];
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(cloneGameStateForUpdate(prev), {
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
       actions: [
         {
           actionId: `ui-meal-plan-set-${Date.now()}`,
@@ -1305,7 +1312,7 @@ function App() {
     map.set(id, (map.get(id) || 0) + addQty);
     const nextIngredients = Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q }));
 
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(cloneGameStateForUpdate(prev), {
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
       actions: [
         {
           actionId: `a-ui-stockpile-add-${Date.now()}`,
@@ -2249,6 +2256,19 @@ function App() {
     return visible;
   }, [cameraAnchorElevationPx, cameraX, cameraY, gameState, rendererMode, windowSize.height, windowSize.width]);
 
+  const sortedVisibleIsoTiles = useMemo(() => {
+    const sorted = visibleIsoTiles.slice();
+    sorted.sort((a, b) => {
+      const da = a.worldY + a.worldX;
+      const db = b.worldY + b.worldX;
+      if (da !== db) {
+        return da - db;
+      }
+      return a.worldX - b.worldX;
+    });
+    return sorted;
+  }, [visibleIsoTiles]);
+
   const buildNewGameState = useCallback((options = {}) => {
     const parsed = Number.parseInt(seedInput, 10);
     const safeSeed = Number.isFinite(parsed) ? parsed : 10000;
@@ -2377,7 +2397,7 @@ function App() {
   };
 
   const submitPlayerAction = useCallback((kind, payload = {}) => {
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(cloneGameStateForUpdate(prev), {
+    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
       actions: [
         {
           actionId: `ui-${kind}-${Date.now()}`,
@@ -3028,7 +3048,7 @@ function App() {
     const payload = {
       exportedAt: new Date().toISOString(),
       state: gameState,
-      metrics,
+      metrics: getMetrics(gameState),
     };
 
     const blob = new Blob([serializeGameState(payload)], { type: 'application/json' });
@@ -3045,7 +3065,7 @@ function App() {
     const payload = {
       exportedAt: new Date().toISOString(),
       state: gameState,
-      metrics,
+      metrics: getMetrics(gameState),
     };
     try {
       window.localStorage.setItem('10000bc_autosave_snapshot', serializeGameState(payload));
@@ -3055,7 +3075,7 @@ function App() {
     }
     setIsPauseMenuOpen(false);
     setAppMode('title');
-  }, [gameState, metrics]);
+  }, [gameState]);
 
   const handleLoadSnapshot = async (event) => {
     const file = event.target.files?.[0];
@@ -3080,177 +3100,12 @@ function App() {
     event.target.value = '';
   };
 
-  if (appMode === 'title') {
-    return (
-      <TitleScreen
-        onStartNewGame={() => {
-          startWorldGeneration('game');
-        }}
-        onLoadGame={() => titleFileInputRef.current?.click()}
-        onOpenDebug={() => {
-          openDebugQuick();
-        }}
-        generationStatus={generationStatus}
-        generationProgress={generationProgress}
-        generationDetail={generationDetail}
-        titleStatus={titleStatus}
-        loadInputRef={titleFileInputRef}
-        onLoadFileChange={handleLoadSnapshot}
-      />
-    );
-  }
+  const isometricPlayView = useMemo(() => {
+    if (rendererMode !== 'game') {
+      return null;
+    }
 
-  const activeOverlayMode = rendererMode === 'game' ? 'moisture' : overlayMode;
-
-  const renderTileGrid = () => (
-    <div
-      className={[
-        'tile-grid',
-        'draggable-grid',
-        `renderer-${rendererMode}`,
-        rendererMode === 'game' ? 'fullscreen-grid' : '',
-        isDraggingObserver ? 'dragging' : '',
-      ].filter(Boolean).join(' ')}
-      style={{
-        '--tile-size-px': `${rendererLayout.tilePx}px`,
-        '--tile-gap-px': `${rendererLayout.tileGapPx}px`,
-        '--viewport-width': viewportWidth,
-        '--viewport-height': viewportHeight,
-      }}
-      onPointerDown={handleObserverPointerDown}
-      onPointerMove={handleObserverPointerMove}
-      onPointerUp={finishObserverDrag}
-      onPointerCancel={finishObserverDrag}
-    >
-      {rows.map((row) => row.map(({ worldX, worldY, tile }) => {
-        if (!tile) {
-          return <div key={`${worldX}-${worldY}`} className="tile offmap">×</div>;
-        }
-
-        const firstPlantId = tile.plantIds[0];
-        const plant = firstPlantId ? gameState.plants[firstPlantId] : null;
-        const zone = tile.groundFungusZone;
-        const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
-          ? zone.speciesId[0].toUpperCase()
-          : '';
-        const featureOverlaySymbol = tile.beehive
-          ? 'B'
-          : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
-        const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
-          ? gameState.worldItemsByTile[`${worldX},${worldY}`]
-          : [];
-        const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
-        const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
-        const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
-        const tileEntityTokens = buildTileEntityTokens(tile, {
-          isPlayerTile,
-          isCampTile,
-          stationAtTile,
-          worldItems,
-          camp: gameState?.camp,
-        });
-        const symbol = plant ? plant.speciesId[0].toUpperCase() : zoneSymbol;
-        const recentTileEvent = gameState.recentDispersal?.byTile?.[`${worldX},${worldY}`] || null;
-        const supportKey = `${worldX},${worldY}`;
-        const speciesSupport = speciesSupportKeySet.has(supportKey);
-        const selectedAnimalDensity = activeOverlayMode === 'animalDensity'
-          ? getAnimalDensityAtTile(gameState, selectedAnimalSpeciesId, worldX, worldY)
-          : null;
-        const selectedFishDensity = activeOverlayMode === 'fishDensity'
-          ? getFishDensityAtTile(gameState, selectedFishSpeciesId, worldX, worldY)
-          : null;
-        const bg = overlayColor(
-          activeOverlayMode,
-          tile,
-          recentTileEvent,
-          speciesSupport,
-          selectedAnimalDensity,
-          selectedFishDensity,
-        );
-        const sprite = plant
-          ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
-          : (tile.deadLog ? getDeadLogSpriteFrame() : getRockSpriteFrame(tile.rockType));
-        const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
-        const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
-        const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
-        const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
-        const spriteCopies = (plant && sprite && patchCapacity > 1)
-          ? resolvePatchLayout(patchCapacity, `${worldX},${worldY}:${plant.id}`, {
-            radiusPx: Math.max(6, rendererLayout.tilePx * 0.22),
-            minSpacingPx: Math.max(4, rendererLayout.tilePx * 0.12),
-            jitterPx: Math.max(0, rendererLayout.tilePx * 0.03),
-          })
-          : [{ x: 0, y: 0, depthY: 0 }];
-        const hasOccupant = Boolean(plant || tile.deadLog || tile.rockType);
-        const logMushroomSymbol = tile.deadLog
-          ? ((tile.deadLog.fungi || [])
-            .find((entry) => Number(entry?.yield_current_grams) > 0)
-            ?.species_id?.[0]?.toUpperCase() || '')
-          : '';
-        const mushroomOverlaySymbol = logMushroomSymbol || (!plant && zoneSymbol ? zoneSymbol : '');
-        const combinedOverlaySymbol = [mushroomOverlaySymbol, featureOverlaySymbol].filter(Boolean).join('');
-
-        return (
-          <div
-            key={`${worldX}-${worldY}`}
-            className={`tile tile-${rendererMode}`}
-            style={{ background: bg }}
-            title={tileTooltip(
-              worldX,
-              worldY,
-              tile,
-              plant,
-              recentTileEvent,
-              activeOverlayMode === 'speciesSupport' ? selectedSpeciesId : null,
-              speciesSupport,
-              hasOccupant,
-              activeOverlayMode === 'animalDensity' ? selectedAnimalSpeciesId : null,
-              selectedAnimalDensity,
-              activeOverlayMode === 'fishDensity' ? selectedFishSpeciesId : null,
-              selectedFishDensity,
-            )}
-          >
-            {sprite ? (
-              spriteCopies.map((copy, copyIndex) => (
-                <span
-                  key={`sprite-copy-${worldX}-${worldY}-${copyIndex}`}
-                  className="plant-sprite"
-                  style={{
-                    ...spriteStyle(sprite, rendererLayout.tilePx, rendererLayout.spriteScaleMode),
-                    transform: `translate(${Math.round(copy.x)}px, ${Math.round(copy.y)}px) scale(${patchScale})`,
-                    transformOrigin: '50% 70%',
-                  }}
-                  aria-hidden="true"
-                />
-              ))
-            ) : (
-              <span className="plant-symbol plant-symbol-fallback">{symbol}</span>
-            )}
-            {combinedOverlaySymbol ? (
-              <span className="mushroom-overlay-symbol">{combinedOverlaySymbol}</span>
-            ) : null}
-            {tileEntityTokens.length > 0 ? (
-              <span className="tile-entity-token">{tileEntityTokens.slice(0, 2).join(' ')}</span>
-            ) : null}
-            {rendererLayout.showTileMeta ? (
-              <span className="tile-meta">{hasOccupant ? '1' : '0'}</span>
-            ) : null}
-          </div>
-        );
-      }))}
-    </div>
-  );
-
-  const renderIsometricPlayView = () => {
-    const tiles = visibleIsoTiles
-      .sort((a, b) => {
-        const da = a.worldY + a.worldX;
-        const db = b.worldY + b.worldX;
-        if (da !== db) {
-          return da - db;
-        }
-        return a.worldX - b.worldX;
-      });
+    const tiles = sortedVisibleIsoTiles;
 
     const canvasWidth = windowSize.width;
     const canvasHeight = windowSize.height;
@@ -3553,14 +3408,196 @@ function App() {
         </div>
       </div>
     );
-  };
+  }, [
+    rendererMode,
+    sortedVisibleIsoTiles,
+    cameraAnchorElevationPx,
+    cameraX,
+    cameraY,
+    windowSize.width,
+    windowSize.height,
+    gameState,
+    selectedTileX,
+    selectedTileY,
+    showAnchorDebug,
+    tileContextMenu,
+    availableContextActionEntries,
+    runContextMenuAction,
+    runTileQuickAction,
+    setSelectedGameTile,
+    setTilePanelMode,
+    setTileContextMenu,
+    setActionComposerStatus,
+    playerActor,
+  ]);
+
+  if (appMode === 'title') {
+    return (
+      <TitleScreen
+        onStartNewGame={() => {
+          startWorldGeneration('game');
+        }}
+        onLoadGame={() => titleFileInputRef.current?.click()}
+        onOpenDebug={() => {
+          openDebugQuick();
+        }}
+        generationStatus={generationStatus}
+        generationProgress={generationProgress}
+        generationDetail={generationDetail}
+        titleStatus={titleStatus}
+        loadInputRef={titleFileInputRef}
+        onLoadFileChange={handleLoadSnapshot}
+      />
+    );
+  }
+
+  const activeOverlayMode = rendererMode === 'game' ? 'moisture' : overlayMode;
+
+  const renderTileGrid = () => (
+    <div
+      className={[
+        'tile-grid',
+        'draggable-grid',
+        `renderer-${rendererMode}`,
+        rendererMode === 'game' ? 'fullscreen-grid' : '',
+        isDraggingObserver ? 'dragging' : '',
+      ].filter(Boolean).join(' ')}
+      style={{
+        '--tile-size-px': `${rendererLayout.tilePx}px`,
+        '--tile-gap-px': `${rendererLayout.tileGapPx}px`,
+        '--viewport-width': viewportWidth,
+        '--viewport-height': viewportHeight,
+      }}
+      onPointerDown={handleObserverPointerDown}
+      onPointerMove={handleObserverPointerMove}
+      onPointerUp={finishObserverDrag}
+      onPointerCancel={finishObserverDrag}
+    >
+      {rows.map((row) => row.map(({ worldX, worldY, tile }) => {
+        if (!tile) {
+          return <div key={`${worldX}-${worldY}`} className="tile offmap">×</div>;
+        }
+
+        const firstPlantId = tile.plantIds[0];
+        const plant = firstPlantId ? gameState.plants[firstPlantId] : null;
+        const zone = tile.groundFungusZone;
+        const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
+          ? zone.speciesId[0].toUpperCase()
+          : '';
+        const featureOverlaySymbol = tile.beehive
+          ? 'B'
+          : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
+        const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
+          ? gameState.worldItemsByTile[`${worldX},${worldY}`]
+          : [];
+        const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
+        const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+        const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
+        const tileEntityTokens = buildTileEntityTokens(tile, {
+          isPlayerTile,
+          isCampTile,
+          stationAtTile,
+          worldItems,
+          camp: gameState?.camp,
+        });
+        const symbol = plant ? plant.speciesId[0].toUpperCase() : zoneSymbol;
+        const recentTileEvent = gameState.recentDispersal?.byTile?.[`${worldX},${worldY}`] || null;
+        const supportKey = `${worldX},${worldY}`;
+        const speciesSupport = speciesSupportKeySet.has(supportKey);
+        const selectedAnimalDensity = activeOverlayMode === 'animalDensity'
+          ? getAnimalDensityAtTile(gameState, selectedAnimalSpeciesId, worldX, worldY)
+          : null;
+        const selectedFishDensity = activeOverlayMode === 'fishDensity'
+          ? getFishDensityAtTile(gameState, selectedFishSpeciesId, worldX, worldY)
+          : null;
+        const bg = overlayColor(
+          activeOverlayMode,
+          tile,
+          recentTileEvent,
+          speciesSupport,
+          selectedAnimalDensity,
+          selectedFishDensity,
+        );
+        const sprite = plant
+          ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
+          : (tile.deadLog ? getDeadLogSpriteFrame() : getRockSpriteFrame(tile.rockType));
+        const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
+        const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
+        const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
+        const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
+        const spriteCopies = (plant && sprite && patchCapacity > 1)
+          ? resolvePatchLayout(patchCapacity, `${worldX},${worldY}:${plant.id}`, {
+            radiusPx: Math.max(6, rendererLayout.tilePx * 0.22),
+            minSpacingPx: Math.max(4, rendererLayout.tilePx * 0.12),
+            jitterPx: Math.max(0, rendererLayout.tilePx * 0.03),
+          })
+          : [{ x: 0, y: 0, depthY: 0 }];
+        const hasOccupant = Boolean(plant || tile.deadLog || tile.rockType);
+        const logMushroomSymbol = tile.deadLog
+          ? ((tile.deadLog.fungi || [])
+            .find((entry) => Number(entry?.yield_current_grams) > 0)
+            ?.species_id?.[0]?.toUpperCase() || '')
+          : '';
+        const mushroomOverlaySymbol = logMushroomSymbol || (!plant && zoneSymbol ? zoneSymbol : '');
+        const combinedOverlaySymbol = [mushroomOverlaySymbol, featureOverlaySymbol].filter(Boolean).join('');
+
+        return (
+          <div
+            key={`${worldX}-${worldY}`}
+            className={`tile tile-${rendererMode}`}
+            style={{ background: bg }}
+            title={tileTooltip(
+              worldX,
+              worldY,
+              tile,
+              plant,
+              recentTileEvent,
+              activeOverlayMode === 'speciesSupport' ? selectedSpeciesId : null,
+              speciesSupport,
+              hasOccupant,
+              activeOverlayMode === 'animalDensity' ? selectedAnimalSpeciesId : null,
+              selectedAnimalDensity,
+              activeOverlayMode === 'fishDensity' ? selectedFishSpeciesId : null,
+              selectedFishDensity,
+            )}
+          >
+            {sprite ? (
+              spriteCopies.map((copy, copyIndex) => (
+                <span
+                  key={`sprite-copy-${worldX}-${worldY}-${copyIndex}`}
+                  className="plant-sprite"
+                  style={{
+                    ...spriteStyle(sprite, rendererLayout.tilePx, rendererLayout.spriteScaleMode),
+                    transform: `translate(${Math.round(copy.x)}px, ${Math.round(copy.y)}px) scale(${patchScale})`,
+                    transformOrigin: '50% 70%',
+                  }}
+                  aria-hidden="true"
+                />
+              ))
+            ) : (
+              <span className="plant-symbol plant-symbol-fallback">{symbol}</span>
+            )}
+            {combinedOverlaySymbol ? (
+              <span className="mushroom-overlay-symbol">{combinedOverlaySymbol}</span>
+            ) : null}
+            {tileEntityTokens.length > 0 ? (
+              <span className="tile-entity-token">{tileEntityTokens.slice(0, 2).join(' ')}</span>
+            ) : null}
+            {rendererLayout.showTileMeta ? (
+              <span className="tile-meta">{hasOccupant ? '1' : '0'}</span>
+            ) : null}
+          </div>
+        );
+      }))}
+    </div>
+  );
 
   if (rendererMode === 'game') {
     return (
       <>
         <main className="app app-game-mode">
           <section className="game-stage">
-            {renderIsometricPlayView()}
+            {isometricPlayView}
           </section>
           <GameModeChrome
           onSwitchToDebug={() => setRendererMode('observer')}
@@ -3650,7 +3687,7 @@ function App() {
             setGameState((prev) => {
               const currentDayTick = Math.max(0, Math.floor(Number(prev?.dayTick) || 0));
               const ticksUntilDebrief = Math.max(0, NIGHT_TICK_THRESHOLD - currentDayTick);
-              let next = cloneGameStateForUpdate(prev);
+              let next = prev;
               if (ticksUntilDebrief > 0) {
                 next = advanceTick(next, { idleTicks: ticksUntilDebrief });
               }
@@ -3689,9 +3726,8 @@ function App() {
           onMealRemoveIngredient={removeMealIngredient}
           onBeginDay={() => {
             setGameState((prev) => {
-              const safePrev = cloneGameStateForUpdate(prev);
               // Commit stew now, then let the remaining ticks drain hunger into morning.
-              const committed = advanceTick(safePrev, {
+              const committed = advanceTick(prev, {
                 actions: [
                   {
                     actionId: `ui-meal-plan-commit-${Date.now()}`,

@@ -8504,6 +8504,35 @@ function runAdvanceTickInputImmutabilityTest() {
   );
 }
 
+function runAdvanceTickStrictModeRegressionTest() {
+  const state = createInitialGameState(4202, { width: 40, height: 40 });
+
+  const updater = (prev) => advanceTick(prev, {
+    actions: [
+      {
+        actionId: 'strict-mode-move',
+        actorId: 'player',
+        kind: 'move',
+        issuedAtTick: 0,
+        payload: { dx: 1, dy: 0 },
+      },
+    ],
+  });
+
+  // Simulate React Strict Mode double-invocation
+  const firstResult = updater(state);
+  const secondResult = updater(state);
+
+  assert.equal(
+    JSON.stringify(firstResult),
+    JSON.stringify(secondResult),
+    'advanceTick should produce identical results on double-invocation (Strict Mode regression guard)',
+  );
+  assert.ok(firstResult !== state, 'first result should be a new object');
+  assert.ok(secondResult !== state, 'second result should be a new object');
+  assert.ok(firstResult !== secondResult, 'results should be separate objects');
+}
+
 function runAdvanceTickInvalidActionRejectionTest() {
   const state = createInitialGameState(4203, { width: 30, height: 30 });
 
@@ -11890,6 +11919,7 @@ function main() {
     ['interrupted player dig resume', runInterruptedPlayerDigResumeTest],
     ['drying rack and ground drying progression', runDryingRackAndGroundDryingProgressionTest],
     ['advanceTick input immutability', runAdvanceTickInputImmutabilityTest],
+    ['advanceTick strict-mode regression', runAdvanceTickStrictModeRegressionTest],
     ['advanceTick invalid action rejection', runAdvanceTickInvalidActionRejectionTest],
     ['getAllActions smoke', runGetAllActionsSmokeTest],
     ['advanceTick budget gate', runAdvanceTickBudgetGateTest],

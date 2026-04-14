@@ -92,12 +92,12 @@ export function applyDigRevealTicksToTile(state, x, y, progressDelta) {
   if (!Number.isFinite(dt) || dt <= 0 || !inBounds(x, y, state.width, state.height)) {
     return;
   }
-  const tile = state.tiles[tileIndex(x, y, state.width)];
+  const tile = state.getMutableTile ? state.getMutableTile(x, y) : state.tiles[tileIndex(x, y, state.width)];
   if (!tile || !Array.isArray(tile.plantIds)) {
     return;
   }
   for (const plantId of tile.plantIds) {
-    const plant = state.plants?.[plantId];
+    const plant = state.getMutablePlant ? state.getMutablePlant(plantId) : state.plants?.[plantId];
     if (!plant?.alive || !Array.isArray(plant.activeSubStages)) {
       continue;
     }

@@ -195,7 +195,7 @@ export function runActionQueue(nextState, options, hooks) {
           : 0;
 
         if (canMarkTile) {
-          const tile = nextState.tiles[tileIndex(targetX, targetY, nextState.width)];
+          const tile = nextState.getMutableTile(targetX, targetY);
           if (tile) {
             tile.disturbed = true;
             tile.lastDigProgress = {

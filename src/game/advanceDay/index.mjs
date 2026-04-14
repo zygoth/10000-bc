@@ -1,3 +1,4 @@
+import { refreshTickWorkingMutators } from '../simCore.shared.mjs';
 import { runDailyStep } from './dailyPipeline.mjs';
 import { applyYearRollover } from './yearRollover.mjs';
 
@@ -14,6 +15,17 @@ export function advanceDayImpl(state, steps = 1, hooks) {
     ensureDailyWeatherState,
     mulberry32,
   } = hooks;
+
+  // advanceTick calls advanceDay(state, 0) for shared prep; steps===0 must not reclone the
+  // full map — createTickWorkingState already produced a mutable tick working copy.
+  if (steps === 0) {
+    ensureDailyWeatherState(state);
+    state.recentDispersal = createEmptyRecentDispersal(state.dayOfYear);
+    if (typeof state.getMutableTile !== 'function') {
+      refreshTickWorkingMutators(state, clonePlant);
+    }
+    return state;
+  }
 
   const clonedPlants = {};
   for (const [plantId, plant] of Object.entries(state.plants || {})) {
@@ -65,6 +77,10 @@ export function advanceDayImpl(state, steps = 1, hooks) {
         actor.thirst = 1;
       }
     }
+  }
+
+  if (typeof state.getMutableTile === 'function') {
+    refreshTickWorkingMutators(nextState, clonePlant);
   }
 
   return nextState;

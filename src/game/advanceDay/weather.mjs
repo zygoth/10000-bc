@@ -1,5 +1,5 @@
 import { getSeason } from '../plantCatalog.mjs';
-import { mulberry32 } from '../simWorld.mjs';
+import { getTileForWrite, mulberry32 } from '../simWorld.mjs';
 
 const YEAR_LENGTH_DAYS = 40;
 const TEMPERATURE_MIN_F = 15;
@@ -235,15 +235,22 @@ export function applyDailyWaterFreezeState(state) {
 
   for (const tile of state.tiles || []) {
     if (!tile?.waterType) {
-      tile.waterFrozen = false;
+      if (tile.waterFrozen === true) {
+        getTileForWrite(state, tile.x, tile.y).waterFrozen = false;
+      }
       continue;
     }
 
     if (!isStillWaterType(tile.waterType)) {
-      tile.waterFrozen = false;
+      if (tile.waterFrozen === true) {
+        getTileForWrite(state, tile.x, tile.y).waterFrozen = false;
+      }
       continue;
     }
 
-    tile.waterFrozen = freezingStreak >= 2;
+    const nextFrozen = freezingStreak >= 2;
+    if (tile.waterFrozen !== nextFrozen) {
+      getTileForWrite(state, tile.x, tile.y).waterFrozen = nextFrozen;
+    }
   }
 }

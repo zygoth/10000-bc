@@ -1,3 +1,5 @@
+import { getTileForWrite } from '../simWorld.mjs';
+
 export function updatePlantLifeImpl(state, plantInstance, rng, deps) {
   const {
     PLANT_BY_ID,
@@ -7,7 +9,7 @@ export function updatePlantLifeImpl(state, plantInstance, rng, deps) {
     lifecycleYearOrdinal,
     getSeason,
     PERENNIAL_WINTER_DAILY_DEATH_RATE,
-    buildActiveSubStages,
+    syncPlantActiveSubStages,
     advanceActiveSubStageRegrowth,
     disperseSeeds,
   } = deps;
@@ -48,12 +50,7 @@ export function updatePlantLifeImpl(state, plantInstance, rng, deps) {
     return;
   }
 
-  plantInstance.activeSubStages = buildActiveSubStages(
-    species,
-    plantInstance.stageName,
-    state.dayOfYear,
-    plantInstance.activeSubStages,
-  );
+  syncPlantActiveSubStages(state, plantInstance);
   advanceActiveSubStageRegrowth(plantInstance, species, state.dayOfYear);
 
   disperseSeeds(state, plantInstance, species, rng);
@@ -76,21 +73,24 @@ export function processDormantSeedsImpl(state, rng, deps) {
 
   for (const tile of state.tiles) {
     if (isRockTile(tile)) {
-      tile.dormantSeeds = {};
+      const rockTile = getTileForWrite(state, tile.x, tile.y);
+      rockTile.dormantSeeds = {};
       continue;
     }
 
-    const seedEntries = Object.entries(tile.dormantSeeds);
+    const seedEntries = Object.entries(tile.dormantSeeds || {});
     if (seedEntries.length === 0) {
       continue;
     }
+
+    const mt = getTileForWrite(state, tile.x, tile.y);
 
     for (const [speciesId, entry] of seedEntries) {
       const species = PLANT_BY_ID[speciesId];
       entry.ageDays += 1;
 
       if (entry.ageDays > species.dispersal.viable_lifespan_days) {
-        delete tile.dormantSeeds[speciesId];
+        delete mt.dormantSeeds[speciesId];
         continue;
       }
 
@@ -98,16 +98,16 @@ export function processDormantSeedsImpl(state, rng, deps) {
         continue;
       }
 
-      if (tile.plantIds.length >= MAX_PLANTS_PER_TILE) {
+      if (mt.plantIds.length >= MAX_PLANTS_PER_TILE) {
         continue;
       }
 
-      const isDisturbed = tile.disturbed === true;
-      if (!isPlantWithinEnvironmentalTolerance(species, tile)) {
+      const isDisturbed = mt.disturbed === true;
+      if (!isPlantWithinEnvironmentalTolerance(species, mt)) {
         continue;
       }
 
-      const soilMatch = computeSoilMatch(species, tile);
+      const soilMatch = computeSoilMatch(species, mt);
       const methodModifier = species.dispersal.method === 'animal_eaten' ? 0.7 : 1;
       const disturbanceModifier = species.dispersal.requires_disturbance && !isDisturbed ? 0.05 : 1;
       const pioneerModifier = species.dispersal.pioneer && isDisturbed ? 2 : 1;
@@ -130,46 +130,58 @@ export function processDormantSeedsImpl(state, rng, deps) {
       }
 
       addPlantInstance(state, speciesId, spot.x, spot.y, 0, 'seed');
-      delete tile.dormantSeeds[speciesId];
+      delete mt.dormantSeeds[speciesId];
     }
   }
 }
 
 export function cleanupDeadPlantsImpl(state, deps) {
-  const { maybeCreateDeadLog, tileIndex } = deps;
+  const { maybeCreateDeadLog, tileIndex, afterPlantRemovedForDynamicShade } = deps;
   for (const plantId of Object.keys(state.plants)) {
     const plant = state.plants[plantId];
     if (plant.alive) {
       continue;
     }
 
+    if (typeof afterPlantRemovedForDynamicShade === 'function') {
+      afterPlantRemovedForDynamicShade(state, plant);
+    }
+
     maybeCreateDeadLog(state, plant);
-    const tile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
+    const tile = getTileForWrite(state, plant.x, plant.y);
     tile.plantIds = tile.plantIds.filter((id) => id !== plantId);
     delete state.plants[plantId];
   }
 }
 
 export function reconcilePlantOccupancyImpl(state, deps) {
-  const { isRockTile, MAX_PLANTS_PER_TILE, inBounds, tileIndex } = deps;
+  // Disabled (perf): full-grid reconcile + getTileForWrite was very expensive. plantIds are
+  // expected to stay consistent via add/remove writers. Restore the block below if desync bugs appear.
+  void state;
+  void deps;
+  return;
+
+  /*
+  const { isRockTile, MAX_PLANTS_PER_TILE, inBounds, afterPlantRemovedForDynamicShade } = deps;
   for (const tile of state.tiles) {
-    if (isRockTile(tile)) {
-      tile.plantIds = [];
+    const t = getTileForWrite(state, tile.x, tile.y);
+    if (isRockTile(t)) {
+      t.plantIds = [];
       continue;
     }
 
-    if (!Array.isArray(tile.plantIds)) {
-      tile.plantIds = [];
+    if (!Array.isArray(t.plantIds)) {
+      t.plantIds = [];
       continue;
     }
 
     const validIds = [];
-    for (const plantId of tile.plantIds) {
+    for (const plantId of t.plantIds) {
       const plant = state.plants[plantId];
       if (!plant || !plant.alive) {
         continue;
       }
-      if (plant.x !== tile.x || plant.y !== tile.y) {
+      if (plant.x !== t.x || plant.y !== t.y) {
         continue;
       }
       validIds.push(plantId);
@@ -177,7 +189,7 @@ export function reconcilePlantOccupancyImpl(state, deps) {
         break;
       }
     }
-    tile.plantIds = validIds;
+    t.plantIds = validIds;
   }
 
   for (const [plantId, plant] of Object.entries(state.plants)) {
@@ -185,12 +197,18 @@ export function reconcilePlantOccupancyImpl(state, deps) {
       continue;
     }
     if (!inBounds(plant.x, plant.y, state.width, state.height)) {
+      if (typeof afterPlantRemovedForDynamicShade === 'function') {
+        afterPlantRemovedForDynamicShade(state, plant);
+      }
       delete state.plants[plantId];
       continue;
     }
 
-    const hostTile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
+    const hostTile = getTileForWrite(state, plant.x, plant.y);
     if (isRockTile(hostTile)) {
+      if (typeof afterPlantRemovedForDynamicShade === 'function') {
+        afterPlantRemovedForDynamicShade(state, plant);
+      }
       delete state.plants[plantId];
       continue;
     }
@@ -199,8 +217,12 @@ export function reconcilePlantOccupancyImpl(state, deps) {
       if (hostTile.plantIds.length < MAX_PLANTS_PER_TILE) {
         hostTile.plantIds.push(plantId);
       } else {
+        if (typeof afterPlantRemovedForDynamicShade === 'function') {
+          afterPlantRemovedForDynamicShade(state, plant);
+        }
         delete state.plants[plantId];
       }
     }
   }
+  */
 }

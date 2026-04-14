@@ -2,6 +2,7 @@ import { PLANT_BY_ID, getSeason } from '../plantCatalog.mjs';
 import {
   calculateSoilSuitability,
   drainageToIndex,
+  getTileForWrite,
   inBounds,
   isRockTile,
   tileIndex,
@@ -44,8 +45,11 @@ function environmentalStressSeverity(species, tile) {
 export function applyEnvironmentalVitality(state) {
   const season = getSeason(state.dayOfYear);
 
-  for (const plant of Object.values(state.plants)) {
-    if (!plant.alive) {
+  for (const plantId of Object.keys(state.plants || {})) {
+    const plant = typeof state.getMutablePlant === 'function'
+      ? state.getMutablePlant(plantId)
+      : state.plants[plantId];
+    if (!plant?.alive) {
       continue;
     }
 
@@ -89,58 +93,126 @@ function shadeStrengthForSize(size) {
   return Math.max(0.08, Math.min(0.85, (size - 2) / 8));
 }
 
-export function recalculateDynamicShade(state) {
-  const shadeAccumulation = new Array(state.tiles.length).fill(0);
-  const occupantSizeByTile = new Array(state.tiles.length).fill(0);
+/** Offsets from a receiver tile to candidate plant home tiles (Manhattan 1..2). Matches max `shadeRangeForSize` of 2. */
+const PLANT_SHADE_CANDIDATE_OFFSETS = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [2, 0], [-2, 0], [0, 2], [0, -2],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
 
-  for (const plant of Object.values(state.plants)) {
-    if (!plant.alive) {
-      continue;
-    }
+/** Shade this plant casts onto neighbor tile (rx, ry); 0 if same cell or out of range (mirrors applyShadeAndSoilToTiles ring logic). */
+function plantShadeContributionToReceiver(plant, species, rx, ry) {
+  const ox = rx - plant.x;
+  const oy = ry - plant.y;
+  if (ox === 0 && oy === 0) {
+    return 0;
+  }
 
-    const species = PLANT_BY_ID[plant.speciesId];
-    const size = getActiveStageSize(species, plant.stageName);
-    const range = shadeRangeForSize(size);
-    const shadeStrength = shadeStrengthForSize(size);
-    const homeIndex = tileIndex(plant.x, plant.y, state.width);
-    occupantSizeByTile[homeIndex] = Math.max(occupantSizeByTile[homeIndex], size);
+  const distance = Math.abs(ox) + Math.abs(oy);
+  const size = getActiveStageSize(species, plant.stageName);
+  const range = shadeRangeForSize(size);
+  const shadeStrength = shadeStrengthForSize(size);
+  if (range === 0 || shadeStrength <= 0) {
+    return 0;
+  }
+  if (distance > range || distance === 0) {
+    return 0;
+  }
 
-    if (range === 0 || shadeStrength <= 0) {
-      continue;
-    }
+  let falloff = 0;
+  if (distance === 1) {
+    falloff = 1;
+  } else if (distance === 2 && range >= 2) {
+    falloff = 0.5;
+  }
+  if (falloff <= 0) {
+    return 0;
+  }
 
-    for (let oy = -range; oy <= range; oy += 1) {
-      for (let ox = -range; ox <= range; ox += 1) {
-        if (ox === 0 && oy === 0) {
-          continue;
-        }
+  return shadeStrength * falloff;
+}
 
-        const nx = plant.x + ox;
-        const ny = plant.y + oy;
-        if (!inBounds(nx, ny, state.width, state.height)) {
-          continue;
-        }
-
-        const distance = Math.abs(ox) + Math.abs(oy);
-        if (distance > range || distance === 0) {
-          continue;
-        }
-
-        let falloff = 0;
-        if (distance === 1) {
-          falloff = 1;
-        } else if (distance === 2 && range >= 2) {
-          falloff = 0.5;
-        }
-
-        if (falloff <= 0) {
-          continue;
-        }
-
-        shadeAccumulation[tileIndex(nx, ny, state.width)] += shadeStrength * falloff;
+function rockNeighborShadeAtTile(state, tx, ty) {
+  let sum = 0;
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      if (ox === 0 && oy === 0) {
+        continue;
       }
+
+      const rx = tx - ox;
+      const ry = ty - oy;
+      if (!inBounds(rx, ry, state.width, state.height)) {
+        continue;
+      }
+
+      const rockTile = state.tiles[tileIndex(rx, ry, state.width)];
+      if (!isRockTile(rockTile)) {
+        continue;
+      }
+
+      const isCardinal = (Math.abs(ox) + Math.abs(oy)) === 1;
+      sum += isCardinal ? 0.4 : 0.2;
     }
   }
+  return sum;
+}
+
+function collectTileIndicesForLifeStageSizeFootprint(state, plantX, plantY, lifeStageSizeValue) {
+  const indices = [];
+  const w = state.width;
+  const h = state.height;
+  const push = (x, y) => {
+    if (inBounds(x, y, w, h)) {
+      indices.push(tileIndex(x, y, w));
+    }
+  };
+
+  push(plantX, plantY);
+
+  if (!Number.isFinite(lifeStageSizeValue) || lifeStageSizeValue <= 0) {
+    return indices;
+  }
+
+  const range = shadeRangeForSize(lifeStageSizeValue);
+  if (range === 0) {
+    return indices;
+  }
+
+  for (let oy = -range; oy <= range; oy += 1) {
+    for (let ox = -range; ox <= range; ox += 1) {
+      if (ox === 0 && oy === 0) {
+        continue;
+      }
+
+      const distance = Math.abs(ox) + Math.abs(oy);
+      if (distance > range || distance === 0) {
+        continue;
+      }
+
+      push(plantX + ox, plantY + oy);
+    }
+  }
+
+  return indices;
+}
+
+export function collectTileIndicesForPlantCanopySizeChange(state, plantX, plantY, oldSize, newSize) {
+  const set = new Set();
+  for (const idx of collectTileIndicesForLifeStageSizeFootprint(state, plantX, plantY, oldSize)) {
+    set.add(idx);
+  }
+  if (newSize !== oldSize) {
+    for (const idx of collectTileIndicesForLifeStageSizeFootprint(state, plantX, plantY, newSize)) {
+      set.add(idx);
+    }
+  }
+  return set;
+}
+
+/** One-time shade + soil fields for tiles that can differ from map defaults (rock neighbors, plant canopy). */
+export function bootstrapDynamicShade(state) {
+  const indices = new Set();
 
   for (const tile of state.tiles) {
     if (!isRockTile(tile)) {
@@ -159,23 +231,162 @@ export function recalculateDynamicShade(state) {
           continue;
         }
 
-        const isCardinal = (Math.abs(ox) + Math.abs(oy)) === 1;
-        shadeAccumulation[tileIndex(nx, ny, state.width)] += isCardinal ? 0.4 : 0.2;
+        indices.add(tileIndex(nx, ny, state.width));
       }
     }
   }
 
-  for (let index = 0; index < state.tiles.length; index += 1) {
-    const tile = state.tiles[index];
+  for (const plant of Object.values(state.plants)) {
+    if (!plant.alive) {
+      continue;
+    }
+
+    const species = PLANT_BY_ID[plant.speciesId];
+    if (!species) {
+      continue;
+    }
+
+    const size = getActiveStageSize(species, plant.stageName);
+    for (const idx of collectTileIndicesForLifeStageSizeFootprint(state, plant.x, plant.y, size)) {
+      indices.add(idx);
+    }
+  }
+
+  applyShadeAndSoilToTiles(state, indices);
+}
+
+export function applyShadeAndSoilToTiles(state, tileIndices) {
+  const dirty = new Set();
+  for (const raw of tileIndices) {
+    const index = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isInteger(index) || index < 0 || index >= state.tiles.length) {
+      continue;
+    }
+    dirty.add(index);
+  }
+
+  if (dirty.size === 0) {
+    return;
+  }
+
+  const plantShadeSum = new Map();
+  for (const index of dirty) {
+    plantShadeSum.set(index, 0);
+  }
+
+  const w = state.width;
+  const h = state.height;
+
+  for (const dIdx of dirty) {
+    const recvTile = state.tiles[dIdx];
+    if (!recvTile) {
+      continue;
+    }
+    const rx = recvTile.x;
+    const ry = recvTile.y;
+
+    for (let oi = 0; oi < PLANT_SHADE_CANDIDATE_OFFSETS.length; oi += 1) {
+      const [dx, dy] = PLANT_SHADE_CANDIDATE_OFFSETS[oi];
+      const px = rx + dx;
+      const py = ry + dy;
+      if (!inBounds(px, py, w, h)) {
+        continue;
+      }
+
+      const hostTile = state.tiles[tileIndex(px, py, w)];
+      const ids = Array.isArray(hostTile?.plantIds) ? hostTile.plantIds : [];
+      if (ids.length === 0) {
+        continue;
+      }
+
+      for (let pi = 0; pi < ids.length; pi += 1) {
+        const plant = state.plants[ids[pi]];
+        if (!plant?.alive || plant.x !== px || plant.y !== py) {
+          continue;
+        }
+
+        const species = PLANT_BY_ID[plant.speciesId];
+        if (!species) {
+          continue;
+        }
+
+        const contrib = plantShadeContributionToReceiver(plant, species, rx, ry);
+        if (contrib > 0) {
+          plantShadeSum.set(dIdx, plantShadeSum.get(dIdx) + contrib);
+        }
+      }
+    }
+  }
+
+  const occupantMaxByIndex = new Map();
+  for (const index of dirty) {
+    occupantMaxByIndex.set(index, 0);
+    const homeTile = state.tiles[index];
+    if (!homeTile) {
+      continue;
+    }
+
+    const ids = Array.isArray(homeTile.plantIds) ? homeTile.plantIds : [];
+    for (let pi = 0; pi < ids.length; pi += 1) {
+      const plant = state.plants[ids[pi]];
+      if (!plant?.alive || plant.x !== homeTile.x || plant.y !== homeTile.y) {
+        continue;
+      }
+
+      const species = PLANT_BY_ID[plant.speciesId];
+      if (!species) {
+        continue;
+      }
+
+      const size = getActiveStageSize(species, plant.stageName);
+      occupantMaxByIndex.set(index, Math.max(occupantMaxByIndex.get(index), size));
+    }
+  }
+
+  for (const index of dirty) {
+    const rawTile = state.tiles[index];
+    if (!rawTile) {
+      continue;
+    }
+
+    const tile = getTileForWrite(state, rawTile.x, rawTile.y);
+
+    const rockShade = rockNeighborShadeAtTile(state, tile.x, tile.y);
+    const plantShade = plantShadeSum.get(index) || 0;
+    const occupantSize = occupantMaxByIndex.get(index) || 0;
+
     if (!Number.isFinite(tile.baseShade)) {
       tile.baseShade = 0;
     }
-    tile.shade = Math.max(0, Math.min(1, tile.baseShade + shadeAccumulation[index]));
-    const occupantSize = occupantSizeByTile[index];
+    tile.shade = Math.max(0, Math.min(1, tile.baseShade + rockShade + plantShade));
     tile.effectiveShadeForOccupant = occupantSize >= 9 ? Math.min(tile.shade, 0.6) : tile.shade;
 
     const soilSuitability = calculateSoilSuitability(tile);
     tile.avgSoilMatch = soilSuitability.avgSoilMatch;
     tile.maxSoilMatch = soilSuitability.maxSoilMatch;
   }
+}
+
+export function refreshDynamicShadeAfterPlantCanopyChange(state, plantX, plantY, oldLifeStageSize, newLifeStageSize) {
+  const indices = collectTileIndicesForPlantCanopySizeChange(
+    state,
+    plantX,
+    plantY,
+    oldLifeStageSize,
+    newLifeStageSize,
+  );
+  applyShadeAndSoilToTiles(state, indices);
+}
+
+export function refreshDynamicShadeAfterPlantRemoval(state, plant) {
+  if (!plant || !Number.isInteger(plant.x) || !Number.isInteger(plant.y)) {
+    return;
+  }
+  if (!inBounds(plant.x, plant.y, state.width, state.height)) {
+    return;
+  }
+
+  const species = PLANT_BY_ID[plant.speciesId];
+  const size = species ? getActiveStageSize(species, plant.stageName) : 1;
+  refreshDynamicShadeAfterPlantCanopyChange(state, plant.x, plant.y, size, 0);
 }

@@ -3,19 +3,21 @@ export function runDailyPlantStep(nextState, rng, hooks) {
     reconcilePlantOccupancy,
     updatePlantLife,
     cleanupDeadPlants,
-    recalculateDynamicShade,
     applyEnvironmentalVitality,
     processDormantSeeds,
   } = hooks;
 
-  reconcilePlantOccupancy(nextState);
-
-  for (const plant of Object.values(nextState.plants)) {
+  for (const plantId of Object.keys(nextState.plants || {})) {
+    const plant = typeof nextState.getMutablePlant === 'function'
+      ? nextState.getMutablePlant(plantId)
+      : nextState.plants[plantId];
+    if (!plant) {
+      continue;
+    }
     updatePlantLife(nextState, plant, rng);
   }
 
   cleanupDeadPlants(nextState);
-  recalculateDynamicShade(nextState);
   applyEnvironmentalVitality(nextState);
   cleanupDeadPlants(nextState);
   processDormantSeeds(nextState, rng);

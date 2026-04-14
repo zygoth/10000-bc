@@ -1,3 +1,5 @@
+import { getTileForWrite } from '../simWorld.mjs';
+
 export function rollBeehiveYieldForDayImpl(state, tile, range, salt, deps) {
   const { mulberry32, rangeRollIntRandom } = deps;
   const seed = (
@@ -27,26 +29,28 @@ export function applyBeehiveSeasonalStateImpl(state, deps) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
+
     if (seasonMultiplier <= 0) {
-      tile.beehive.active = false;
-      tile.beehive.yieldCurrentHoneyGrams = 0;
-      tile.beehive.yieldCurrentLarvaeGrams = 0;
-      tile.beehive.yieldCurrentBeeswaxGrams = 0;
+      mt.beehive.active = false;
+      mt.beehive.yieldCurrentHoneyGrams = 0;
+      mt.beehive.yieldCurrentLarvaeGrams = 0;
+      mt.beehive.yieldCurrentBeeswaxGrams = 0;
       continue;
     }
 
-    tile.beehive.active = true;
-    tile.beehive.yieldCurrentHoneyGrams = Math.max(
+    mt.beehive.active = true;
+    mt.beehive.yieldCurrentHoneyGrams = Math.max(
       1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_HONEY_RANGE_GRAMS, 11) * seasonMultiplier),
+      Math.round(rollBeehiveYieldForDay(state, mt, BEEHIVE_HONEY_RANGE_GRAMS, 11) * seasonMultiplier),
     );
-    tile.beehive.yieldCurrentLarvaeGrams = Math.max(
+    mt.beehive.yieldCurrentLarvaeGrams = Math.max(
       1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_LARVAE_RANGE_GRAMS, 23) * seasonMultiplier),
+      Math.round(rollBeehiveYieldForDay(state, mt, BEEHIVE_LARVAE_RANGE_GRAMS, 23) * seasonMultiplier),
     );
-    tile.beehive.yieldCurrentBeeswaxGrams = Math.max(
+    mt.beehive.yieldCurrentBeeswaxGrams = Math.max(
       1,
-      Math.round(rollBeehiveYieldForDay(state, tile, BEEHIVE_BEESWAX_RANGE_GRAMS, 41) * seasonMultiplier),
+      Math.round(rollBeehiveYieldForDay(state, mt, BEEHIVE_BEESWAX_RANGE_GRAMS, 41) * seasonMultiplier),
     );
   }
 }
@@ -98,7 +102,8 @@ export function generateBeehivesInternalImpl(state, rng, deps) {
   candidates.sort((a, b) => b.score - a.score);
   const targetCount = Math.max(1, Math.min(candidates.length, Math.round(candidates.length * 0.15)));
   for (const { tile } of candidates.slice(0, targetCount)) {
-    tile.beehive = {
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    mt.beehive = {
       speciesId: BEEHIVE_SPECIES_ID,
       yieldCurrentHoneyGrams: 0,
       yieldCurrentLarvaeGrams: 0,

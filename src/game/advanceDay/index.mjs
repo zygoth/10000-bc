@@ -27,15 +27,10 @@ export function advanceDayImpl(state, steps = 1, hooks) {
     return state;
   }
 
-  const clonedPlants = {};
-  for (const [plantId, plant] of Object.entries(state.plants || {})) {
-    clonedPlants[plantId] = clonePlant(plant);
-  }
-
   const nextState = {
     ...state,
-    plants: clonedPlants,
-    tiles: Array.isArray(state.tiles) ? state.tiles.map(cloneTile) : [],
+    plants: { ...(state.plants || {}) },
+    tiles: Array.isArray(state.tiles) ? state.tiles.slice() : [],
     recentDispersal: createEmptyRecentDispersal(state.dayOfYear),
     animalZoneGrid: state?.animalZoneGrid ? { ...state.animalZoneGrid } : null,
     animalDensityByZone: cloneAnimalDensityByZone(state?.animalDensityByZone),
@@ -53,6 +48,8 @@ export function advanceDayImpl(state, steps = 1, hooks) {
       ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
       : [],
   };
+
+  refreshTickWorkingMutators(nextState, clonePlant, cloneTile);
 
   ensureDailyWeatherState(nextState);
   const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 13);
@@ -77,10 +74,6 @@ export function advanceDayImpl(state, steps = 1, hooks) {
         actor.thirst = 1;
       }
     }
-  }
-
-  if (typeof state.getMutableTile === 'function') {
-    refreshTickWorkingMutators(nextState, clonePlant);
   }
 
   return nextState;

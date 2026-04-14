@@ -32,17 +32,30 @@ export function cloneWorldItemsByTile(input) {
 }
 
 /** Rebind tick COW accessors after `advanceDay` clones `tiles`/`plants` onto a new state object. */
-export function refreshTickWorkingMutators(state, clonePlant) {
+export function refreshTickWorkingMutators(state, clonePlant, cloneTile = null) {
   const mutablePlantIds = new Set();
-  state.getMutableTile = (x, y) => {
-    const index = tileIndex(x, y, state.width);
-    return state.tiles[index];
-  };
+  const mutableTileIndices = typeof cloneTile === 'function' ? new Set() : null;
+
+  if (mutableTileIndices) {
+    state.getMutableTile = (x, y) => {
+      const index = tileIndex(x, y, state.width);
+      if (!mutableTileIndices.has(index)) {
+        mutableTileIndices.add(index);
+        state.tiles[index] = cloneTile(state.tiles[index]);
+      }
+      return state.tiles[index];
+    };
+  } else {
+    state.getMutableTile = (x, y) => {
+      const index = tileIndex(x, y, state.width);
+      return state.tiles[index];
+    };
+  }
+
   state.getMutablePlant = (plantId) => {
     if (!mutablePlantIds.has(plantId)) {
-      state.plants = { ...state.plants };
-      state.plants[plantId] = clonePlant(state.plants[plantId]);
       mutablePlantIds.add(plantId);
+      state.plants[plantId] = clonePlant(state.plants[plantId]);
     }
     return state.plants[plantId];
   };

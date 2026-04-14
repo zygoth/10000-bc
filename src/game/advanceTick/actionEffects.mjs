@@ -6,6 +6,7 @@ import {
   runDebriefVisionRequest,
 } from '../medicineDebrief.mjs';
 import { PLANT_BY_ID } from '../plantCatalog.mjs';
+import { refreshDynamicShadeAfterPlantRemoval } from '../advanceDay/ecology.mjs';
 import { TECH_RESEARCHABLE_UNLOCK_KEYS, getTechResearchMeta } from '../techResearchCatalog.mjs';
 import { getTechForestNode } from '../techForestGen.mjs';
 import { parsePlantPartItemId } from '../plantPartDescriptors.mjs';
@@ -522,6 +523,7 @@ export function applyActionEffectImpl(state, action, deps) {
       const plant = getPlant(plantId);
       if (plant) {
         plant.alive = false;
+        refreshDynamicShadeAfterPlantRemoval(state, plant);
         if (state.getMutablePlant) {
           state.plants = { ...state.plants };
           delete state.plants[plantId];
@@ -2302,6 +2304,7 @@ export function applyActionEffectImpl(state, action, deps) {
       createdYear: state.year,
       createdDayOfYear: state.dayOfYear,
     });
+    refreshDynamicShadeAfterPlantRemoval(state, plant);
 
     if (tile) {
       tile.plantIds = Array.isArray(tile.plantIds)

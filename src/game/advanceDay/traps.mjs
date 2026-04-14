@@ -1,4 +1,5 @@
 import { getLandTrapBaitItemId } from '../trapBaitLand.mjs';
+import { getTileForWrite } from '../simWorld.mjs';
 
 export function rollDeadfallCatchImpl(state, tile, trap, deps) {
   const {
@@ -82,6 +83,8 @@ export function applyDailyDeadfallTrapResolutionImpl(state, deps) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
+
     if (trap.hasCatch === true) {
       const catchResolvedTotalDays = Number.isInteger(trap.catchResolvedTotalDays)
         ? trap.catchResolvedTotalDays
@@ -107,7 +110,7 @@ export function applyDailyDeadfallTrapResolutionImpl(state, deps) {
       const poachRoll = mulberry32(poachSeed)();
       const poached = poachRoll <= poachChance;
 
-      tile.deadfallTrap = {
+      mt.deadfallTrap = {
         ...trap,
         hasCatch: poached ? false : true,
         poached,
@@ -122,8 +125,8 @@ export function applyDailyDeadfallTrapResolutionImpl(state, deps) {
       continue;
     }
 
-    const outcome = rollDeadfallCatch(state, tile, trap);
-    tile.deadfallTrap = {
+    const outcome = rollDeadfallCatch(state, mt, trap);
+    mt.deadfallTrap = {
       ...trap,
       hasCatch: outcome.hasCatch,
       poached: false,
@@ -215,6 +218,8 @@ export function applyDailyFishTrapResolutionImpl(state, deps) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
+
     const maxStoredCatch = Number.isInteger(trap.maxStoredCatch)
       ? Math.max(1, trap.maxStoredCatch)
       : FISH_TRAP_MAX_STORED_CATCH;
@@ -230,7 +235,7 @@ export function applyDailyFishTrapResolutionImpl(state, deps) {
     let lastRoll = null;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const outcome = rollFishTrapCatch(state, tile, trap, attempt);
+      const outcome = rollFishTrapCatch(state, mt, trap, attempt);
       lastDensity = outcome.lastDensity;
       lastRoll = outcome.roll;
       if (!outcome.caughtSpeciesId) {
@@ -257,7 +262,7 @@ export function applyDailyFishTrapResolutionImpl(state, deps) {
       ? clamp01(reliabilityRaw)
       : 1;
 
-    tile.fishTrap = {
+    mt.fishTrap = {
       ...trap,
       active: true,
       sprung: storedCatchSpeciesIds.length > 0,
@@ -338,6 +343,8 @@ export function applyDailySimpleSnareResolutionImpl(state, deps) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
+
     if (snare.hasCatch === true) {
       const catchResolvedTotalDays = Number.isInteger(snare.catchResolvedTotalDays)
         ? snare.catchResolvedTotalDays
@@ -362,7 +369,7 @@ export function applyDailySimpleSnareResolutionImpl(state, deps) {
       const poachRoll = mulberry32(poachSeed)();
       const poached = poachRoll <= poachChance;
 
-      tile.simpleSnare = {
+      mt.simpleSnare = {
         ...snare,
         hasCatch: poached ? false : true,
         poached,
@@ -376,8 +383,8 @@ export function applyDailySimpleSnareResolutionImpl(state, deps) {
       continue;
     }
 
-    const outcome = rollSimpleSnareCatch(state, tile, snare);
-    tile.simpleSnare = {
+    const outcome = rollSimpleSnareCatch(state, mt, snare);
+    mt.simpleSnare = {
       ...snare,
       hasCatch: outcome.hasCatch,
       poached: false,

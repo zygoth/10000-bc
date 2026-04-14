@@ -1,3 +1,5 @@
+import { getTileForWrite } from '../simWorld.mjs';
+
 export function logFungusHostCompatibleImpl(logFungus, sourceSpeciesId) {
   if (!logFungus || !Array.isArray(logFungus.hostTrees) || logFungus.hostTrees.length === 0) {
     return false;
@@ -40,8 +42,9 @@ export function applyLogFungusFruitingImpl(state, rng, deps) {
       continue;
     }
 
-    ensureDeadLogFungusShape(tile.deadLog);
-    for (const fungusEntry of tile.deadLog.fungi) {
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    ensureDeadLogFungusShape(mt.deadLog);
+    for (const fungusEntry of mt.deadLog.fungi) {
       const windows = Array.isArray(fungusEntry.fruiting_windows) ? fungusEntry.fruiting_windows : [];
       const activeWindowIndices = windows
         .map((window, index) => (isDayInLogWindow(state.dayOfYear, window) ? index : -1))
@@ -67,7 +70,7 @@ export function applyLogFungusFruitingImpl(state, rng, deps) {
         }
 
         fungusEntry.rolled_year_by_window[windowIndex] = state.year;
-        fungusEntry.yield_current_grams = rollLogFungusYield(fungusEntry, tile, tile.deadLog, rng);
+        fungusEntry.yield_current_grams = rollLogFungusYield(fungusEntry, mt, mt.deadLog, rng);
       }
     }
   }
@@ -87,14 +90,15 @@ export function colonizeDeadLogFungiByYearImpl(state, rng, deps) {
       continue;
     }
 
-    ensureDeadLogFungusShape(tile.deadLog);
-    const currentDecayStage = Number.isFinite(tile.deadLog.decayStage)
-      ? Math.max(1, Math.min(4, Math.round(tile.deadLog.decayStage)))
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    ensureDeadLogFungusShape(mt.deadLog);
+    const currentDecayStage = Number.isFinite(mt.deadLog.decayStage)
+      ? Math.max(1, Math.min(4, Math.round(mt.deadLog.decayStage)))
       : 1;
-    const existingSpecies = new Set(tile.deadLog.fungi.map((entry) => entry.species_id));
+    const existingSpecies = new Set(mt.deadLog.fungi.map((entry) => entry.species_id));
 
     for (const speciesId of state.runFungusPool || []) {
-      if (tile.deadLog.fungi.length >= MAX_LOG_FUNGI_PER_LOG) {
+      if (mt.deadLog.fungi.length >= MAX_LOG_FUNGI_PER_LOG) {
         break;
       }
       if (existingSpecies.has(speciesId)) {
@@ -105,24 +109,24 @@ export function colonizeDeadLogFungiByYearImpl(state, rng, deps) {
       if (!logFungus) {
         continue;
       }
-      if (!logFungusHostCompatible(logFungus, tile.deadLog.sourceSpeciesId)) {
+      if (!logFungusHostCompatible(logFungus, mt.deadLog.sourceSpeciesId)) {
         continue;
       }
       if (!logFungus.preferredDecayStages.includes(currentDecayStage)) {
         continue;
       }
 
-      const chance = clamp01((Number(logFungus.baseSpawnChance) || 0) * moistureYieldMultiplier(Number(tile.moisture) || 0));
+      const chance = clamp01((Number(logFungus.baseSpawnChance) || 0) * moistureYieldMultiplier(Number(mt.moisture) || 0));
       if (rng() > chance) {
         continue;
       }
 
-      tile.deadLog.fungi.push({
+      mt.deadLog.fungi.push({
         species_id: logFungus.id,
         yield_current_grams: 0,
         fruiting_windows: logFungus.fruitingWindows.map((window) => ({ ...window })),
         per_log_yield_range: [...logFungus.perLogYieldRange],
-        log_size_multiplier: Math.max(0.7, Math.min(1.8, (Number(tile.deadLog.sizeAtDeath) || 8) / 8)),
+        log_size_multiplier: Math.max(0.7, Math.min(1.8, (Number(mt.deadLog.sizeAtDeath) || 8) / 8)),
         rolled_year_by_window: {},
       });
       existingSpecies.add(logFungus.id);

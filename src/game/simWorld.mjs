@@ -127,6 +127,14 @@ export function tileIndex(x, y, width) {
   return y * width + x;
 }
 
+/** Mutate a tile without aliasing parent state when `getMutableTile` is installed (advanceDay COW). */
+export function getTileForWrite(state, x, y) {
+  if (typeof state.getMutableTile === 'function') {
+    return state.getMutableTile(x, y);
+  }
+  return state.tiles[tileIndex(x, y, state.width)];
+}
+
 export function inBounds(x, y, width, height) {
   return x >= 0 && x < width && y >= 0 && y < height;
 }

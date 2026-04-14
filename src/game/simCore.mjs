@@ -13,7 +13,12 @@ import {
   landCarcassUnitWeightKgFromSpecies,
   resolveInnerBarkUnitWeightKgForItem,
 } from './stockpileDefaultStackOptions.mjs';
-import { applyEnvironmentalVitality, recalculateDynamicShade } from './advanceDay/ecology.mjs';
+import {
+  applyEnvironmentalVitality,
+  bootstrapDynamicShade,
+  refreshDynamicShadeAfterPlantCanopyChange,
+  refreshDynamicShadeAfterPlantRemoval,
+} from './advanceDay/ecology.mjs';
 import { clonePlant, cloneTile, createEmptyRecentDispersal } from './simState.mjs';
 import { createTickWorkingState } from './simCore.shared.mjs';
 import {
@@ -35,6 +40,7 @@ import {
   calculateSoilSuitability,
   computeSoilMatch,
   generateMap,
+  getTileForWrite,
   inBounds,
   isRockTile,
   isPlantWithinEnvironmentalTolerance,
@@ -934,7 +940,8 @@ function processAutoRodTickResolution(state) {
       continue;
     }
 
-    resolveAutoRodTickOutcome(state, tile, tileOrdinal, 0);
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    resolveAutoRodTickOutcome(state, mt, tileOrdinal, 0);
     tileOrdinal += 1;
   }
 }
@@ -946,8 +953,9 @@ function applyDailyAutoRodResolution(state) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
     for (let attempt = 0; attempt < AUTO_ROD_OVERNIGHT_ATTEMPTS; attempt += 1) {
-      const outcome = resolveAutoRodTickOutcome(state, tile, attempt, 1);
+      const outcome = resolveAutoRodTickOutcome(state, mt, attempt, 1);
       if (outcome?.biteResolved === true) {
         break;
       }
@@ -1197,6 +1205,10 @@ function clearPlantsFromCampFootprint(state) {
     tile.plantIds = [];
   }
   for (const plantId of toRemove) {
+    const plant = state.plants[plantId];
+    if (plant) {
+      refreshDynamicShadeAfterPlantRemoval(state, plant);
+    }
     delete state.plants[plantId];
   }
 }
@@ -2334,9 +2346,24 @@ function processLandTrapBaitDecay(state, decayDayFraction, groundDrynessIncremen
     const x = tile.x;
     const y = tile.y;
     const key = `${x},${y}`;
+    const hasLandTrap = ['simpleSnare', 'deadfallTrap', 'autoRod'].some((field) => {
+      const candidate = tile[field];
+      if (!candidate || candidate.active !== true) {
+        return false;
+      }
+      if (field === 'autoRod' && candidate.state !== 'live') {
+        return false;
+      }
+      return true;
+    });
+    if (!hasLandTrap) {
+      continue;
+    }
+
+    const mt = getTileForWrite(state, x, y);
 
     for (const field of ['simpleSnare', 'deadfallTrap', 'autoRod']) {
-      const trap = tile[field];
+      const trap = mt[field];
       if (!trap || trap.active !== true) {
         continue;
       }
@@ -2351,7 +2378,7 @@ function processLandTrapBaitDecay(state, decayDayFraction, groundDrynessIncremen
         const legacyStack = defaultLandTrapBaitStackFromItemId(trap.baitItemId);
         if (legacyStack) {
           nextTrap = { ...trap, baitStack: legacyStack };
-          tile[field] = nextTrap;
+          mt[field] = nextTrap;
         }
       }
 
@@ -2361,7 +2388,7 @@ function processLandTrapBaitDecay(state, decayDayFraction, groundDrynessIncremen
       }
       const qty = Math.max(0, Math.floor(Number(stack.quantity) || 0));
       if (qty <= 0) {
-        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        mt[field] = { ...nextTrap, baitStack: null, baitItemId: null };
         continue;
       }
 
@@ -2387,19 +2414,19 @@ function processLandTrapBaitDecay(state, decayDayFraction, groundDrynessIncremen
       });
 
       if (out.length === 0) {
-        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        mt[field] = { ...nextTrap, baitStack: null, baitItemId: null };
         continue;
       }
 
       const top = out[0];
       if (top?.itemId === ROTTING_ORGANIC_ITEM_ID) {
         mergeStackIntoWorldItemsAtTile(state, x, y, top);
-        tile[field] = { ...nextTrap, baitStack: null, baitItemId: null };
+        mt[field] = { ...nextTrap, baitStack: null, baitItemId: null };
         continue;
       }
 
       const baitTop = isAutoRod ? { ...top, dryness: 0 } : top;
-      tile[field] = {
+      mt[field] = {
         ...nextTrap,
         baitStack: baitTop,
         baitItemId: typeof baitTop?.itemId === 'string' ? baitTop.itemId : null,
@@ -2438,7 +2465,7 @@ function applyRottingOrganicFertilityBonusAtTile(state, tileKey) {
     return;
   }
 
-  const tile = state.tiles[tileIndex(x, y, state.width)];
+  const tile = getTileForWrite(state, x, y);
   if (!tile || tile.waterType) {
     return;
   }
@@ -2587,6 +2614,7 @@ function applyDailySapTapFill(state) {
       continue;
     }
 
+    const mt = getTileForWrite(state, tile.x, tile.y);
     const vesselCapacityUnits = Number.isInteger(sapTap.vesselCapacityUnits) && sapTap.vesselCapacityUnits > 0
       ? sapTap.vesselCapacityUnits
       : SAP_TAP_VESSEL_CAPACITY_UNITS;
@@ -2595,7 +2623,7 @@ function applyDailySapTapFill(state) {
       : 0;
     const nextSapUnits = Math.min(vesselCapacityUnits, vesselSapUnits + SAP_TAP_DAILY_FILL_UNITS);
 
-    tile.sapTap = {
+    mt.sapTap = {
       ...sapTap,
       vesselSapUnits: nextSapUnits,
       vesselCapacityUnits,
@@ -2614,13 +2642,14 @@ function applyDailyLeachingBasketProgress(state) {
       continue;
     }
 
-    const reduction = tile.waterType === 'river'
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    const reduction = mt.waterType === 'river'
       ? LEACHING_BASKET_TANNIN_REDUCTION_RIVER_PER_DAY
       : LEACHING_BASKET_TANNIN_REDUCTION_POND_PER_DAY;
     const tanninRemaining = Number.isFinite(Number(basket.tanninRemaining))
       ? clamp01(Number(basket.tanninRemaining))
       : 0;
-    tile.leachingBasket = {
+    mt.leachingBasket = {
       ...basket,
       tanninRemaining: clamp01(tanninRemaining - reduction),
       lastResolvedYear: Number(state.year) || 1,
@@ -3147,7 +3176,8 @@ function generateSquirrelCachesInternal(state, rng, options = {}) {
 
   for (const { tile, placementType } of selectedCandidates) {
     const cacheItem = cacheItemPool[Math.floor(rng() * cacheItemPool.length)];
-    tile.squirrelCache = {
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    mt.squirrelCache = {
       cachedSpeciesId: cacheItem.speciesId,
       cachedPartName: cacheItem.partName,
       cachedSubStageId: cacheItem.subStageId,
@@ -3431,16 +3461,17 @@ function subStageMatchesLifecycleYear(species, stageName, subStageId) {
   return true;
 }
 
-function buildActiveSubStages(species, stageName, dayOfYear, existing = []) {
-  const activeByKey = new Map();
-  for (const entry of existing) {
-    if (!entry || !entry.partName || !entry.subStageId) {
-      continue;
-    }
-    activeByKey.set(`${entry.partName}:${entry.subStageId}`, entry);
+const activeSubStageTemplateCache = new Map();
+
+/** Immutable rows: which part/subStage slots are active for (species, stage, calendar day). Shared by all plants of that species at that stage on that day. */
+function getActiveSubStageTemplate(species, stageName, dayOfYear) {
+  const cacheKey = `${species?.id ?? ''}\0${stageName}\0${dayOfYear}`;
+  const cached = activeSubStageTemplateCache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
-  const nextActive = [];
+  const template = [];
   for (const part of species.parts || []) {
     if (!part.availableLifeStages?.includes(stageName)) {
       continue;
@@ -3454,23 +3485,77 @@ function buildActiveSubStages(species, stageName, dayOfYear, existing = []) {
         continue;
       }
 
-      const key = `${part.name}:${subStage.id}`;
-      const existingEntry = activeByKey.get(key);
-      if (existingEntry) {
-        nextActive.push(existingEntry);
-        continue;
-      }
-
-      nextActive.push({
-        partName: part.name,
-        subStageId: subStage.id,
-        regrowthCountdown: null,
-        harvestsThisSeason: 0,
+      const partName = part.name;
+      const subStageId = subStage.id;
+      template.push({
+        partName,
+        subStageId,
+        mergeKey: `${partName}:${subStageId}`,
       });
     }
   }
 
+  activeSubStageTemplateCache.set(cacheKey, template);
+  return template;
+}
+
+function activeSubStageTemplateSignature(template) {
+  if (!template.length) {
+    return '';
+  }
+  const keys = new Array(template.length);
+  for (let i = 0; i < template.length; i += 1) {
+    keys[i] = template[i].mergeKey;
+  }
+  return keys.join('\x1e');
+}
+
+function mergeActiveSubStagesFromTemplate(template, existing = []) {
+  const activeByKey = new Map();
+  for (const entry of existing) {
+    if (!entry || !entry.partName || !entry.subStageId) {
+      continue;
+    }
+    activeByKey.set(`${entry.partName}:${entry.subStageId}`, entry);
+  }
+
+  const nextActive = [];
+  for (const row of template) {
+    const existingEntry = activeByKey.get(row.mergeKey);
+    if (existingEntry) {
+      nextActive.push(existingEntry);
+      continue;
+    }
+
+    nextActive.push({
+      partName: row.partName,
+      subStageId: row.subStageId,
+      regrowthCountdown: null,
+      harvestsThisSeason: 0,
+    });
+  }
+
   return nextActive;
+}
+
+/** Skip rebuilding activeSubStages when template key-set unchanged (same calendar slots); still run advanceActiveSubStageRegrowth after. */
+function syncPlantActiveSubStages(state, plantInstance) {
+  const species = PLANT_BY_ID[plantInstance.speciesId];
+  if (!species) {
+    return;
+  }
+
+  const template = getActiveSubStageTemplate(species, plantInstance.stageName, state.dayOfYear);
+  const sig = `${plantInstance.speciesId}\x1e${activeSubStageTemplateSignature(template)}`;
+  if (plantInstance._activeSubStageSig === sig) {
+    return;
+  }
+
+  plantInstance._activeSubStageSig = sig;
+  plantInstance.activeSubStages = mergeActiveSubStagesFromTemplate(
+    template,
+    plantInstance.activeSubStages,
+  );
 }
 
 function findOpenSpot(tiles, width, height, x, y) {
@@ -3498,7 +3583,7 @@ function findOpenSpot(tiles, width, height, x, y) {
 }
 
 function addPlantInstance(state, speciesId, x, y, age, source = 'founder') {
-  const tile = state.tiles[tileIndex(x, y, state.width)];
+  const tile = getTileForWrite(state, x, y);
   if (isTileWithinCampFootprint(state, x, y)) {
     return null;
   }
@@ -3513,6 +3598,7 @@ function addPlantInstance(state, speciesId, x, y, age, source = 'founder') {
   const id = `plant_${state.nextPlantNumericId}`;
   state.nextPlantNumericId += 1;
 
+  const template = getActiveSubStageTemplate(species, stageName, state.dayOfYear);
   const plantInstance = {
     id,
     speciesId,
@@ -3522,12 +3608,20 @@ function addPlantInstance(state, speciesId, x, y, age, source = 'founder') {
     stageName,
     alive: true,
     vitality: 1,
-    activeSubStages: buildActiveSubStages(species, stageName, state.dayOfYear),
+    activeSubStages: mergeActiveSubStagesFromTemplate(template, []),
+    _activeSubStageSig: `${speciesId}\x1e${activeSubStageTemplateSignature(template)}`,
     source,
   };
 
   state.plants[id] = plantInstance;
   tile.plantIds.push(id);
+  refreshDynamicShadeAfterPlantCanopyChange(
+    state,
+    x,
+    y,
+    0,
+    lifeStageSize(species, stageName),
+  );
   return id;
 }
 
@@ -3557,7 +3651,7 @@ function maybeCreateDeadLog(state, plant, options = {}) {
     return;
   }
 
-  const tile = state.tiles[tileIndex(plant.x, plant.y, state.width)];
+  const tile = getTileForWrite(state, plant.x, plant.y);
   if (!tile || tile.deadLog || isRockTile(tile)) {
     return;
   }
@@ -3708,7 +3802,7 @@ function advanceDeadLogDecayByYear(state) {
         const bonus = ox === 0 && oy === 0
           ? DEAD_LOG_DECAY_FERTILITY_BONUS_CENTER
           : DEAD_LOG_DECAY_FERTILITY_BONUS_ADJACENT;
-        const tile = state.tiles[tileIndex(nx, ny, state.width)];
+        const tile = getTileForWrite(state, nx, ny);
         if (!tile || tile.waterType) {
           continue;
         }
@@ -3728,21 +3822,22 @@ function advanceDeadLogDecayByYear(state) {
       continue;
     }
 
-    const createdYear = Number.isInteger(tile.deadLog.createdYear) ? tile.deadLog.createdYear : null;
+    const mt = getTileForWrite(state, tile.x, tile.y);
+    const createdYear = Number.isInteger(mt.deadLog.createdYear) ? mt.deadLog.createdYear : null;
     if (createdYear !== null && createdYear >= state.year) {
       continue;
     }
 
-    const currentStage = Number.isFinite(tile.deadLog.decayStage) ? tile.deadLog.decayStage : 1;
+    const currentStage = Number.isFinite(mt.deadLog.decayStage) ? mt.deadLog.decayStage : 1;
     if (currentStage >= 4) {
-      applyDeadLogDecayFertilityBonus(tile.x, tile.y);
-      tile.deadLog = null;
-      tile.disturbed = true;
+      applyDeadLogDecayFertilityBonus(mt.x, mt.y);
+      mt.deadLog = null;
+      mt.disturbed = true;
       continue;
     }
 
-    tile.deadLog.decayStage = Math.max(1, Math.min(4, Math.round(currentStage + 1)));
-    applyDeadLogDecayFertilityBonus(tile.x, tile.y);
+    mt.deadLog.decayStage = Math.max(1, Math.min(4, Math.round(currentStage + 1)));
+    applyDeadLogDecayFertilityBonus(mt.x, mt.y);
   }
 }
 
@@ -3790,8 +3885,6 @@ function placeFounders(state, rng) {
 
       addPlantInstance(state, species.id, tile.x, tile.y, age);
     }
-
-    recalculateDynamicShade(state);
   }
 }
 
@@ -3959,7 +4052,7 @@ function depositWaterDispersedSeed(state, species, sourceX, sourceY, rng, method
     return false;
   }
 
-  const tile = state.tiles[tileIndex(bank.x, bank.y, state.width)];
+  const tile = getTileForWrite(state, bank.x, bank.y);
   if (tile.waterType || isRockTile(tile)) {
     return false;
   }
@@ -3972,7 +4065,7 @@ function placeDormantSeed(state, species, x, y, methodLabel = species.dispersal.
   if (!inBounds(x, y, state.width, state.height)) {
     return false;
   }
-  const tile = state.tiles[tileIndex(x, y, state.width)];
+  const tile = getTileForWrite(state, x, y);
   if (isTileWithinCampFootprint(state, x, y)) {
     return false;
   }
@@ -4113,7 +4206,10 @@ function disperseSeeds(state, plantInstance, species, rng) {
 }
 
 function updatePlantLife(state, plantInstance, rng) {
-  return updatePlantLifeImpl(state, plantInstance, rng, {
+  const species = PLANT_BY_ID[plantInstance.speciesId];
+  const prevStageName = plantInstance.stageName;
+  const prevSize = species ? lifeStageSize(species, prevStageName) : 1;
+  updatePlantLifeImpl(state, plantInstance, rng, {
     PLANT_BY_ID,
     stageForDay,
     maxLifeStageMinAge,
@@ -4121,10 +4217,17 @@ function updatePlantLife(state, plantInstance, rng) {
     lifecycleYearOrdinal,
     getSeason,
     PERENNIAL_WINTER_DAILY_DEATH_RATE,
-    buildActiveSubStages,
+    syncPlantActiveSubStages,
     advanceActiveSubStageRegrowth,
     disperseSeeds,
   });
+  if (!species || !plantInstance.alive) {
+    return;
+  }
+  const newSize = lifeStageSize(species, plantInstance.stageName);
+  if (newSize !== prevSize) {
+    refreshDynamicShadeAfterPlantCanopyChange(state, plantInstance.x, plantInstance.y, prevSize, newSize);
+  }
 }
 
 export function applyHarvestAction(state, plantId, partName, subStageId, options = {}) {
@@ -4156,6 +4259,7 @@ function cleanupDeadPlants(state) {
   return cleanupDeadPlantsImpl(state, {
     maybeCreateDeadLog,
     tileIndex,
+    afterPlantRemovedForDynamicShade: refreshDynamicShadeAfterPlantRemoval,
   });
 }
 
@@ -4165,6 +4269,7 @@ function reconcilePlantOccupancy(state) {
     MAX_PLANTS_PER_TILE,
     inBounds,
     tileIndex,
+    afterPlantRemovedForDynamicShade: refreshDynamicShadeAfterPlantRemoval,
   });
 }
 
@@ -4223,7 +4328,7 @@ export function createInitialGameState(seed = 10000, options = {}) {
   placeFounders(state, mulberry32(normalizedSeed * 17 + 9));
   generateInitialDeadTrees(state, mulberry32(normalizedSeed * 29 + 13));
   clearPlantsFromCampFootprint(state);
-  recalculateDynamicShade(state);
+  bootstrapDynamicShade(state);
   initializeDailyWeatherState(state);
   applyDailyWaterFreezeState(state);
   return state;
@@ -4248,7 +4353,6 @@ export function advanceDay(state, steps = 1, options = {}) {
     reconcilePlantOccupancy,
     updatePlantLife,
     cleanupDeadPlants,
-    recalculateDynamicShade,
     applyEnvironmentalVitality,
     processDormantSeeds,
     applyLogFungusFruiting,

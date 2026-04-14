@@ -1,3 +1,5 @@
+import { getTileForWrite } from '../simWorld.mjs';
+
 export function rollGroundFungusYieldImpl(zone, targetTile, rng, deps) {
   const { rangeRollIntRandom } = deps;
   const baseYield = rangeRollIntRandom(zone.perTileYieldRange, rng, 1);
@@ -47,7 +49,7 @@ export function applyGroundFungusFruitingImpl(state, rng, deps) {
 
     if (activeWindowIndices.length === 0) {
       for (const tile of zoneTiles) {
-        tile.groundFungusZone.yieldCurrentGrams = 0;
+        getTileForWrite(state, tile.x, tile.y).groundFungusZone.yieldCurrentGrams = 0;
       }
       continue;
     }
@@ -64,11 +66,12 @@ export function applyGroundFungusFruitingImpl(state, rng, deps) {
       }
 
       for (const tile of zoneTiles) {
-        tile.groundFungusZone.yieldCurrentGrams = 0;
-        if (!tile.groundFungusZone.rolledYearByWindow) {
-          tile.groundFungusZone.rolledYearByWindow = {};
+        const mt = getTileForWrite(state, tile.x, tile.y);
+        mt.groundFungusZone.yieldCurrentGrams = 0;
+        if (!mt.groundFungusZone.rolledYearByWindow) {
+          mt.groundFungusZone.rolledYearByWindow = {};
         }
-        tile.groundFungusZone.rolledYearByWindow[windowIndex] = state.year;
+        mt.groundFungusZone.rolledYearByWindow[windowIndex] = state.year;
       }
 
       const availableTargetIndices = new Set(
@@ -80,7 +83,8 @@ export function applyGroundFungusFruitingImpl(state, rng, deps) {
       let pendingBlockedSuccesses = 0;
       for (let index = 0; index < zoneTiles.length; index += 1) {
         const tile = zoneTiles[index];
-        const chance = Number(tile.groundFungusZone.annualFruitChance);
+        const mt = getTileForWrite(state, tile.x, tile.y);
+        const chance = Number(mt.groundFungusZone.annualFruitChance);
         const safeChance = Number.isFinite(chance) ? Math.max(0, Math.min(1, chance)) : 0;
 
         if (rng() > safeChance) {
@@ -88,7 +92,7 @@ export function applyGroundFungusFruitingImpl(state, rng, deps) {
         }
 
         if (availableTargetIndices.has(index)) {
-          tile.groundFungusZone.yieldCurrentGrams = rollGroundFungusYield(tile.groundFungusZone, tile, rng);
+          mt.groundFungusZone.yieldCurrentGrams = rollGroundFungusYield(mt.groundFungusZone, mt, rng);
           availableTargetIndices.delete(index);
         } else {
           pendingBlockedSuccesses += 1;
@@ -98,7 +102,8 @@ export function applyGroundFungusFruitingImpl(state, rng, deps) {
       while (pendingBlockedSuccesses > 0 && availableTargetIndices.size > 0) {
         const candidates = [...availableTargetIndices];
         const targetIndex = candidates[Math.floor(rng() * candidates.length)];
-        const targetTile = zoneTiles[targetIndex];
+        const targetRef = zoneTiles[targetIndex];
+        const targetTile = getTileForWrite(state, targetRef.x, targetRef.y);
         targetTile.groundFungusZone.yieldCurrentGrams = rollGroundFungusYield(
           targetTile.groundFungusZone,
           targetTile,
@@ -228,7 +233,7 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
             continue;
           }
 
-          assignGroundFungusZoneToTile(tile, fungus, zoneId);
+          assignGroundFungusZoneToTile(getTileForWrite(state, nx, ny), fungus, zoneId);
         }
       }
     }

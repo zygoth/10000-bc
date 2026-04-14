@@ -1,4 +1,5 @@
 import { MIN_DAYS_FOR_SQUIRREL_CACHE_GENERATION } from '../simCore.constants.mjs';
+import { getTileForWrite } from '../simWorld.mjs';
 
 export function selectSquirrelCacheCandidatesWithSpread(candidates, targetCount, spreadConfig = {}) {
   if (!Array.isArray(candidates) || candidates.length === 0 || targetCount <= 0) {
@@ -80,7 +81,7 @@ export function resolveSquirrelCacheItemPool(plantCatalog) {
 export function clearSquirrelCaches(state) {
   for (const tile of state?.tiles || []) {
     if (tile?.squirrelCache) {
-      tile.squirrelCache = null;
+      getTileForWrite(state, tile.x, tile.y).squirrelCache = null;
     }
   }
 }

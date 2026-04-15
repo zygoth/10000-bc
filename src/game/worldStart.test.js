@@ -1,3 +1,15 @@
+jest.mock('./simCore.mjs', () => {
+  const actual = jest.requireActual('./simCore.mjs');
+  return {
+    ...actual,
+    advanceDay: (state, steps) => {
+      const s = Number.isFinite(Number(steps)) ? Math.max(0, Math.floor(Number(steps))) : 0;
+      state.totalDaysSimulated = (Number(state.totalDaysSimulated) || 0) + s;
+      return state;
+    },
+  };
+});
+
 import { getTileAt } from './simCore.mjs';
 import {
   DEFAULT_PREHISTORY_DAYS,

@@ -3199,20 +3199,16 @@ export function generateGroundFungusZones(state) {
     return state;
   }
 
-  const nextState = {
-    ...state,
-    tiles: Array.isArray(state.tiles) ? state.tiles.map(cloneTile) : [],
-    runGroundFungusPool: Array.isArray(state.runGroundFungusPool) ? [...state.runGroundFungusPool] : [],
-  };
-  const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 59);
-  generateGroundFungusZonesInternal(nextState, rng);
-  return nextState;
+  state.runGroundFungusPool = Array.isArray(state.runGroundFungusPool) ? state.runGroundFungusPool : [];
+  const rng = mulberry32((state.seed + state.totalDaysSimulated + 1) * 59);
+  generateGroundFungusZonesInternal(state, rng);
+  return state;
 }
 
 export function advanceTick(state, options = {}) {
-  const workingState = createTickWorkingState(state, cloneTile, clonePlant, cloneActors);
-  return advanceTickImpl(workingState, options, {
-    advanceDay: (innerState, steps, dayOpts) => advanceDay(innerState, steps, dayOpts || {}),
+  // Mutable-by-default: run directly against the provided state reference.
+  return advanceTickImpl(state, options, {
+    advanceDay: (innerState, steps, dayOpts) => advanceDayInPlace(innerState, steps, dayOpts || {}),
     applyItemDecayAndDryingTick,
     ensureTickSystems,
     sortActionsDeterministically,
@@ -3234,6 +3230,15 @@ export function advanceTick(state, options = {}) {
     TICKS_PER_DAY,
     getActorDayStartTickBudgetBase,
   });
+}
+
+/**
+ * Pure/tick-cloning boundary for tests and snapshot comparisons.
+ * Produces a deep-copied state before running mutating sim logic.
+ */
+export function advanceTickPure(state, options = {}) {
+  const copy = deserializeSnapshotState(serializeSnapshotState(state));
+  return advanceTick(copy, options);
 }
 
 export function validateAction(state, action, options = {}) {
@@ -3266,13 +3271,9 @@ export function generateBeehives(state) {
     return state;
   }
 
-  const nextState = {
-    ...state,
-    tiles: Array.isArray(state.tiles) ? state.tiles.map(cloneTile) : [],
-  };
-  const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 67);
-  generateBeehivesInternal(nextState, rng);
-  return nextState;
+  const rng = mulberry32((state.seed + state.totalDaysSimulated + 1) * 67);
+  generateBeehivesInternal(state, rng);
+  return state;
 }
 
 export function generateSquirrelCaches(state) {
@@ -3283,14 +3284,10 @@ export function generateSquirrelCaches(state) {
     return state;
   }
 
-  const nextState = {
-    ...state,
-    tiles: Array.isArray(state.tiles) ? state.tiles.map(cloneTile) : [],
-    runSquirrelCacheNutPool: cloneStringArray(state.runSquirrelCacheNutPool),
-  };
-  const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 71);
-  generateSquirrelCachesInternal(nextState, rng);
-  return nextState;
+  state.runSquirrelCacheNutPool = cloneStringArray(state.runSquirrelCacheNutPool);
+  const rng = mulberry32((state.seed + state.totalDaysSimulated + 1) * 71);
+  generateSquirrelCachesInternal(state, rng);
+  return state;
 }
 
 export function generateFishPopulations(state) {
@@ -3301,16 +3298,11 @@ export function generateFishPopulations(state) {
     return state;
   }
 
-  const nextState = {
-    ...state,
-    fishDensityByTile: cloneFishDensityByTile(state?.fishDensityByTile),
-    fishEquilibriumByTile: state?.fishEquilibriumByTile || {},
-    fishWaterBodyByTile: { ...(state?.fishWaterBodyByTile || {}) },
-    fishWaterBodies: { ...(state?.fishWaterBodies || {}) },
-    runSquirrelCacheNutPool: cloneStringArray(state?.runSquirrelCacheNutPool),
-  };
-  generateFishPopulationsInternal(nextState);
-  return nextState;
+  state.fishDensityByTile = cloneFishDensityByTile(state?.fishDensityByTile);
+  state.fishWaterBodyByTile = { ...(state?.fishWaterBodyByTile || {}) };
+  state.fishWaterBodies = { ...(state?.fishWaterBodies || {}) };
+  generateFishPopulationsInternal(state);
+  return state;
 }
 
 export function canGenerateAnimalZones(state) {
@@ -3888,11 +3880,41 @@ function placeFounders(state, rng) {
   }
 }
 
-function addDormantSeedToTile(tile, speciesId, amount = 1) {
+function ensureDormantSeedSeasonIndex(state) {
+  if (!state || typeof state !== 'object') {
+    return null;
+  }
+  if (!state.dormantSeedTilesBySeason || typeof state.dormantSeedTilesBySeason !== 'object') {
+    state.dormantSeedTilesBySeason = {
+      spring: Object.create(null),
+      summer: Object.create(null),
+      fall: Object.create(null),
+      winter: Object.create(null),
+    };
+  }
+  return state.dormantSeedTilesBySeason;
+}
+
+function addDormantSeedToTile(state, tile, speciesId, germinationSeason, amount = 1) {
   if (amount <= 0) {
     return;
   }
-  tile.dormantSeeds[speciesId] = { ageDays: 0 };
+  const bornTotalDays = Number.isInteger(state?.totalDaysSimulated) ? state.totalDaysSimulated : 0;
+  tile.dormantSeeds[speciesId] = { bornTotalDays };
+  if (state && Number.isInteger(tile?.x) && Number.isInteger(tile?.y) && Number.isInteger(state.width)) {
+    const idx = (tile.y * state.width) + tile.x;
+    const buckets = ensureDormantSeedSeasonIndex(state);
+    const season = typeof germinationSeason === 'string' ? germinationSeason : null;
+    if (buckets && season && buckets[season]) {
+      buckets[season][idx] = 1;
+    } else {
+      // Fallback bucket: keep a broad index for back-compat.
+      if (!state.dormantSeedTiles || typeof state.dormantSeedTiles !== 'object') {
+        state.dormantSeedTiles = Object.create(null);
+      }
+      state.dormantSeedTiles[idx] = 1;
+    }
+  }
 }
 
 function seasonalWindowLength(window) {
@@ -4056,7 +4078,7 @@ function depositWaterDispersedSeed(state, species, sourceX, sourceY, rng, method
   if (tile.waterType || isRockTile(tile)) {
     return false;
   }
-  addDormantSeedToTile(tile, species.id, 1);
+  addDormantSeedToTile(state, tile, species.id, species?.dispersal?.germination_season, 1);
   recordDispersalEvent(state, bank.x, bank.y, methodLabel, 1);
   return true;
 }
@@ -4072,7 +4094,7 @@ function placeDormantSeed(state, species, x, y, methodLabel = species.dispersal.
   if (isTileBlockedForPlantLife(tile)) {
     return false;
   }
-  addDormantSeedToTile(tile, species.id, 1);
+  addDormantSeedToTile(state, tile, species.id, species?.dispersal?.germination_season, 1);
   recordDispersalEvent(state, x, y, methodLabel, 1);
   return true;
 }
@@ -4295,7 +4317,8 @@ export function createInitialGameState(seed = 10000, options = {}) {
     tiles,
     plants: {},
     nextPlantNumericId: 1,
-    recentDispersal: createEmptyRecentDispersal(5),
+    // Debug/overlay telemetry (seed dispersal): opt-in.
+    recentDispersal: null,
     runFungusPool: LOG_FUNGUS_CATALOG.map((fungus) => fungus.id),
     runGroundFungusPool: [],
     groundFungusZonesGenerated: false,
@@ -4335,6 +4358,15 @@ export function createInitialGameState(seed = 10000, options = {}) {
 }
 
 export function advanceDay(state, steps = 1, options = {}) {
+  return advanceDayInPlace(state, steps, options);
+}
+
+/**
+ * Mutating variant of `advanceDay` for store-owned state (no full-map cloning).
+ * Callers must ensure `state` is exclusively owned and not shared for comparisons/snapshots.
+ */
+export function advanceDayInPlace(state, steps = 1, options = {}) {
+  const trackRecentDispersal = options.trackRecentDispersal === true;
   const applyDailyItemDecayHook = options.skipBatchItemProgress === true
     ? () => {}
     : applyBatchCalendarDayItemProgress;
@@ -4342,7 +4374,7 @@ export function advanceDay(state, steps = 1, options = {}) {
     clonePlant,
     cloneTile,
     cloneActors,
-    createEmptyRecentDispersal,
+    createEmptyRecentDispersal: trackRecentDispersal ? createEmptyRecentDispersal : () => null,
     cloneAnimalDensityByZone,
     cloneFishDensityByTile,
     cloneWorldItemsByTile,
@@ -4369,16 +4401,26 @@ export function advanceDay(state, steps = 1, options = {}) {
     rollDailyWeatherForCurrentDay,
     advanceDeadLogDecayByYear,
     refillSquirrelCachesByYear,
+    mutateInPlace: true,
   });
   ensurePartnerCampMaintenanceQueued(next);
   return next;
+}
+
+/**
+ * Pure/day-cloning boundary for tests and snapshot comparisons.
+ * Produces a deep-copied state before running mutating sim logic.
+ */
+export function advanceDayPure(state, steps = 1, options = {}) {
+  const copy = deserializeSnapshotState(serializeSnapshotState(state));
+  return advanceDayInPlace(copy, steps, options);
 }
 
 export function countDormantSeeds(state) {
   let total = 0;
   for (const tile of state.tiles) {
     for (const entry of Object.values(tile.dormantSeeds)) {
-      if (entry && Number.isFinite(entry.ageDays)) {
+      if (entry && Number.isInteger(entry.bornTotalDays)) {
         total += 1;
       }
     }

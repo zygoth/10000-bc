@@ -28,6 +28,8 @@ export function withRockTile(state, x, y, rockType, extra = {}) {
   const idx = Number(y) * Number(state.width) + Number(x);
   const tile = state.tiles[idx];
   tile.rockType = rockType;
+  // Test helper: rock-focused fixtures should not accidentally surface plant harvest actions.
+  tile.plantIds = [];
   if (rockType === 'flint_cobble_scatter' && Number.isInteger(extra.flintCobbleRemaining)) {
     tile.flintCobbleRemaining = extra.flintCobbleRemaining;
   }

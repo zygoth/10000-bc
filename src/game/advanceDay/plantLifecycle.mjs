@@ -71,32 +71,101 @@ export function processDormantSeedsImpl(state, rng, deps) {
   } = deps;
   const currentSeason = getSeason(state.dayOfYear);
 
-  for (const tile of state.tiles) {
+  const ensureSeasonBuckets = () => {
+    if (!state.dormantSeedTilesBySeason || typeof state.dormantSeedTilesBySeason !== 'object') {
+      state.dormantSeedTilesBySeason = {
+        spring: Object.create(null),
+        summer: Object.create(null),
+        fall: Object.create(null),
+        winter: Object.create(null),
+      };
+    }
+    return state.dormantSeedTilesBySeason;
+  };
+
+  const buckets = ensureSeasonBuckets();
+  let seedTileIndex = buckets?.[currentSeason] && typeof buckets[currentSeason] === 'object'
+    ? buckets[currentSeason]
+    : null;
+
+  // Back-compat / test support: if seed pools were mutated directly without updating the index,
+  // rebuild season buckets once from current tiles.
+  if (!seedTileIndex) {
+    buckets[currentSeason] = Object.create(null);
+    seedTileIndex = buckets[currentSeason];
+  }
+  if (Object.keys(seedTileIndex).length === 0) {
+    // Only do the expensive rebuild if we appear to be missing indexes entirely.
+    // (This keeps the common-path fast.)
+    let sawAnySeeds = false;
+    for (let i = 0; i < state.tiles.length; i += 1) {
+      const t = state.tiles[i];
+      if (t && t.dormantSeeds && typeof t.dormantSeeds === 'object' && Object.keys(t.dormantSeeds).length > 0) {
+        sawAnySeeds = true;
+        for (const speciesId of Object.keys(t.dormantSeeds)) {
+          const season = PLANT_BY_ID?.[speciesId]?.dispersal?.germination_season;
+          if (season && buckets[season]) {
+            buckets[season][i] = 1;
+          }
+        }
+      }
+    }
+    if (sawAnySeeds) {
+      seedTileIndex = buckets[currentSeason];
+    }
+  }
+
+  for (const rawIndex of Object.keys(seedTileIndex)) {
+    const idx = Math.floor(Number(rawIndex));
+    if (!Number.isInteger(idx) || idx < 0 || idx >= state.tiles.length) {
+      delete seedTileIndex[rawIndex];
+      continue;
+    }
+    const tile = state.tiles[idx];
     if (isRockTile(tile)) {
       const rockTile = getTileForWrite(state, tile.x, tile.y);
       rockTile.dormantSeeds = {};
+      delete seedTileIndex[rawIndex];
       continue;
     }
 
     const seedEntries = Object.entries(tile.dormantSeeds || {});
     if (seedEntries.length === 0) {
+      delete seedTileIndex[rawIndex];
       continue;
     }
 
     const mt = getTileForWrite(state, tile.x, tile.y);
+    let hasCurrentSeasonSeedsAfter = false;
 
     for (const [speciesId, entry] of seedEntries) {
       const species = PLANT_BY_ID[speciesId];
-      entry.ageDays += 1;
-
-      if (entry.ageDays > species.dispersal.viable_lifespan_days) {
+      if (!species) {
         delete mt.dormantSeeds[speciesId];
         continue;
       }
 
-      if (species.dispersal.germination_season !== currentSeason) {
+      const viableLifespan = species?.dispersal?.viable_lifespan_days;
+      const season = species?.dispersal?.germination_season;
+
+      // Lazy aging: store bornTotalDays; compute age on demand.
+      if (!Number.isInteger(entry?.bornTotalDays)) {
+        // No legacy support: dormant seed entries must be `{ bornTotalDays }`.
+        delete mt.dormantSeeds[speciesId];
         continue;
       }
+      const nowDays = Number.isInteger(state.totalDaysSimulated) ? state.totalDaysSimulated : 0;
+      const ageDays = Math.max(0, nowDays - entry.bornTotalDays);
+
+      if (Number.isFinite(viableLifespan) && ageDays > viableLifespan) {
+        delete mt.dormantSeeds[speciesId];
+        continue;
+      }
+
+      if (season !== currentSeason) {
+        continue;
+      }
+      hasCurrentSeasonSeedsAfter = true;
 
       if (mt.plantIds.length >= MAX_PLANTS_PER_TILE) {
         continue;
@@ -131,6 +200,27 @@ export function processDormantSeedsImpl(state, rng, deps) {
 
       addPlantInstance(state, speciesId, spot.x, spot.y, 0, 'seed');
       delete mt.dormantSeeds[speciesId];
+      hasCurrentSeasonSeedsAfter = false;
+    }
+
+    if (!hasCurrentSeasonSeedsAfter) {
+      // Re-check after mutations: keep the tile in the season bucket only if it still has a seed
+      // for the current season.
+      for (const [speciesId] of Object.entries(mt.dormantSeeds || {})) {
+        const s = PLANT_BY_ID?.[speciesId];
+        if (s?.dispersal?.germination_season === currentSeason) {
+          hasCurrentSeasonSeedsAfter = true;
+          break;
+        }
+      }
+    }
+
+    if (Object.keys(mt.dormantSeeds || {}).length === 0) {
+      delete seedTileIndex[rawIndex];
+      continue;
+    }
+    if (!hasCurrentSeasonSeedsAfter) {
+      delete seedTileIndex[rawIndex];
     }
   }
 }

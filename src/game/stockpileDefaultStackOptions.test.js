@@ -1,4 +1,7 @@
-import { buildDefaultCampStockpileStackFields } from './stockpileDefaultStackOptions.mjs';
+import {
+  buildDefaultCampStockpileStackFields,
+  resolveInnerBarkUnitWeightKgForItem,
+} from './stockpileDefaultStackOptions.mjs';
 
 describe('buildDefaultCampStockpileStackFields', () => {
   it('sets plant-part decay and unit weight from catalog', () => {
@@ -19,7 +22,7 @@ describe('buildDefaultCampStockpileStackFields', () => {
 
   it('assigns weight to synthetic inner bark for test bootstrap', () => {
     const fields = buildDefaultCampStockpileStackFields('bark:inner_bark');
-    expect(fields.unitWeightKg).toBeCloseTo(0.04);
+    expect(fields.unitWeightKg).toBeCloseTo(resolveInnerBarkUnitWeightKgForItem());
   });
 
   it('uses fish meat decay for fish_carcass', () => {

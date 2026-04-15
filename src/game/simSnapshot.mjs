@@ -69,9 +69,9 @@ function legacyBandForWaterType(waterType) {
 function normalizeDormantSeeds(dormantSeeds) {
   const normalized = {};
   for (const [speciesId, entry] of Object.entries(dormantSeeds || {})) {
-    normalized[speciesId] = {
-      ageDays: Number.isFinite(entry?.ageDays) ? entry.ageDays : 0,
-    };
+    if (Number.isInteger(entry?.bornTotalDays)) {
+      normalized[speciesId] = { bornTotalDays: entry.bornTotalDays };
+    }
   }
   return normalized;
 }
@@ -1012,7 +1012,6 @@ function normalizeStateForLoad(candidate) {
   const camp = normalizeCampState(candidate.camp, candidate.width, candidate.height);
   const pendingActionQueue = normalizeActionLog(candidate.pendingActionQueue);
   const currentDayActionLog = normalizeActionLog(candidate.currentDayActionLog);
-
   const loaded = {
     ...candidate,
     tiles: candidate.tiles.map((tile) => normalizeTileForLoad(tile)),

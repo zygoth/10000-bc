@@ -17,6 +17,7 @@ function toCatalogShape(plant) {
     dispersal: plant.dispersal,
     life_stages: plant.life_stages,
     parts: plant.parts,
+    max_plants_per_tile: plant.max_plants_per_tile,
   };
   if (typeof plant.physical_description === 'string' && plant.physical_description) {
     entry.physical_description = plant.physical_description;

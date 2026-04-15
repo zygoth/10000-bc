@@ -89,6 +89,8 @@ import {
 } from './ui/isoProjection.js';
 import TitleScreen from './ui/title/TitleScreen.jsx';
 import { generateWorldStartState } from './game/worldStart.mjs';
+import { getGameState as getStoredGameState, setGameState as setStoredGameState } from './game/gameStore.mjs';
+import { useGameDispatch, useGameStore } from './ui/useGameStore.js';
 
 const OBSERVER_VIEWPORT_WIDTH = 15;
 const OBSERVER_VIEWPORT_HEIGHT = 10;
@@ -1056,6 +1058,18 @@ function cloneGameStateForUpdate(state) {
   return deserializeGameState(serializeGameState(state));
 }
 
+function ensureInitialGameStateInitialized() {
+  const existing = getStoredGameState();
+  if (existing) {
+    return existing;
+  }
+  const initial = applyAutoUnlockGenerations(createInitialGameState(10000, { width: 80, height: 80 }));
+  setStoredGameState(initial, { kind: 'init' });
+  return initial;
+}
+
+ensureInitialGameStateInitialized();
+
 function App() {
   const [seedInput, setSeedInput] = useState('10000');
   const [mapWidthInput, setMapWidthInput] = useState('80');
@@ -1068,7 +1082,8 @@ function App() {
   const [seedStationBuildMaterials, setSeedStationBuildMaterials] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedStationBuildMaterials);
   const [seedCraftingProcessInputs, setSeedCraftingProcessInputs] = useState(DEFAULT_MANUAL_TEST_BOOTSTRAP.seedCraftingProcessInputs);
   const [appMode, setAppMode] = useState('title');
-  const [gameState, setGameState] = useState(() => applyAutoUnlockGenerations(createInitialGameState(10000, { width: 80, height: 80 })));
+  const { gameState, version: gameStateVersion } = useGameStore();
+  const gameDispatch = useGameDispatch();
   const [cameraX, setCameraX] = useState(32);
   const [cameraY, setCameraY] = useState(35);
   const [overlayMode, setOverlayMode] = useState('moisture');
@@ -1126,11 +1141,33 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const setGameState = useCallback((nextState, meta = null) => {
+    gameDispatch.setGameState(applyAutoUnlockGenerations(nextState), meta || { kind: 'set' });
+  }, [gameDispatch]);
+
+  const advanceTickInStore = useCallback((options) => {
+    const nextState = gameDispatch.advanceTick(options);
+    const unlocked = applyAutoUnlockGenerations(nextState);
+    if (unlocked !== nextState) {
+      gameDispatch.setGameState(unlocked, { kind: 'autounlock' });
+    }
+    return unlocked;
+  }, [gameDispatch]);
+
+  const advanceDayInStore = useCallback((steps, options = null) => {
+    const nextState = gameDispatch.advanceDay(steps, options);
+    const unlocked = applyAutoUnlockGenerations(nextState);
+    if (unlocked !== nextState) {
+      gameDispatch.setGameState(unlocked, { kind: 'autounlock' });
+    }
+    return unlocked;
+  }, [gameDispatch]);
+
   const metrics = useMemo(() => (
     rendererMode === 'observer'
       ? getMetrics(gameState)
       : getMetricsLight(gameState)
-  ), [rendererMode, gameState]);
+  ), [rendererMode, gameStateVersion]);
   const recentDispersalSummary = useMemo(() => {
     const totalsByMethod = gameState.recentDispersal?.totalsByMethod || {};
     const entries = Object.entries(totalsByMethod).sort((a, b) => b[1] - a[1]);
@@ -1138,7 +1175,7 @@ function App() {
       return 'none';
     }
     return entries.map(([method, count]) => `${method}:${count}`).join(' | ');
-  }, [gameState.recentDispersal]);
+  }, [gameStateVersion]);
   const selectedSpecies = useMemo(
     () => (selectedSpeciesId ? PLANT_BY_ID[selectedSpeciesId] || null : null),
     [selectedSpeciesId],
@@ -1155,7 +1192,7 @@ function App() {
       }
     }
     return supports;
-  }, [gameState.tiles, selectedSpecies]);
+  }, [gameStateVersion, selectedSpecies]);
 
   const rendererLayout = RENDERER_LAYOUT[rendererMode] || RENDERER_LAYOUT.observer;
   const familyVitalGroups = useMemo(() => {
@@ -1183,7 +1220,7 @@ function App() {
         };
       })
       .filter(Boolean);
-  }, [gameState?.actors]);
+  }, [gameStateVersion]);
   const debriefState = gameState?.camp?.debrief && typeof gameState.camp.debrief === 'object'
     ? gameState.camp.debrief
     : { active: false, medicineRequests: [], medicineNotifications: [] };
@@ -1211,7 +1248,7 @@ function App() {
     };
   const playerInventoryStacks = useMemo(
     () => (Array.isArray(playerActor?.inventory?.stacks) ? playerActor.inventory.stacks : []),
-    [playerActor?.inventory?.stacks],
+    [gameStateVersion],
   );
   const playerInventoryForGrid = useMemo(() => ({
     gridWidth: Number.isInteger(playerActor?.inventory?.gridWidth)
@@ -1222,6 +1259,7 @@ function App() {
       : 4,
     stacks: playerInventoryStacks,
   }), [
+    gameStateVersion,
     playerActor?.inventory?.gridWidth,
     playerActor?.inventory?.gridHeight,
     playerInventoryStacks,
@@ -1239,7 +1277,7 @@ function App() {
     : 0;
   const campStockpileStacks = useMemo(
     () => (Array.isArray(gameState?.camp?.stockpile?.stacks) ? gameState.camp.stockpile.stacks : []),
-    [gameState?.camp?.stockpile?.stacks],
+    [gameStateVersion],
   );
   const campStockpileEntries = useMemo(
     () => campStockpileStacks.map((entry, idx) => buildStockpileGridEntry(entry, idx)),
@@ -1251,7 +1289,7 @@ function App() {
 
   const setMealPlanIngredients = useCallback((nextIngredients) => {
     const ingredients = Array.isArray(nextIngredients) ? nextIngredients : [];
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+    advanceTickInStore({
       actions: [
         {
           actionId: `ui-meal-plan-set-${Date.now()}`,
@@ -1260,8 +1298,8 @@ function App() {
           payload: { ingredients },
         },
       ],
-    })));
-  }, []);
+    });
+  }, [advanceTickInStore]);
 
   const addMealIngredientFromStockpile = useCallback((itemId, quantity = 1) => {
     const id = typeof itemId === 'string' ? itemId : '';
@@ -1277,7 +1315,7 @@ function App() {
     }
     map.set(id, (map.get(id) || 0) + addQty);
     setMealPlanIngredients(Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q })));
-  }, [gameState?.camp?.mealPlan?.ingredients, setMealPlanIngredients]);
+  }, [gameStateVersion, setMealPlanIngredients]);
 
   const removeMealIngredient = useCallback((itemId, quantity = 1) => {
     const id = typeof itemId === 'string' ? itemId : '';
@@ -1295,7 +1333,7 @@ function App() {
     if (next <= 0) map.delete(id);
     else map.set(id, next);
     setMealPlanIngredients(Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q })));
-  }, [gameState?.camp?.mealPlan?.ingredients, setMealPlanIngredients]);
+  }, [gameStateVersion, setMealPlanIngredients]);
 
   const addMealIngredientFromInventory = useCallback((itemId, quantity = 1) => {
     const id = typeof itemId === 'string' ? itemId : '';
@@ -1312,7 +1350,7 @@ function App() {
     map.set(id, (map.get(id) || 0) + addQty);
     const nextIngredients = Array.from(map.entries()).map(([k, q]) => ({ itemId: k, quantity: q }));
 
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+    advanceTickInStore({
       actions: [
         {
           actionId: `a-ui-stockpile-add-${Date.now()}`,
@@ -1327,8 +1365,8 @@ function App() {
           payload: { ingredients: nextIngredients },
         },
       ],
-    })));
-  }, [gameState?.camp?.mealPlan?.ingredients]);
+    });
+  }, [advanceTickInStore, gameStateVersion]);
   const debriefSpoilageEntries = useMemo(
     () => campStockpileEntries
       .filter((entry) => Number.isFinite(entry.decayDaysRemaining) && entry.decayDaysRemaining <= 1.5)
@@ -1357,7 +1395,7 @@ function App() {
     : null;
   const campDryingRackSlots = useMemo(
     () => (Array.isArray(gameState?.camp?.dryingRack?.slots) ? gameState.camp.dryingRack.slots : []),
-    [gameState?.camp?.dryingRack?.slots],
+    [gameStateVersion],
   );
   const campHasDryingRackStation = Array.isArray(gameState?.camp?.stationsUnlocked)
     && gameState.camp.stationsUnlocked.includes('drying_rack');
@@ -1378,7 +1416,7 @@ function App() {
   const selectedTileWorldItems = useMemo(() => {
     const key = tileKey(selectedTileX, selectedTileY);
     return key && Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
-  }, [gameState, selectedTileX, selectedTileY]);
+  }, [gameStateVersion, selectedTileX, selectedTileY]);
   const selectedTileWorldItemEntries = useMemo(
     () => selectedTileWorldItems.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
     [selectedTileWorldItems],
@@ -1407,7 +1445,7 @@ function App() {
       }
     }
     return null;
-  }, [gameState, playerActor]);
+  }, [gameStateVersion, playerActor]);
 
   const sledPanelVisible = playerActor?.sledAttached === true || Boolean(adjacentSledTile);
   const sledPanelSource = playerActor?.sledAttached === true ? 'attached' : (adjacentSledTile ? 'ground' : null);
@@ -1419,7 +1457,7 @@ function App() {
       return [];
     }
     return Array.isArray(adjacentSledTile.tile.sledStash.stacks) ? adjacentSledTile.tile.sledStash.stacks : [];
-  }, [adjacentSledTile, playerActor]);
+  }, [gameStateVersion, adjacentSledTile, playerActor]);
   const sledPanelStacks = useMemo(
     () => sledPanelStacksRaw.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
     [sledPanelStacksRaw],
@@ -1796,7 +1834,7 @@ function App() {
       }
     }
     return results;
-  }, [campStockpileEntries, gameState, playerInventoryEntries, stationProcessPanel]);
+  }, [campStockpileEntries, gameStateVersion, playerInventoryEntries, stationProcessPanel]);
 
   const stationProcessTickPreview = useMemo(() => {
     const entry = stationProcessCandidateEntries[0];
@@ -1805,7 +1843,7 @@ function App() {
     }
     const quantity = Math.max(1, Math.min(Number(entry.maxQuantity) || 1, Math.floor(Number(stationProcessQuantity) || 1)));
     return resolveStationProcessTickCost(gameState, entry, quantity);
-  }, [gameState, stationProcessCandidateEntries, stationProcessQuantity]);
+  }, [gameStateVersion, stationProcessCandidateEntries, stationProcessQuantity]);
 
   const stationProcessEnergyUi = useMemo(() => {
     const tc = Number(stationProcessTickPreview);
@@ -1962,7 +2000,7 @@ function App() {
       ...plantBlock,
       activeParts: plantBlock?.activeParts ?? [],
     };
-  }, [gameState, selectedTileEntity]);
+  }, [gameStateVersion, selectedTileEntity]);
   const dayTick = Number(gameState?.dayTick) || 0;
   const dayProgressPercent = Math.max(0, Math.min(100, (dayTick / TICKS_PER_DAY) * 100));
   const nightThresholdPercent = Math.max(0, Math.min(100, (NIGHT_TICK_THRESHOLD / TICKS_PER_DAY) * 100));
@@ -2171,7 +2209,7 @@ function App() {
       }
     }
     actionLogSeenCountRef.current = logs.length;
-  }, [gameState.currentDayActionLog]);
+  }, [gameStateVersion]);
 
   const rows = useMemo(() => {
     const nextRows = [];
@@ -2192,7 +2230,7 @@ function App() {
     }
 
     return nextRows;
-  }, [cameraX, cameraY, gameState, viewportHeight, viewportWidth]);
+  }, [cameraX, cameraY, gameStateVersion, viewportHeight, viewportWidth]);
 
   const visibleIsoTiles = useMemo(() => {
     if (rendererMode !== 'game') {
@@ -2254,7 +2292,7 @@ function App() {
     }
 
     return visible;
-  }, [cameraAnchorElevationPx, cameraX, cameraY, gameState, rendererMode, windowSize.height, windowSize.width]);
+  }, [cameraAnchorElevationPx, cameraX, cameraY, gameStateVersion, rendererMode, windowSize.height, windowSize.width]);
 
   const sortedVisibleIsoTiles = useMemo(() => {
     const sorted = visibleIsoTiles.slice();
@@ -2304,7 +2342,7 @@ function App() {
 
   const initializeFromSeed = useCallback((enterPlayMode = false) => {
     const nextState = buildNewGameState();
-    setGameState(nextState);
+    setGameState(nextState, { kind: 'init' });
     const centeredX = Math.max(0, Math.floor((nextState.width - viewportWidth) / 2));
     const centeredY = Math.max(0, Math.floor((nextState.height - viewportHeight) / 2));
     setCameraX(centeredX);
@@ -2314,17 +2352,17 @@ function App() {
     if (enterPlayMode) {
       setRendererMode('game');
     }
-  }, [buildNewGameState, preSimDaysInput, viewportHeight, viewportWidth]);
+  }, [buildNewGameState, preSimDaysInput, setGameState, viewportHeight, viewportWidth]);
 
   const applyLoadedState = useCallback((loadedState, options = {}) => {
     const renderer = options.rendererMode === 'observer' ? 'observer' : 'game';
-    setGameState(loadedState);
+    setGameState(loadedState, { kind: 'load' });
     setCameraX(Math.max(0, Math.floor((loadedState.width - viewportWidth) / 2)));
     setCameraY(Math.max(0, Math.floor((loadedState.height - viewportHeight) / 2)));
     setSelectedGameTile({ x: loadedState.camp.anchorX, y: loadedState.camp.anchorY });
     setRendererMode(renderer);
     setAppMode('running');
-  }, [viewportHeight, viewportWidth]);
+  }, [setGameState, viewportHeight, viewportWidth]);
 
   const parseLoadedGameStateFromText = useCallback((text) => {
     const parsed = JSON.parse(text);
@@ -2393,11 +2431,11 @@ function App() {
   }, [applyLoadedState, buildNewGameState, preSimDaysInput]);
 
   const runSteps = (steps) => {
-    setGameState((prev) => applyAutoUnlockGenerations(advanceDay(cloneGameStateForUpdate(prev), steps)));
+    advanceDayInStore(steps);
   };
 
   const submitPlayerAction = useCallback((kind, payload = {}) => {
-    setGameState((prev) => applyAutoUnlockGenerations(advanceTick(prev, {
+    advanceTickInStore({
       actions: [
         {
           actionId: `ui-${kind}-${Date.now()}`,
@@ -2406,8 +2444,8 @@ function App() {
           payload,
         },
       ],
-    })));
-  }, []);
+    });
+  }, [advanceTickInStore]);
 
   const appendPartnerTaskFromDebrief = useCallback((task) => {
     if (!task || typeof task !== 'object') {
@@ -2478,7 +2516,7 @@ function App() {
     setActionComposerStatus(`Submitted: ${formatTokenLabel(entry.processId)} x${safeQuantity}`);
     setStationProcessPanel(null);
     setStationProcessQuantity(1);
-  }, [gameState, playerActor, submitPlayerAction]);
+  }, [gameStateVersion, playerActor, submitPlayerAction]);
 
   const appendLocalFeed = useCallback((entry) => {
     setPlayActionFeed((prev) => [
@@ -2822,7 +2860,7 @@ function App() {
     }
     runTileQuickAction(kind, worldX, worldY, getTileAt(gameState, worldX, worldY));
     setTileContextMenu(null);
-  }, [gameState, runTileQuickAction, selectedInspectData, submitPlayerAction, tileContextMenu]);
+  }, [gameStateVersion, runTileQuickAction, selectedInspectData, submitPlayerAction, tileContextMenu]);
 
   const generateMushroomZones = () => {
     if (!canGenerateMushroomZones(gameState)) {
@@ -3075,7 +3113,7 @@ function App() {
     }
     setIsPauseMenuOpen(false);
     setAppMode('title');
-  }, [gameState]);
+  }, [gameStateVersion]);
 
   const handleLoadSnapshot = async (event) => {
     const file = event.target.files?.[0];
@@ -3684,24 +3722,20 @@ function App() {
                 return;
               }
             }
-            setGameState((prev) => {
-              const currentDayTick = Math.max(0, Math.floor(Number(prev?.dayTick) || 0));
-              const ticksUntilDebrief = Math.max(0, NIGHT_TICK_THRESHOLD - currentDayTick);
-              let next = prev;
-              if (ticksUntilDebrief > 0) {
-                next = advanceTick(next, { idleTicks: ticksUntilDebrief });
-              }
-              next = advanceTick(next, {
-                actions: [
-                  {
-                    actionId: `ui-debrief-enter-${Date.now()}`,
-                    actorId: 'player',
-                    kind: 'debrief_enter',
-                    payload: {},
-                  },
-                ],
-              });
-              return applyAutoUnlockGenerations(next);
+            const currentDayTick = Math.max(0, Math.floor(Number(gameState?.dayTick) || 0));
+            const ticksUntilDebrief = Math.max(0, NIGHT_TICK_THRESHOLD - currentDayTick);
+            if (ticksUntilDebrief > 0) {
+              advanceTickInStore({ idleTicks: ticksUntilDebrief });
+            }
+            advanceTickInStore({
+              actions: [
+                {
+                  actionId: `ui-debrief-enter-${Date.now()}`,
+                  actorId: 'player',
+                  kind: 'debrief_enter',
+                  payload: {},
+                },
+              ],
             });
           }}
           selectedDebriefTab={selectedDebriefTab}
@@ -3725,20 +3759,18 @@ function App() {
           onMealAddFromInventory={addMealIngredientFromInventory}
           onMealRemoveIngredient={removeMealIngredient}
           onBeginDay={() => {
-            setGameState((prev) => {
-              // Commit stew now, then let the remaining ticks drain hunger into morning.
-              const committed = advanceTick(prev, {
-                actions: [
-                  {
-                    actionId: `ui-meal-plan-commit-${Date.now()}`,
-                    actorId: 'player',
-                    kind: 'meal_plan_commit',
-                    payload: {},
-                  },
-                ],
-              });
-              return applyAutoUnlockGenerations(advanceStateToNextMorning(committed));
+            // Commit stew now, then let the remaining ticks drain hunger into morning.
+            const committed = advanceTickInStore({
+              actions: [
+                {
+                  actionId: `ui-meal-plan-commit-${Date.now()}`,
+                  actorId: 'player',
+                  kind: 'meal_plan_commit',
+                  payload: {},
+                },
+              ],
             });
+            setGameState(advanceStateToNextMorning(committed), { kind: 'begin_day' });
           }}
           visionSelectionOptions={visionSelectionOptions}
           selectedVisionItemId={selectedVisionItemId}

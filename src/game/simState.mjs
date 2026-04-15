@@ -10,7 +10,7 @@ function cloneDormantSeeds(dormantSeeds) {
   const cloned = {};
   for (const [speciesId, entry] of Object.entries(dormantSeeds || {})) {
     cloned[speciesId] = {
-      ageDays: Number.isFinite(entry?.ageDays) ? entry.ageDays : 0,
+      bornTotalDays: Number.isInteger(entry?.bornTotalDays) ? entry.bornTotalDays : 0,
     };
   }
   return cloned;

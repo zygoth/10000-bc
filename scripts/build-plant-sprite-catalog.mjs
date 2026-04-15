@@ -182,7 +182,14 @@ function firstOpaqueFromBottom(decoded, frame, alphaThreshold = 1) {
 
 function getOpaqueBottomByFrame(pngPath, textureFrames, cache) {
   const stat = fs.statSync(pngPath);
-  const signature = `${stat.size}:${Math.floor(stat.mtimeMs)}`;
+  const frameSignature = textureFrames
+    .map((frame) => {
+      const filename = String(frame?.filename || '');
+      const rect = frame?.frame || {};
+      return `${filename}:${rect.x || 0},${rect.y || 0},${rect.w || 0},${rect.h || 0}`;
+    })
+    .join('|');
+  const signature = `${stat.size}:${Math.floor(stat.mtimeMs)}:${frameSignature}`;
   const cached = cache.files?.[pngPath];
 
   if (cached?.signature === signature && cached?.frameOpaqueBottomByFilename) {
@@ -316,6 +323,16 @@ function buildSpeciesSpriteEntry(plantDir, spriteAlphaCache) {
   if (!texture || !Array.isArray(texture.frames)) {
     throw new Error(`Invalid atlas format for ${speciesId} (${REQUIRED_ATLAS_BASENAME})`);
   }
+  const seenFilenames = new Set();
+  const uniqueFrames = [];
+  for (const frame of texture.frames) {
+    const filename = typeof frame?.filename === 'string' ? frame.filename : '';
+    if (!filename || seenFilenames.has(filename)) {
+      continue;
+    }
+    seenFilenames.add(filename);
+    uniqueFrames.push(frame);
+  }
 
   const pngDimensions = readPngDimensions(pngPath);
   const logicalWidth = texture.size?.w;
@@ -323,8 +340,8 @@ function buildSpeciesSpriteEntry(plantDir, spriteAlphaCache) {
   const scaleX = logicalWidth ? pngDimensions.width / logicalWidth : 1;
   const scaleY = logicalHeight ? pngDimensions.height / logicalHeight : 1;
 
-  const frameByFilename = Object.fromEntries(texture.frames.map((frame) => [frame.filename, frame]));
-  const opaqueBottomByFilename = getOpaqueBottomByFrame(pngPath, texture.frames, spriteAlphaCache);
+  const frameByFilename = Object.fromEntries(uniqueFrames.map((frame) => [frame.filename, frame]));
+  const opaqueBottomByFilename = getOpaqueBottomByFrame(pngPath, uniqueFrames, spriteAlphaCache);
   const lifeStageFrames = {};
 
   for (const lifeStage of plant.life_stages || []) {

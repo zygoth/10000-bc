@@ -14,6 +14,7 @@ export function advanceDayImpl(state, steps = 1, hooks) {
     cloneCampState,
     ensureDailyWeatherState,
     mulberry32,
+    mutateInPlace,
   } = hooks;
 
   // advanceTick calls advanceDay(state, 0) for shared prep; steps===0 must not reclone the
@@ -27,29 +28,37 @@ export function advanceDayImpl(state, steps = 1, hooks) {
     return state;
   }
 
-  const nextState = {
-    ...state,
-    plants: { ...(state.plants || {}) },
-    tiles: Array.isArray(state.tiles) ? state.tiles.slice() : [],
-    recentDispersal: createEmptyRecentDispersal(state.dayOfYear),
-    animalZoneGrid: state?.animalZoneGrid ? { ...state.animalZoneGrid } : null,
-    animalDensityByZone: cloneAnimalDensityByZone(state?.animalDensityByZone),
-    fishDensityByTile: cloneFishDensityByTile(state?.fishDensityByTile),
-    fishEquilibriumByTile: state?.fishEquilibriumByTile || {},
-    fishWaterBodyByTile: state?.fishWaterBodyByTile || {},
-    fishWaterBodies: state?.fishWaterBodies || {},
-    actors: cloneActors(state?.actors),
-    worldItemsByTile: cloneWorldItemsByTile(state?.worldItemsByTile),
-    camp: cloneCampState(state?.camp, Math.floor(state.width / 2), Math.floor(state.height / 2)),
-    pendingActionQueue: Array.isArray(state?.pendingActionQueue)
-      ? state.pendingActionQueue.map((action) => ({ ...(action || {}) }))
-      : [],
-    currentDayActionLog: Array.isArray(state?.currentDayActionLog)
-      ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
-      : [],
-  };
+  const nextState = mutateInPlace === true
+    ? state
+    : {
+      ...state,
+      plants: { ...(state.plants || {}) },
+      tiles: Array.isArray(state.tiles) ? state.tiles.slice() : [],
+      recentDispersal: createEmptyRecentDispersal(state.dayOfYear),
+      animalZoneGrid: state?.animalZoneGrid ? { ...state.animalZoneGrid } : null,
+      animalDensityByZone: cloneAnimalDensityByZone(state?.animalDensityByZone),
+      fishDensityByTile: cloneFishDensityByTile(state?.fishDensityByTile),
+      fishEquilibriumByTile: state?.fishEquilibriumByTile || {},
+      fishWaterBodyByTile: state?.fishWaterBodyByTile || {},
+      fishWaterBodies: state?.fishWaterBodies || {},
+      actors: cloneActors(state?.actors),
+      worldItemsByTile: cloneWorldItemsByTile(state?.worldItemsByTile),
+      camp: cloneCampState(state?.camp, Math.floor(state.width / 2), Math.floor(state.height / 2)),
+      pendingActionQueue: Array.isArray(state?.pendingActionQueue)
+        ? state.pendingActionQueue.map((action) => ({ ...(action || {}) }))
+        : [],
+      currentDayActionLog: Array.isArray(state?.currentDayActionLog)
+        ? state.currentDayActionLog.map((entry) => ({ ...(entry || {}) }))
+        : [],
+    };
 
-  refreshTickWorkingMutators(nextState, clonePlant, cloneTile);
+  if (mutateInPlace === true) {
+    nextState.recentDispersal = createEmptyRecentDispersal(nextState.dayOfYear);
+    nextState.getMutableTile = (x, y) => nextState.tiles[(y * nextState.width) + x];
+    nextState.getMutablePlant = (plantId) => nextState.plants?.[plantId];
+  } else {
+    refreshTickWorkingMutators(nextState, clonePlant, cloneTile);
+  }
 
   ensureDailyWeatherState(nextState);
   const rng = mulberry32((nextState.seed + nextState.totalDaysSimulated + 1) * 13);

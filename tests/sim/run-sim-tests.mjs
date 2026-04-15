@@ -856,8 +856,11 @@ function runTrapPlaceDeadfallRuntimeAndDailyResolutionTest() {
     'trap_place_deadfall should consume one deadfall item from inventory',
   );
 
-  const dayResolvedA = advanceDay(placed, 1);
-  const dayResolvedB = advanceDay(placed, 1);
+  // advanceDay is mutating-by-default; fork copies for deterministic comparisons.
+  const placedForA = deserializeGameState(serializeGameState(placed));
+  const placedForB = deserializeGameState(serializeGameState(placed));
+  const dayResolvedA = advanceDay(placedForA, 1);
+  const dayResolvedB = advanceDay(placedForB, 1);
   const resolvedTileA = dayResolvedA.tiles[landTile.y * dayResolvedA.width + landTile.x];
   const resolvedTileB = dayResolvedB.tiles[landTile.y * dayResolvedB.width + landTile.x];
 
@@ -986,8 +989,11 @@ function runTrapPlaceFishWeirRuntimeAndDailyResolutionTest() {
     'trap_place_fish_weir should consume one fish trap weir item from inventory',
   );
 
-  const dayResolvedA = advanceDay(placed, 1);
-  const dayResolvedB = advanceDay(placed, 1);
+  // advanceDay is mutating-by-default; fork copies for deterministic comparisons.
+  const placedForA = deserializeGameState(serializeGameState(placed));
+  const placedForB = deserializeGameState(serializeGameState(placed));
+  const dayResolvedA = advanceDay(placedForA, 1);
+  const dayResolvedB = advanceDay(placedForB, 1);
   const resolvedTileA = dayResolvedA.tiles[riverTile.y * dayResolvedA.width + riverTile.x];
   const resolvedTileB = dayResolvedB.tiles[riverTile.y * dayResolvedB.width + riverTile.x];
   assert.ok(resolvedTileA.fishTrap, 'daily fish trap resolution should preserve fishTrap state');
@@ -1176,6 +1182,9 @@ function runFishRodCastEarlyStopAndDensityBehaviorTest() {
     { itemId: 'earthworm', quantity: 1 },
   ];
 
+  // advanceTick is mutating-by-default; snapshot pre-state for before/after comparisons.
+  const before = deserializeGameState(serializeGameState(state));
+
   const next = advanceTick(state, {
     actions: [
       {
@@ -1201,12 +1210,12 @@ function runFishRodCastEarlyStopAndDensityBehaviorTest() {
   const caught = next.actors.player.inventory.stacks.find((entry) => typeof entry.itemId === 'string' && entry.itemId.endsWith(':fish_carcass'));
   if (caught) {
     const speciesId = String(caught.itemId).split(':')[0];
-    const beforeDensity = Number(state.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
+    const beforeDensity = Number(before.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
     const afterDensity = Number(next.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
     assert.ok(afterDensity < beforeDensity, 'successful fish_rod_cast catch should reduce local fish density');
   } else {
     for (const speciesId of rodSpecies) {
-      const beforeDensity = Number(state.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
+      const beforeDensity = Number(before.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
       const afterDensity = Number(next.fishDensityByTile?.[speciesId]?.[tileKey] || 0);
       assert.equal(afterDensity, beforeDensity, 'fish_rod_cast escape should not change local fish density');
     }
@@ -2254,7 +2263,11 @@ function runWorkbenchToolCraftTickReductionTest() {
 
   assert.ok(afterBuild.camp.stationsUnlocked.includes('workbench'), 'workbench should be unlocked after build action');
 
-  const craftInCamp = advanceTick(afterBuild, {
+  // advanceTick is mutating-by-default; fork copies when we need multiple branches.
+  const afterBuildForCraft = deserializeGameState(serializeGameState(afterBuild));
+  const afterBuildForValidation = deserializeGameState(serializeGameState(afterBuild));
+
+  const craftInCamp = advanceTick(afterBuildForCraft, {
     actions: [
       {
         actionId: 'craft-knife-in-camp',
@@ -2270,11 +2283,11 @@ function runWorkbenchToolCraftTickReductionTest() {
   assert.equal(appliedInCamp.tickCost, 24, 'workbench should reduce in-camp flint knife craft tick cost by 20%');
 
   const outOfCamp = {
-    ...afterBuild,
+    ...afterBuildForValidation,
     actors: {
-      ...afterBuild.actors,
+      ...afterBuildForValidation.actors,
       player: {
-        ...afterBuild.actors.player,
+        ...afterBuildForValidation.actors.player,
         x: 0,
         y: 0,
       },
@@ -2759,7 +2772,11 @@ function runWorkbenchSpoutCraftTickReductionTest() {
     },
   };
 
-  const inCamp = advanceTick(withKnife, {
+  // advanceTick is mutating-by-default; fork copies when we need multiple branches.
+  const withKnifeForTick = deserializeGameState(serializeGameState(withKnife));
+  const withKnifeForValidation = deserializeGameState(serializeGameState(withKnife));
+
+  const inCamp = advanceTick(withKnifeForTick, {
     actions: [
       {
         actionId: 'craft-spout-in-camp',
@@ -2774,11 +2791,11 @@ function runWorkbenchSpoutCraftTickReductionTest() {
   assert.equal(inCampLog.tickCost, 12, 'workbench should reduce carved_wooden_spout craft tick cost by 20% in camp');
 
   const outOfCamp = {
-    ...withKnife,
+    ...withKnifeForValidation,
     actors: {
-      ...withKnife.actors,
+      ...withKnifeForValidation.actors,
       player: {
-        ...withKnife.actors.player,
+        ...withKnifeForValidation.actors.player,
         x: 0,
         y: 0,
       },
@@ -3715,8 +3732,11 @@ function runTrapPlaceSnareRuntimeAndDailyResolutionTest() {
     'trap_place_snare should consume one snare item from inventory',
   );
 
-  const dayResolvedA = advanceDay(placed, 1);
-  const dayResolvedB = advanceDay(placed, 1);
+  // advanceDay is mutating-by-default; fork copies for deterministic comparisons.
+  const placedForA = deserializeGameState(serializeGameState(placed));
+  const placedForB = deserializeGameState(serializeGameState(placed));
+  const dayResolvedA = advanceDay(placedForA, 1);
+  const dayResolvedB = advanceDay(placedForB, 1);
   const resolvedTileA = dayResolvedA.tiles[landTile.y * dayResolvedA.width + landTile.x];
   const resolvedTileB = dayResolvedB.tiles[landTile.y * dayResolvedB.width + landTile.x];
 
@@ -8514,15 +8534,16 @@ function runDiscoveredSquirrelCacheHarvestTest() {
   );
 }
 
-function runAdvanceTickInputImmutabilityTest() {
+function runAdvanceTickMutatesInPlaceTest() {
   const state = createInitialGameState(4202, { width: 40, height: 40 });
-  const sourcePlayer = state.actors.player;
-  const sourceDayTick = state.dayTick;
+  const beforeX = state.actors.player.x;
+  const beforeY = state.actors.player.y;
+  const beforeDayTick = state.dayTick;
 
   const next = advanceTick(state, {
     actions: [
       {
-        actionId: 'immu-move',
+        actionId: 'inplace-move',
         actorId: 'player',
         kind: 'move',
         issuedAtTick: 0,
@@ -8531,44 +8552,10 @@ function runAdvanceTickInputImmutabilityTest() {
     ],
   });
 
-  assert.ok(next !== state, 'advanceTick should return a new state object');
-  assert.equal(state.dayTick, sourceDayTick, 'advanceTick should not mutate source dayTick');
-  assert.equal(state.actors.player.x, sourcePlayer.x, 'advanceTick should not mutate source actor x');
-  assert.equal(state.actors.player.y, sourcePlayer.y, 'advanceTick should not mutate source actor y');
-  assert.equal(
-    JSON.stringify(state.currentDayActionLog),
-    JSON.stringify([]),
-    'advanceTick should not mutate source action log',
-  );
-}
-
-function runAdvanceTickStrictModeRegressionTest() {
-  const state = createInitialGameState(4202, { width: 40, height: 40 });
-
-  const updater = (prev) => advanceTick(prev, {
-    actions: [
-      {
-        actionId: 'strict-mode-move',
-        actorId: 'player',
-        kind: 'move',
-        issuedAtTick: 0,
-        payload: { dx: 1, dy: 0 },
-      },
-    ],
-  });
-
-  // Simulate React Strict Mode double-invocation
-  const firstResult = updater(state);
-  const secondResult = updater(state);
-
-  assert.equal(
-    JSON.stringify(firstResult),
-    JSON.stringify(secondResult),
-    'advanceTick should produce identical results on double-invocation (Strict Mode regression guard)',
-  );
-  assert.ok(firstResult !== state, 'first result should be a new object');
-  assert.ok(secondResult !== state, 'second result should be a new object');
-  assert.ok(firstResult !== secondResult, 'results should be separate objects');
+  assert.ok(next === state, 'advanceTick should mutate and return the same state object');
+  assert.ok(state.actors.player.x !== beforeX || state.actors.player.y !== beforeY, 'move should change actor position');
+  assert.ok(state.dayTick !== beforeDayTick, 'advanceTick should advance dayTick when action applies');
+  assert.ok(Array.isArray(state.currentDayActionLog) && state.currentDayActionLog.length >= 1, 'advanceTick should append action log entries');
 }
 
 function runAdvanceTickInvalidActionRejectionTest() {
@@ -9773,7 +9760,7 @@ function runNoUnsuitableSeedlingGerminationTest() {
         tile.drainage = 'well';
         tile.baseShade = (species.soil.shade.tolerance_range[0] + species.soil.shade.tolerance_range[1]) / 2;
         tile.shade = tile.baseShade;
-        tile.dormantSeeds[speciesId] = { ageDays: 0 };
+        tile.dormantSeeds[speciesId] = { bornTotalDays: state.totalDaysSimulated };
       }
 
       const next = advanceDay(state, 3);
@@ -9811,7 +9798,7 @@ function runDisturbanceAwareGerminationTest() {
       tile.baseShade = (species.soil.shade.tolerance_range[0] + species.soil.shade.tolerance_range[1]) / 2;
       tile.shade = tile.baseShade;
       tile.disturbed = disturbed;
-      tile.dormantSeeds[speciesId] = { ageDays: 0 };
+      tile.dormantSeeds[speciesId] = { bornTotalDays: state.totalDaysSimulated };
     }
 
     return state;
@@ -9992,8 +9979,8 @@ function runPerennialWinterMortalityAmortizedTest() {
 
   for (let winter = 0; winter < 4; winter += 1) {
     for (let day = 0; day < 10; day += 1) {
-      const next = advanceDay(previousOldState, 1);
       const previousCount = Object.keys(previousOldState.plants).length;
+      const next = advanceDay(previousOldState, 1);
       const nextCount = Object.keys(next.plants).length;
       aggregatedWinterDayDeaths[day] += previousCount - nextCount;
       previousOldState = next;
@@ -10098,6 +10085,12 @@ function runDeadLogCreationOnTreeDeathTest() {
     'newly created dead logs should start at decay stage 1',
   );
 
+  const hostFertilityBeforeYear = qualifyingTile.fertility;
+  const adjacentBefore = qualifyingNext.tiles[
+    (qualifying.hostTile.y + 1) * qualifyingNext.width + qualifying.hostTile.x
+  ];
+  const adjacentFertilityBeforeYear = adjacentBefore.fertility;
+
   const afterOneYear = advanceDay(qualifyingNext, 40);
   const afterOneYearTile = afterOneYear.tiles[qualifying.hostTile.y * afterOneYear.width + qualifying.hostTile.x];
   assert.equal(
@@ -10106,18 +10099,15 @@ function runDeadLogCreationOnTreeDeathTest() {
     'dead logs should advance by one decay stage after one full year',
   );
   assert.ok(
-    afterOneYearTile.fertility > qualifyingTile.fertility,
+    afterOneYearTile.fertility > hostFertilityBeforeYear,
     'host tile fertility should increase when dead logs decay yearly',
   );
 
   const adjacentAfterOneYear = afterOneYear.tiles[
     (qualifying.hostTile.y + 1) * afterOneYear.width + qualifying.hostTile.x
   ];
-  const adjacentBefore = qualifyingNext.tiles[
-    (qualifying.hostTile.y + 1) * qualifyingNext.width + qualifying.hostTile.x
-  ];
   assert.ok(
-    adjacentAfterOneYear.fertility > adjacentBefore.fertility,
+    adjacentAfterOneYear.fertility > adjacentFertilityBeforeYear,
     'adjacent tile fertility should also increase from dead-log decay enrichment',
   );
 
@@ -10525,7 +10515,7 @@ function runDispersalMechanismsTest() {
     },
     () => {
       const windState = createSinglePlantDispersalState(4101, speciesId);
-      const windAfter = advanceDay(windState, 1);
+      const windAfter = advanceDay(windState, 1, { trackRecentDispersal: true });
       const windSeeds = collectDormantSeedPositions(windAfter, speciesId);
 
       assert.ok(windSeeds.length > 0, 'wind dispersal should place dormant seeds');
@@ -10546,7 +10536,7 @@ function runDispersalMechanismsTest() {
         },
         () => {
           const explosiveState = createSinglePlantDispersalState(4101, speciesId);
-          const explosiveAfter = advanceDay(explosiveState, 1);
+          const explosiveAfter = advanceDay(explosiveState, 1, { trackRecentDispersal: true });
           const explosiveSeeds = collectDormantSeedPositions(explosiveAfter, speciesId);
 
           assert.ok(explosiveSeeds.length > 0, 'explosive dispersal should place dormant seeds');
@@ -10583,7 +10573,7 @@ function runDispersalMechanismsTest() {
         waterTile.plantIds = [];
       }
 
-      const waterAfter = advanceDay(waterState, 1);
+      const waterAfter = advanceDay(waterState, 1, { trackRecentDispersal: true });
       const waterSeeds = collectDormantSeedPositions(waterAfter, speciesId);
 
       assert.ok(waterSeeds.length > 0, 'water dispersal should place dormant seeds on banks');
@@ -10614,7 +10604,7 @@ function runDispersalMechanismsTest() {
     },
     () => {
       const runnerState = createSinglePlantDispersalState(4301, speciesId, 20, 20);
-      const runnerAfter = advanceDay(runnerState, 1);
+      const runnerAfter = advanceDay(runnerState, 1, { trackRecentDispersal: true });
       const runnerMetrics = getMetrics(runnerAfter);
       const runnerPlants = Object.values(runnerAfter.plants).filter((plant) => plant.source === 'runner');
 
@@ -10795,7 +10785,7 @@ function runSpeciesReproductionNicheSweepTest() {
     for (const tile of germState.tiles) {
       tile.plantIds = [];
       tile.disturbed = true;
-      tile.dormantSeeds[speciesId] = { ageDays: 0 };
+      tile.dormantSeeds[speciesId] = { bornTotalDays: germState.totalDaysSimulated };
     }
 
     const postGerm = advanceDay(germState, 8);
@@ -10839,37 +10829,18 @@ function runDeterminismTest() {
   );
 }
 
-function runAdvanceDayInputImmutabilityTest() {
+function runAdvanceDayMutatesInPlaceTest() {
   const state = createInitialGameState(2027, { width: 40, height: 40 });
-  const samplePlant = Object.values(state.plants).find((plant) => plant.speciesId === 'daucus_carota')
-    || Object.values(state.plants)[0];
-  assert.ok(samplePlant, 'expected at least one plant in initial state for immutability test');
+  const samplePlant = Object.values(state.plants)[0];
+  assert.ok(samplePlant, 'expected at least one plant in initial state for in-place test');
 
   const dayBefore = state.dayOfYear;
   const totalBefore = state.totalDaysSimulated;
-  const ageBefore = samplePlant.age;
-  const tileIndexBefore = samplePlant.y * state.width + samplePlant.x;
-  const tilePlantIdsBefore = [...state.tiles[tileIndexBefore].plantIds];
 
   const advanced = advanceDay(state, 1);
-  assert.ok(advanced !== state, 'advanceDay should return a new state object');
-
-  assert.equal(state.dayOfYear, dayBefore, 'advanceDay should not mutate source dayOfYear');
-  assert.equal(
-    state.totalDaysSimulated,
-    totalBefore,
-    'advanceDay should not mutate source totalDaysSimulated',
-  );
-  assert.equal(
-    state.plants[samplePlant.id].age,
-    ageBefore,
-    'advanceDay should not mutate source plant ages',
-  );
-  assert.equal(
-    JSON.stringify(state.tiles[tileIndexBefore].plantIds),
-    JSON.stringify(tilePlantIdsBefore),
-    'advanceDay should not mutate source tile occupancy arrays',
-  );
+  assert.ok(advanced === state, 'advanceDay should mutate and return the same state object');
+  assert.equal(state.dayOfYear, dayBefore + 1, 'advanceDay should advance dayOfYear');
+  assert.equal(state.totalDaysSimulated, totalBefore + 1, 'advanceDay should advance totalDaysSimulated');
 }
 
 function runMapSanityTest() {
@@ -11880,7 +11851,7 @@ function main() {
   let tests = [
     ['extracted inventory module smoke', runExtractedInventoryModuleSmokeTest],
     ['determinism', runDeterminismTest],
-    ['advanceDay input immutability', runAdvanceDayInputImmutabilityTest],
+    ['advanceDay mutates in place', runAdvanceDayMutatesInPlaceTest],
     ['advanceTick determinism', runAdvanceTickDeterminismTest],
     ['action stream replay equivalence', runActionStreamReplayEquivalenceTest],
     ['action unlock gate', runActionUnlockGateTest],
@@ -11960,8 +11931,7 @@ function main() {
     ['interrupted player camp_station_build resume', runInterruptedPlayerCampStationBuildResumeTest],
     ['interrupted player dig resume', runInterruptedPlayerDigResumeTest],
     ['drying rack and ground drying progression', runDryingRackAndGroundDryingProgressionTest],
-    ['advanceTick input immutability', runAdvanceTickInputImmutabilityTest],
-    ['advanceTick strict-mode regression', runAdvanceTickStrictModeRegressionTest],
+    ['advanceTick mutates in place', runAdvanceTickMutatesInPlaceTest],
     ['advanceTick invalid action rejection', runAdvanceTickInvalidActionRejectionTest],
     ['getAllActions smoke', runGetAllActionsSmokeTest],
     ['advanceTick budget gate', runAdvanceTickBudgetGateTest],

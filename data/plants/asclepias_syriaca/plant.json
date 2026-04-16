@@ -208,10 +208,11 @@
             "green"
           ],
           "average_fiber_length_cm": 5.0,
-          "fiber_strength_modifier": 0.5,          "craft_tags": [],
+          "fiber_strength_modifier": 0.5,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 1.0,
-          "harvest_base_ticks": 3,
+          "harvest_base_ticks": 1,
           "harvest_tool_modifiers": {
             "knife": 1.5
           },
@@ -272,7 +273,8 @@
             "green"
           ],
           "average_fiber_length_cm": 2.0,
-          "fiber_strength_modifier": 0.3,          "craft_tags": [],
+          "fiber_strength_modifier": 0.3,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 1.0,
           "harvest_base_ticks": 1,
@@ -346,10 +348,11 @@
             "overpowering"
           ],
           "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 0.5,
-          "harvest_base_ticks": 2,
+          "harvest_base_ticks": 1,
           "harvest_tool_modifiers": {},
           "harvest_yield": {
             "units_per_action": [
@@ -405,10 +408,11 @@
             "green"
           ],
           "average_fiber_length_cm": 2.0,
-          "fiber_strength_modifier": 0.2,          "craft_tags": [],
+          "fiber_strength_modifier": 0.2,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 1.0,
-          "harvest_base_ticks": 2,
+          "harvest_base_ticks": 1,
           "harvest_tool_modifiers": {
             "knife": 1.2
           },
@@ -518,12 +522,13 @@
             "dry"
           ],
           "average_fiber_length_cm": 25.0,
-          "fiber_strength_modifier": 1.8,          "craft_tags": [
+          "fiber_strength_modifier": 1.8,
+          "craft_tags": [
             "cordage_fiber"
           ],
           "ingestion": null,
           "potency_multiplier": 0.0,
-          "harvest_base_ticks": 3,
+          "harvest_base_ticks": 1,
           "harvest_tool_modifiers": {
             "knife": 1.5,
             "axe": 1.2
@@ -585,7 +590,8 @@
             "pungent"
           ],
           "average_fiber_length_cm": 3.0,
-          "fiber_strength_modifier": 0.4,          "craft_tags": [],
+          "fiber_strength_modifier": 0.4,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 5.0,
           "harvest_base_ticks": 1,
@@ -633,7 +639,8 @@
           ],
           "scent_notes": [],
           "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 3.0,
           "harvest_base_ticks": null,
@@ -669,7 +676,8 @@
           "taste_notes": [],
           "scent_notes": [],
           "average_fiber_length_cm": 4.0,
-          "fiber_strength_modifier": 0.1,          "craft_tags": [
+          "fiber_strength_modifier": 0.1,
+          "craft_tags": [
             "insulation_material",
             "tinder"
           ],
@@ -709,7 +717,8 @@
             "dusty"
           ],
           "average_fiber_length_cm": 1.0,
-          "fiber_strength_modifier": 0.1,          "craft_tags": [
+          "fiber_strength_modifier": 0.1,
+          "craft_tags": [
             "tinder"
           ],
           "ingestion": null,

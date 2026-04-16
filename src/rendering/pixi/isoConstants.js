@@ -1,0 +1,25 @@
+/** Matches isometric constants in `src/App.js` (keep in sync). */
+export const ISO_GLOBAL_RENDER_SCALE = 1;
+export const ISO_BASE_TILE_WIDTH_PX = 128;
+export const ISO_BASE_TILE_HEIGHT_PX = 64;
+export const ISO_TILE_WIDTH_PX = ISO_BASE_TILE_WIDTH_PX * ISO_GLOBAL_RENDER_SCALE;
+export const ISO_TILE_HEIGHT_PX = ISO_BASE_TILE_HEIGHT_PX * ISO_GLOBAL_RENDER_SCALE;
+export const ISO_TILE_HALF_WIDTH_PX = ISO_TILE_WIDTH_PX / 2;
+export const ISO_TILE_HALF_HEIGHT_PX = ISO_TILE_HEIGHT_PX / 2;
+export const ISO_SOURCE_TILE_WIDTH = 64;
+export const ISO_BASE_SCALE = ISO_TILE_WIDTH_PX / ISO_SOURCE_TILE_WIDTH;
+export const ISO_HALF_CUBE_FRAME_HEIGHT = 52;
+export const ISO_FULL_CUBE_FRAME_HEIGHT = 64;
+export const ISO_WATER_VERTICAL_OFFSET_PX = (ISO_FULL_CUBE_FRAME_HEIGHT - ISO_HALF_CUBE_FRAME_HEIGHT) * ISO_BASE_SCALE;
+export const ISO_ROCK_STACK_OFFSET_PX = ISO_TILE_HALF_HEIGHT_PX;
+export const ISO_OCCUPANT_VISUAL_NUDGE_PX = -4;
+export const ISO_PLAY_TOP_HUD_CENTER_BIAS_PX = 80;
+export const ISO_PLAY_VERTICAL_NUDGE_EXTRA_TILE_HEIGHTS = 1;
+export const ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX = (ISO_HALF_CUBE_FRAME_HEIGHT * ISO_BASE_SCALE) * 0.38;
+export const ISO_ELEVATION_LEVELS = 6;
+export const ISO_MAX_ELEVATION_OFFSET_PX = ISO_ELEVATION_LEVELS * ISO_TILE_HALF_HEIGHT_PX;
+
+export function elevationToIsoOffsetPx(elevation) {
+  const normalized = Math.max(0, Math.min(1, Number(elevation) || 0));
+  return normalized * ISO_MAX_ELEVATION_OFFSET_PX;
+}

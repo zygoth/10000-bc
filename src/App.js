@@ -38,7 +38,6 @@ import {
   getDeadLogSpriteFrame,
   getPlantSpriteFrame,
   getRockSpriteFrame,
-  getTerrainSpriteFrame,
 } from './game/plantSpriteCatalog.mjs';
 import {
   buildPlayerInventoryGridEntry,
@@ -83,14 +82,27 @@ import { listWorkbenchToolCraftStationEntries } from './ui/gameModeChrome/player
 import { getTileContextMenuEntries } from './ui/gameModeChrome/TileContextMenuDisplayLogic.js';
 import DryingRackGrid from './ui/gameModeChrome/components/DryingRackGrid.jsx';
 import CarrotPartSpriteProbe from './ui/CarrotPartSpriteProbe.jsx';
-import {
-  computeOccupantAnchorYFromTileTop,
-  computeTileTopCenterYFromGroundAnchor,
-} from './ui/isoProjection.js';
 import TitleScreen from './ui/title/TitleScreen.jsx';
 import { generateWorldStartState } from './game/worldStart.mjs';
 import { getGameState as getStoredGameState, setGameState as setStoredGameState } from './game/gameStore.mjs';
 import { useGameDispatch, useGameStore } from './ui/useGameStore.js';
+import CameraDebugPanel from './rendering/CameraDebugPanel.jsx';
+import PixiWorldView from './rendering/PixiWorldView.js';
+import { cameraDebugOnGameCameraCommit } from './rendering/cameraDebug.js';
+import {
+  applyClampedGameCameraFloatWrite,
+  gameCameraFloatRef,
+  setGameCameraClampBounds,
+  setGameCameraTarget,
+  setCameraFollowActive,
+  snapGameCameraFloatAndTarget,
+} from './rendering/standaloneGameCamera.js';
+import { computeIsoCameraClampBounds } from './rendering/pixi/isoMath.js';
+import {
+  buildTileEntityTokens,
+  formatTokenLabel,
+  getStationIdAtTile,
+} from './game/tileEntityTokens.mjs';
 
 const OBSERVER_VIEWPORT_WIDTH = 15;
 const OBSERVER_VIEWPORT_HEIGHT = 10;
@@ -103,21 +115,7 @@ const ISO_BASE_TILE_WIDTH_PX = 128;
 const ISO_BASE_TILE_HEIGHT_PX = 64;
 const ISO_TILE_WIDTH_PX = ISO_BASE_TILE_WIDTH_PX * ISO_GLOBAL_RENDER_SCALE;
 const ISO_TILE_HEIGHT_PX = ISO_BASE_TILE_HEIGHT_PX * ISO_GLOBAL_RENDER_SCALE;
-const ISO_TILE_HALF_WIDTH_PX = ISO_TILE_WIDTH_PX / 2;
 const ISO_TILE_HALF_HEIGHT_PX = ISO_TILE_HEIGHT_PX / 2;
-const ISO_SOURCE_TILE_WIDTH = 64;
-const ISO_BASE_SCALE = ISO_TILE_WIDTH_PX / ISO_SOURCE_TILE_WIDTH;
-const ISO_HALF_CUBE_FRAME_HEIGHT = 52;
-const ISO_FULL_CUBE_FRAME_HEIGHT = 64;
-const ISO_WATER_VERTICAL_OFFSET_PX = (ISO_FULL_CUBE_FRAME_HEIGHT - ISO_HALF_CUBE_FRAME_HEIGHT) * ISO_BASE_SCALE;
-const ISO_ROCK_STACK_OFFSET_PX = ISO_TILE_HALF_HEIGHT_PX;
-const ISO_OCCUPANT_VISUAL_NUDGE_PX = -4;
-/** Push iso origin down so the followed tile reads nearer true vertical center under the top HUD. */
-const ISO_PLAY_TOP_HUD_CENTER_BIAS_PX = 80;
-/** Extra vertical shift (in full isometric tile heights) requested for framing the player. */
-const ISO_PLAY_VERTICAL_NUDGE_EXTRA_TILE_HEIGHTS = 1;
-/** Nudge overlay labels ([player], C, fungus letters); reduced from half-face after UX feedback. */
-const ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX = (ISO_HALF_CUBE_FRAME_HEIGHT * ISO_BASE_SCALE) * 0.38;
 const ISO_ELEVATION_LEVELS = 6;
 const ISO_MAX_ELEVATION_OFFSET_PX = ISO_ELEVATION_LEVELS * ISO_TILE_HALF_HEIGHT_PX;
 const TICKS_PER_DAY = SIM_TICKS_PER_DAY;
@@ -250,18 +248,6 @@ function tileKey(x, y) {
   return `${x},${y}`;
 }
 
-function getStationIdAtTile(camp, x, y) {
-  if (!Number.isInteger(x) || !Number.isInteger(y) || !camp?.stationPlacements || typeof camp.stationPlacements !== 'object') {
-    return null;
-  }
-  for (const [stationId, placement] of Object.entries(camp.stationPlacements)) {
-    if (Number.isInteger(placement?.x) && Number.isInteger(placement?.y) && placement.x === x && placement.y === y) {
-      return stationId;
-    }
-  }
-  return null;
-}
-
 function stationActionLabel(stationId) {
   if (stationId === 'thread_spinner') return 'Spin Thread...';
   if (stationId === 'mortar_pestle') return 'Grind Item...';
@@ -301,110 +287,11 @@ function vitalSeverityClass(value) {
   return 'good';
 }
 
-function buildTileEntityTokens(tile, context = {}) {
-  const tokens = [];
-  const {
-    isPlayerTile = false,
-    isCampTile = false,
-    stationAtTile = null,
-    worldItems = [],
-    camp = null,
-  } = context;
-
-  if (isPlayerTile) {
-    tokens.push('[player]');
-  }
-  if (isCampTile) {
-    tokens.push('[camp]');
-    if (camp?.dryingRackUnlocked) {
-      tokens.push('[drying rack]');
-    }
-  }
-  if (typeof stationAtTile === 'string' && stationAtTile) {
-    tokens.push(`[${formatTokenLabel(stationAtTile)}]`);
-  }
-
-  if (tile?.simpleSnare?.active) {
-    tokens.push('[snare]');
-  }
-  if (tile?.deadfallTrap?.active) {
-    tokens.push('[deadfall]');
-  }
-  if (tile?.fishTrap?.active) {
-    tokens.push('[fish trap]');
-  }
-  if (tile?.autoRod?.active) {
-    tokens.push('[auto rod]');
-  }
-  if (tile?.sapTap?.active) {
-    tokens.push('[sap tap]');
-  }
-  if (tile?.leachingBasket?.active) {
-    tokens.push('[leaching basket]');
-  }
-  const worldItemToken = buildWorldItemToken(worldItems);
-  if (worldItemToken) {
-    tokens.push(worldItemToken);
-  }
-
-  return tokens;
-}
-
-function buildWorldItemToken(worldItems) {
-  if (!Array.isArray(worldItems) || worldItems.length === 0) {
-    return '';
-  }
-  const uniqueItemIds = Array.from(new Set(
-    worldItems
-      .map((entry) => (typeof entry?.itemId === 'string' ? entry.itemId : ''))
-      .filter(Boolean),
-  ));
-  if (uniqueItemIds.length === 0) {
-    return '';
-  }
-  if (uniqueItemIds.length > 1) {
-    return '[items]';
-  }
-  return `[${formatItemTokenLabel(uniqueItemIds[0])}]`;
-}
-
-function formatItemTokenLabel(itemId) {
-  const item = ITEM_BY_ID[itemId];
-  if (item?.name) {
-    return item.name.toLowerCase();
-  }
-  if (typeof itemId !== 'string' || !itemId) {
-    return 'item';
-  }
-  const segments = itemId.split(':');
-  if (segments.length === 3) {
-    const [speciesId, partName] = segments;
-    const species = PLANT_BY_ID[speciesId] || null;
-    const speciesLabel = species?.name ? species.name.toLowerCase() : formatTokenLabel(speciesId || 'plant').toLowerCase();
-    return `${speciesLabel} ${formatTokenLabel(partName || 'part').toLowerCase()}`;
-  }
-  if (segments.length === 2) {
-    return `${formatTokenLabel(segments[1]).toLowerCase()}`;
-  }
-  return formatTokenLabel(itemId).toLowerCase() || 'item';
-}
-
 function titleCase(value) {
   if (typeof value !== 'string' || !value) {
     return '';
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatTokenLabel(value) {
-  if (typeof value !== 'string' || !value) {
-    return '';
-  }
-  return value
-    .split('_')
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
 }
 
 function buildTileTrapInspectSummary(tile, fmtTokenLabel) {
@@ -922,45 +809,6 @@ function spriteStyle(sprite, tilePx, scaleMode = 'fit') {
   };
 }
 
-function anchoredSpriteStyle(sprite, scale, anchorX, anchorY, extra = null, options = null) {
-  const sourceWidth = (sprite.frame.sourceW ?? sprite.frame.w) * scale;
-  const sourceHeight = (sprite.frame.sourceH ?? sprite.frame.h) * scale;
-  const offsetX = (sprite.frame.offsetX ?? 0) * scale;
-  const offsetY = (sprite.frame.offsetY ?? 0) * scale;
-  const anchorYOffsetPx = Number(options?.anchorYOffsetPx) || 0;
-  const footAnchorX = (sprite.frame.anchorX ?? ((sprite.frame.sourceW ?? sprite.frame.w) / 2)) * scale;
-  const footAnchorY = (sprite.frame.anchorY ?? (sprite.frame.sourceH ?? sprite.frame.h)) * scale;
-  const x = sprite.frame.x * scale;
-  const y = sprite.frame.y * scale;
-  const atlasWidth = sprite.atlasWidth * scale;
-  const atlasHeight = sprite.atlasHeight * scale;
-  const publicBase = process.env.PUBLIC_URL || '';
-  return {
-    position: 'absolute',
-    left: `${Math.round(anchorX - footAnchorX)}px`,
-    top: `${Math.round((anchorY - footAnchorY) + anchorYOffsetPx)}px`,
-    width: `${Math.round(sourceWidth)}px`,
-    height: `${Math.round(sourceHeight)}px`,
-    backgroundImage: `url(${publicBase}${sprite.imagePath})`,
-    backgroundPosition: `-${x - offsetX}px -${y - offsetY}px`,
-    backgroundSize: `${atlasWidth}px ${atlasHeight}px`,
-    backgroundRepeat: 'no-repeat',
-    imageRendering: 'pixelated',
-    ...(extra || {}),
-  };
-}
-
-function isoPlantScale(plant) {
-  if (!plant) {
-    return ISO_BASE_SCALE;
-  }
-
-  const species = PLANT_BY_ID[plant.speciesId] || null;
-  const stage = species?.lifeStages?.find((entry) => entry.stage === plant.stageName) || null;
-  const size = Number(stage?.size || 0);
-  return size >= 8 ? ISO_BASE_SCALE : (ISO_BASE_SCALE * 0.5);
-}
-
 function elevationToIsoOffsetPx(elevation) {
   const normalized = Math.max(0, Math.min(1, Number(elevation) || 0));
   return normalized * ISO_MAX_ELEVATION_OFFSET_PX;
@@ -1107,7 +955,12 @@ function App() {
   const dragCameraStartRef = useRef(null);
   const actionLogSeenCountRef = useRef(0);
   const isoCanvasRef = useRef(null);
-  const prevCameraRef = useRef({ x: null, y: null });
+  const cameraXYRef = useRef({ x: 32, y: 35 });
+  /** Tile anchor for CSS observer; float camera for Pixi lives in `standaloneGameCamera`. */
+  const lastEmittedCameraFloorRef = useRef({ x: 32, y: 35 });
+  const playerActorRef = useRef(null);
+  const prevRendererModeRef = useRef(rendererMode);
+  const rendererModeRef = useRef(rendererMode);
   const [selectedGameTile, setSelectedGameTile] = useState(null);
   const [tileContextMenu, setTileContextMenu] = useState(null);
   const [tilePanelMode, setTilePanelMode] = useState('context');
@@ -2054,7 +1907,11 @@ function App() {
     ? Math.min(gameState.height, gameViewportHeight)
     : OBSERVER_VIEWPORT_HEIGHT;
   const cameraAnchorTile = useMemo(
-    () => getTileAt(gameState, cameraX, cameraY),
+    () => getTileAt(
+      gameState,
+      Math.floor(cameraX + 1e-9),
+      Math.floor(cameraY + 1e-9),
+    ),
     [cameraX, cameraY, gameState],
   );
   const cameraAnchorElevationPx = rendererMode === 'game'
@@ -2139,25 +1996,40 @@ function App() {
     }
   }, [playerActor, selectedGameTile]);
 
+  useEffect(() => {
+    playerActorRef.current = playerActor;
+  }, [playerActor]);
+
+  useEffect(() => {
+    rendererModeRef.current = rendererMode;
+  }, [rendererMode]);
+
   useLayoutEffect(() => {
     if (rendererMode !== 'game') {
       return;
     }
-    if (!playerActor || !Number.isInteger(playerActor.x) || !Number.isInteger(playerActor.y)) {
-      return;
-    }
-    const nextX = playerActor.x;
-    const nextY = playerActor.y;
     const canvas = isoCanvasRef.current;
     if (canvas) {
       canvas.style.transition = '';
       canvas.style.transform = 'translate(0px, 0px)';
     }
-    prevCameraRef.current = { x: nextX, y: nextY };
-    setCameraX(nextX);
-    setCameraY(nextY);
-    return undefined;
-  }, [playerActor, rendererMode]);
+  }, [rendererMode]);
+
+  useEffect(() => {
+    const prev = prevRendererModeRef.current;
+    prevRendererModeRef.current = rendererMode;
+    if (prev !== 'game' && rendererMode === 'game') {
+      const p = playerActorRef.current;
+      if (p && Number.isInteger(p.x) && Number.isInteger(p.y)) {
+        snapGameCameraFloatAndTarget(p.x, p.y);
+        cameraXYRef.current = { x: p.x, y: p.y };
+        lastEmittedCameraFloorRef.current = { x: p.x, y: p.y };
+        setCameraX(p.x);
+        setCameraY(p.y);
+        setCameraFollowActive(true);
+      }
+    }
+  }, [rendererMode]);
 
   useEffect(() => {
     if (!isDebriefActive) {
@@ -2213,12 +2085,14 @@ function App() {
 
   const rows = useMemo(() => {
     const nextRows = [];
+    const camBaseX = Math.floor(cameraX + 1e-9);
+    const camBaseY = Math.floor(cameraY + 1e-9);
 
     for (let y = 0; y < viewportHeight; y += 1) {
       const cols = [];
       for (let x = 0; x < viewportWidth; x += 1) {
-        const worldX = cameraX + x;
-        const worldY = cameraY + y;
+        const worldX = camBaseX + x;
+        const worldY = camBaseY + y;
         const tile = getTileAt(gameState, worldX, worldY);
         cols.push({
           worldX,
@@ -2231,81 +2105,6 @@ function App() {
 
     return nextRows;
   }, [cameraX, cameraY, gameStateVersion, viewportHeight, viewportWidth]);
-
-  const visibleIsoTiles = useMemo(() => {
-    if (rendererMode !== 'game') {
-      return [];
-    }
-
-    const originX = Math.round(windowSize.width / 2);
-    const originY = Math.round(windowSize.height / 2)
-      + ISO_PLAY_TOP_HUD_CENTER_BIAS_PX
-      + ISO_PLAY_VERTICAL_NUDGE_EXTRA_TILE_HEIGHTS * ISO_TILE_HEIGHT_PX
-      + cameraAnchorElevationPx;
-    const xMin = -ISO_TILE_WIDTH_PX;
-    const xMax = windowSize.width + ISO_TILE_WIDTH_PX;
-    const yMin = -ISO_TILE_HEIGHT_PX;
-    const yMax = windowSize.height + ISO_TILE_HEIGHT_PX;
-    const corners = [
-      [xMin, yMin],
-      [xMax, yMin],
-      [xMin, yMax],
-      [xMax, yMax],
-    ];
-
-    let minLocalX = Number.POSITIVE_INFINITY;
-    let maxLocalX = Number.NEGATIVE_INFINITY;
-    let minLocalY = Number.POSITIVE_INFINITY;
-    let maxLocalY = Number.NEGATIVE_INFINITY;
-
-    for (const [sx, sy] of corners) {
-      const sum = (sy - originY) / ISO_TILE_HALF_HEIGHT_PX;
-      const diff = (sx - originX) / ISO_TILE_HALF_WIDTH_PX;
-      const localX = (sum + diff) / 2;
-      const localY = (sum - diff) / 2;
-      minLocalX = Math.min(minLocalX, localX);
-      maxLocalX = Math.max(maxLocalX, localX);
-      minLocalY = Math.min(minLocalY, localY);
-      maxLocalY = Math.max(maxLocalY, localY);
-    }
-
-    const pad = 2;
-    const startLocalX = Math.floor(minLocalX) - pad;
-    const endLocalX = Math.ceil(maxLocalX) + pad;
-    const startLocalY = Math.floor(minLocalY) - pad;
-    const endLocalY = Math.ceil(maxLocalY) + pad;
-
-    const visible = [];
-    for (let localY = startLocalY; localY <= endLocalY; localY += 1) {
-      for (let localX = startLocalX; localX <= endLocalX; localX += 1) {
-        const worldX = cameraX + localX;
-        const worldY = cameraY + localY;
-        if (worldX < 0 || worldY < 0 || worldX >= gameState.width || worldY >= gameState.height) {
-          continue;
-        }
-        const tile = getTileAt(gameState, worldX, worldY);
-        if (!tile) {
-          continue;
-        }
-        visible.push({ worldX, worldY, tile });
-      }
-    }
-
-    return visible;
-  }, [cameraAnchorElevationPx, cameraX, cameraY, gameStateVersion, rendererMode, windowSize.height, windowSize.width]);
-
-  const sortedVisibleIsoTiles = useMemo(() => {
-    const sorted = visibleIsoTiles.slice();
-    sorted.sort((a, b) => {
-      const da = a.worldY + a.worldX;
-      const db = b.worldY + b.worldX;
-      if (da !== db) {
-        return da - db;
-      }
-      return a.worldX - b.worldX;
-    });
-    return sorted;
-  }, [visibleIsoTiles]);
 
   const buildNewGameState = useCallback((options = {}) => {
     const parsed = Number.parseInt(seedInput, 10);
@@ -2345,6 +2144,9 @@ function App() {
     setGameState(nextState, { kind: 'init' });
     const centeredX = Math.max(0, Math.floor((nextState.width - viewportWidth) / 2));
     const centeredY = Math.max(0, Math.floor((nextState.height - viewportHeight) / 2));
+    snapGameCameraFloatAndTarget(centeredX, centeredY);
+    cameraXYRef.current = { x: centeredX, y: centeredY };
+    lastEmittedCameraFloorRef.current = { x: centeredX, y: centeredY };
     setCameraX(centeredX);
     setCameraY(centeredY);
     setSelectedGameTile({ x: nextState.camp.anchorX, y: nextState.camp.anchorY });
@@ -2357,11 +2159,19 @@ function App() {
   const applyLoadedState = useCallback((loadedState, options = {}) => {
     const renderer = options.rendererMode === 'observer' ? 'observer' : 'game';
     setGameState(loadedState, { kind: 'load' });
-    setCameraX(Math.max(0, Math.floor((loadedState.width - viewportWidth) / 2)));
-    setCameraY(Math.max(0, Math.floor((loadedState.height - viewportHeight) / 2)));
+    const lx = Math.max(0, Math.floor((loadedState.width - viewportWidth) / 2));
+    const ly = Math.max(0, Math.floor((loadedState.height - viewportHeight) / 2));
+    snapGameCameraFloatAndTarget(lx, ly);
+    cameraXYRef.current = { x: lx, y: ly };
+    lastEmittedCameraFloorRef.current = { x: lx, y: ly };
+    setCameraX(lx);
+    setCameraY(ly);
     setSelectedGameTile({ x: loadedState.camp.anchorX, y: loadedState.camp.anchorY });
     setRendererMode(renderer);
     setAppMode('running');
+    if (renderer === 'game') {
+      setCameraFollowActive(true);
+    }
   }, [setGameState, viewportHeight, viewportWidth]);
 
   const parseLoadedGameStateFromText = useCallback((text) => {
@@ -2957,21 +2767,78 @@ function App() {
     }
   };
 
-  const maxCameraX = Math.max(0, gameState.width - viewportWidth);
-  const maxCameraY = Math.max(0, gameState.height - viewportHeight);
+  const isoCameraClamp = useMemo(() => {
+    if (rendererMode !== 'game') {
+      return null;
+    }
+    return computeIsoCameraClampBounds(
+      gameState.width,
+      gameState.height,
+      windowSize.width,
+      windowSize.height,
+      0,
+    );
+  }, [rendererMode, gameState.width, gameState.height, windowSize.width, windowSize.height]);
 
-  const clampCameraX = useCallback((value) => Math.max(0, Math.min(maxCameraX, value)), [maxCameraX]);
-  const clampCameraY = useCallback((value) => Math.max(0, Math.min(maxCameraY, value)), [maxCameraY]);
+  const minCameraX = isoCameraClamp ? isoCameraClamp.minCameraX : 0;
+  const maxCameraX = isoCameraClamp
+    ? isoCameraClamp.maxCameraX
+    : Math.max(0, gameState.width - viewportWidth);
+  const minCameraY = isoCameraClamp ? isoCameraClamp.minCameraY : 0;
+  const maxCameraY = isoCameraClamp
+    ? isoCameraClamp.maxCameraY
+    : Math.max(0, gameState.height - viewportHeight);
+
+  const clampCameraX = useCallback(
+    (value) => Math.min(maxCameraX, Math.max(minCameraX, value)),
+    [minCameraX, maxCameraX],
+  );
+  const clampCameraY = useCallback(
+    (value) => Math.min(maxCameraY, Math.max(minCameraY, value)),
+    [minCameraY, maxCameraY],
+  );
+
+  /** Writes imperative float + observer React tile anchor when the floor changes (Pixi follow runs in PixiWorldView). */
+  const commitGameCamera = useCallback((nx, ny, debugSrc = 'commit') => {
+    const { prevX, prevY, cx, cy } = applyClampedGameCameraFloatWrite(nx, ny);
+    cameraXYRef.current = { x: cx, y: cy };
+    const fx = Math.floor(cx + 1e-9);
+    const fy = Math.floor(cy + 1e-9);
+    let emittedReactFloor = false;
+    if (fx !== lastEmittedCameraFloorRef.current.x || fy !== lastEmittedCameraFloorRef.current.y) {
+      lastEmittedCameraFloorRef.current = { x: fx, y: fy };
+      if (rendererModeRef.current !== 'game') {
+        setCameraX(fx);
+        setCameraY(fy);
+        emittedReactFloor = true;
+      }
+    }
+    cameraDebugOnGameCameraCommit(prevX, prevY, cx, cy, {
+      src: typeof debugSrc === 'string' ? debugSrc : 'commit',
+      floor: [fx, fy],
+      emittedReactFloor,
+    });
+  }, []);
 
   useEffect(() => {
-    setCameraX((prev) => Math.max(0, Math.min(maxCameraX, prev)));
-    setCameraY((prev) => Math.max(0, Math.min(maxCameraY, prev)));
-  }, [maxCameraX, maxCameraY]);
+    setGameCameraClampBounds({
+      minX: minCameraX,
+      maxX: maxCameraX,
+      minY: minCameraY,
+      maxY: maxCameraY,
+    });
+  }, [minCameraX, maxCameraX, minCameraY, maxCameraY]);
 
   const panCamera = useCallback((dx, dy) => {
-    setCameraX((prev) => clampCameraX(prev + dx));
-    setCameraY((prev) => clampCameraY(prev + dy));
-  }, [clampCameraX, clampCameraY]);
+    if (rendererMode === 'game') {
+      setCameraFollowActive(false);
+    }
+    const { x, y } = gameCameraFloatRef.current;
+    const nx = clampCameraX(x + dx);
+    const ny = clampCameraY(y + dy);
+    setGameCameraTarget(nx, ny);
+    commitGameCamera(nx, ny, 'pan');
+  }, [rendererMode, clampCameraX, clampCameraY, commitGameCamera]);
 
   useEffect(() => {
     if (rendererMode !== 'game') {
@@ -3052,7 +2919,10 @@ function App() {
     }
 
     dragStartRef.current = { x: event.clientX, y: event.clientY };
-    dragCameraStartRef.current = { x: cameraX, y: cameraY };
+    dragCameraStartRef.current = {
+      x: gameCameraFloatRef.current.x,
+      y: gameCameraFloatRef.current.y,
+    };
     setIsDraggingObserver(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
@@ -3067,8 +2937,8 @@ function App() {
     const nextCameraX = clampCameraX(dragCameraStartRef.current.x + deltaTilesX);
     const nextCameraY = clampCameraY(dragCameraStartRef.current.y + deltaTilesY);
 
-    setCameraX(nextCameraX);
-    setCameraY(nextCameraY);
+    setGameCameraTarget(nextCameraX, nextCameraY);
+    commitGameCamera(nextCameraX, nextCameraY, 'observer-drag');
   };
 
   const finishObserverDrag = (event) => {
@@ -3138,336 +3008,31 @@ function App() {
     event.target.value = '';
   };
 
-  const isometricPlayView = useMemo(() => {
-    if (rendererMode !== 'game') {
-      return null;
+  const handleIsoTilePrimaryClick = useCallback(({ worldX, worldY, tile }) => {
+    setSelectedGameTile({ x: worldX, y: worldY });
+    setTilePanelMode('context');
+    setTileContextMenu(null);
+    const playerX = Number(playerActor?.x);
+    const playerY = Number(playerActor?.y);
+    if (Number.isFinite(playerX) && Number.isFinite(playerY) && (playerX !== worldX || playerY !== worldY)) {
+      setCameraFollowActive(true);
+      runTileQuickAction('move', worldX, worldY, tile);
+    } else {
+      setActionComposerStatus('Tile selected.');
     }
+  }, [playerActor, runTileQuickAction]);
 
-    const tiles = sortedVisibleIsoTiles;
-
-    const canvasWidth = windowSize.width;
-    const canvasHeight = windowSize.height;
-    const originX = Math.round(canvasWidth / 2);
-    const originY = Math.round(canvasHeight / 2)
-      + ISO_PLAY_TOP_HUD_CENTER_BIAS_PX
-      + ISO_PLAY_VERTICAL_NUDGE_EXTRA_TILE_HEIGHTS * ISO_TILE_HEIGHT_PX
-      + cameraAnchorElevationPx;
-
-    return (
-      <div className="isometric-play-stage" style={{ '--iso-canvas-width': `${canvasWidth}px`, '--iso-canvas-height': `${canvasHeight}px` }}>
-        <div className="isometric-canvas" ref={isoCanvasRef}>
-          {tiles.map(({ worldX, worldY, tile }) => {
-            const localX = worldX - cameraX;
-            const localY = worldY - cameraY;
-            const screenX = Math.round((localX - localY) * ISO_TILE_HALF_WIDTH_PX + originX);
-            const screenY = Math.round((localX + localY) * ISO_TILE_HALF_HEIGHT_PX + originY);
-            const elevationOffsetPx = elevationToIsoOffsetPx(tile.elevation);
-            const groundY = screenY + ISO_TILE_HALF_HEIGHT_PX - elevationOffsetPx;
-            const firstPlantId = tile.plantIds[0];
-            const plant = firstPlantId ? gameState.plants[firstPlantId] : null;
-            const deadLogSprite = tile.deadLog ? getDeadLogSpriteFrame() : null;
-            const occupantSprite = plant
-              ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
-              : deadLogSprite;
-            const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
-            const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
-            const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
-            const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
-            const occupantCopies = (plant && occupantSprite && patchCapacity > 1)
-              ? resolvePatchLayout(patchCapacity, `iso:${worldX},${worldY}:${plant.id}`, {
-                radiusPx: Math.max(8, ISO_TILE_HALF_WIDTH_PX * 0.24),
-                minSpacingPx: Math.max(5, ISO_TILE_HALF_WIDTH_PX * 0.1),
-                jitterPx: 2,
-              })
-              : [{ x: 0, y: 0, depthY: 0 }];
-            const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
-            const zone = tile.groundFungusZone;
-            const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
-              ? zone.speciesId[0].toUpperCase()
-              : '';
-            const logMushroomSymbol = tile.deadLog
-              ? ((tile.deadLog.fungi || [])
-                .find((entry) => Number(entry?.yield_current_grams) > 0)
-                ?.species_id?.[0]?.toUpperCase() || '')
-              : '';
-            const mushroomOverlaySymbol = logMushroomSymbol || (!plant && zoneSymbol ? zoneSymbol : '');
-            const featureOverlaySymbol = tile.beehive
-              ? 'B'
-              : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
-            const combinedOverlaySymbol = [mushroomOverlaySymbol, featureOverlaySymbol].filter(Boolean).join('');
-            const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
-              ? gameState.worldItemsByTile[`${worldX},${worldY}`]
-              : [];
-            const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
-            const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
-            const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
-            const tileEntityTokens = buildTileEntityTokens(tile, {
-              isPlayerTile,
-              isCampTile,
-              stationAtTile,
-              worldItems,
-              camp: gameState?.camp,
-            });
-            const isSelectedTile = selectedTileX === worldX && selectedTileY === worldY;
-            const rockSprite = tile.rockType ? getRockSpriteFrame(tile.rockType) : null;
-            const grassSprite = !tile.waterType ? getTerrainSpriteFrame('grass') : null;
-            const dirtSprite = !tile.waterType ? getTerrainSpriteFrame('dirt') : null;
-            const waterSprite = tile.waterType ? getTerrainSpriteFrame('water') : null;
-            const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
-            const missingTerrainSprites = tile.waterType
-              ? !waterSprite
-              : (!dirtSprite && !grassSprite);
-            const topFaceReferenceSprite = grassSprite || dirtSprite || waterSprite || null;
-            const topFaceReferenceAnchorY = (
-              topFaceReferenceSprite?.frame?.anchorY
-              ?? topFaceReferenceSprite?.frame?.sourceH
-              ?? topFaceReferenceSprite?.frame?.h
-              ?? ISO_SOURCE_TILE_WIDTH
-            ) * ISO_BASE_SCALE;
-            const tileTopCenterY = computeTileTopCenterYFromGroundAnchor(
-              groundY,
-              topFaceReferenceAnchorY,
-              ISO_TILE_HALF_HEIGHT_PX,
-            );
-            const occupantAnchorY = computeOccupantAnchorYFromTileTop(tileTopCenterY, ISO_OCCUPANT_VISUAL_NUDGE_PX);
-            const southTile = getTileAt(gameState, worldX, worldY + 1);
-            const eastTile = getTileAt(gameState, worldX + 1, worldY);
-            const southElevationOffsetPx = southTile ? elevationToIsoOffsetPx(southTile.elevation) : 0;
-            const eastElevationOffsetPx = eastTile ? elevationToIsoOffsetPx(eastTile.elevation) : 0;
-            const sideFillDepthPx = Math.max(
-              0,
-              elevationOffsetPx - southElevationOffsetPx,
-              elevationOffsetPx - eastElevationOffsetPx,
-            );
-            const sideFillDepth = Math.ceil(sideFillDepthPx / ISO_TILE_HALF_HEIGHT_PX);
-            const needsDirtUnderlay = Boolean(!tile.waterType && (!southTile || southTile.waterType));
-            const deepWaterStyle = tile.waterType && tile.waterDepth === 'deep'
-              ? { filter: 'hue-rotate(-18deg) saturate(1.35) brightness(0.82)' }
-              : null;
-
-            return (
-              <div key={`${worldX}-${worldY}`} className="iso-tile-stack">
-                {needsDirtUnderlay && dirtSprite ? (
-                  <span
-                    className="iso-layer iso-layer-underlay"
-                    style={anchoredSpriteStyle(dirtSprite, ISO_BASE_SCALE, screenX, groundY + ISO_TILE_HALF_HEIGHT_PX)}
-                  />
-                ) : null}
-                {!tile.waterType && dirtSprite
-                  ? Array.from({ length: sideFillDepth }, (_, idx) => (
-                    <span
-                      key={`side-fill-${worldX}-${worldY}-${idx}`}
-                      className="iso-layer iso-layer-underlay"
-                      style={anchoredSpriteStyle(
-                        dirtSprite,
-                        ISO_BASE_SCALE,
-                        screenX,
-                        groundY + (ISO_TILE_HALF_HEIGHT_PX * (idx + 1)),
-                      )}
-                    />
-                  ))
-                  : null}
-                {dirtSprite ? (
-                  <span
-                    className="iso-layer iso-layer-dirt"
-                    style={anchoredSpriteStyle(dirtSprite, ISO_BASE_SCALE, screenX, groundY)}
-                  />
-                ) : null}
-                {grassSprite ? (
-                  <span
-                    className="iso-layer iso-layer-grass"
-                    style={anchoredSpriteStyle(grassSprite, ISO_BASE_SCALE, screenX, groundY)}
-                  />
-                ) : null}
-                {waterSprite ? (
-                  <span
-                    className="iso-layer iso-layer-water"
-                    style={anchoredSpriteStyle(
-                      waterSprite,
-                      ISO_BASE_SCALE,
-                      screenX,
-                      groundY + ISO_WATER_VERTICAL_OFFSET_PX,
-                      deepWaterStyle,
-                    )}
-                  />
-                ) : null}
-                {iceSprite ? (
-                  <span
-                    className="iso-layer iso-layer-ice"
-                    style={anchoredSpriteStyle(
-                      iceSprite,
-                      ISO_BASE_SCALE,
-                      screenX,
-                      groundY + ISO_WATER_VERTICAL_OFFSET_PX,
-                    )}
-                  />
-                ) : null}
-                {missingTerrainSprites ? (
-                  <span
-                    className={`iso-layer iso-layer-ground-fallback ${tile.waterType ? 'iso-layer-ground-fallback-water' : 'iso-layer-ground-fallback-land'}`}
-                    style={{
-                      left: `${screenX}px`,
-                      top: `${groundY}px`,
-                    }}
-                  />
-                ) : null}
-                {rockSprite ? (
-                  <span
-                    className="iso-layer iso-layer-rock"
-                    style={anchoredSpriteStyle(
-                      rockSprite,
-                      ISO_BASE_SCALE,
-                      screenX,
-                      groundY - ISO_ROCK_STACK_OFFSET_PX,
-                    )}
-                  />
-                ) : null}
-                {occupantSprite ? (
-                  occupantCopies.map((copy, copyIndex) => (
-                    <span
-                      key={`iso-occupant-${worldX}-${worldY}-${copyIndex}`}
-                      className="iso-layer iso-layer-occupant"
-                      style={anchoredSpriteStyle(
-                        occupantSprite,
-                        plantOrLogScale * patchScale,
-                        screenX + copy.x,
-                        occupantAnchorY + copy.y,
-                        null,
-                        deadLogSprite ? { anchorYOffsetPx: ISO_TILE_HEIGHT_PX } : null,
-                      )}
-                    />
-                  ))
-                ) : null}
-                {!occupantSprite && plant ? (
-                  <span
-                    className="iso-entity-token"
-                    style={{
-                      left: `${screenX}px`,
-                      top: `${tileTopCenterY - 12 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX}px`,
-                    }}
-                  >
-                    {plant.speciesId[0]?.toUpperCase() || '?'}
-                  </span>
-                ) : null}
-                {showAnchorDebug ? (
-                  <span
-                    className="iso-anchor-debug"
-                    style={{ left: `${screenX}px`, top: `${occupantAnchorY}px` }}
-                    title={`anchor ${worldX},${worldY}`}
-                  />
-                ) : null}
-                {combinedOverlaySymbol ? (
-                  <span
-                    className="iso-mushroom-overlay"
-                    style={{ left: `${screenX}px`, top: `${tileTopCenterY - 8 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX}px` }}
-                  >
-                    {combinedOverlaySymbol}
-                  </span>
-                ) : null}
-                {tileEntityTokens.map((token, idx) => (
-                  <span
-                    key={`entity-token-${worldX}-${worldY}-${token}`}
-                    className="iso-entity-token"
-                    style={{
-                      left: `${screenX}px`,
-                      top: `${tileTopCenterY - 24 - (idx * 16) + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX}px`,
-                    }}
-                  >
-                    {token}
-                  </span>
-                ))}
-                <button
-                  type="button"
-                  className={`iso-tile-hitbox ${isSelectedTile ? 'selected' : ''}`}
-                  style={{ left: `${screenX}px`, top: `${tileTopCenterY}px` }}
-                  onClick={() => {
-                    setSelectedGameTile({ x: worldX, y: worldY });
-                    setTilePanelMode('context');
-                    setTileContextMenu(null);
-                    const playerX = Number(playerActor?.x);
-                    const playerY = Number(playerActor?.y);
-                    if (Number.isFinite(playerX) && Number.isFinite(playerY) && (playerX !== worldX || playerY !== worldY)) {
-                      runTileQuickAction('move', worldX, worldY, tile);
-                    } else {
-                      setActionComposerStatus('Tile selected.');
-                    }
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    setSelectedGameTile({ x: worldX, y: worldY });
-                    setTilePanelMode('context');
-                    setTileContextMenu({
-                      worldX,
-                      worldY,
-                      screenX,
-                      groundY: tileTopCenterY,
-                    });
-                    setActionComposerStatus('Tile actions opened.');
-                  }}
-                  title={tileTooltip(worldX, worldY, tile, plant)}
-                />
-              </div>
-            );
-          })}
-          {tileContextMenu && Number.isInteger(tileContextMenu.worldX) && Number.isInteger(tileContextMenu.worldY) ? (
-            <div
-              className="iso-context-menu"
-              style={{ left: `${tileContextMenu.screenX + 20}px`, top: `${tileContextMenu.groundY - 18}px` }}
-            >
-              {availableContextActionEntries.length === 0 ? (
-                <p className="iso-context-menu-empty">No available actions</p>
-              ) : (
-                availableContextActionEntries.map((entry, idx) => (
-                  <button
-                    key={`ctx-${entry.kind}-${idx}`}
-                    type="button"
-                    className={`iso-context-menu-action${entry.tickOverdraftWarning ? ' iso-context-menu-action--overdraft-warn' : ''}`}
-                    disabled={entry.disabled === true}
-                    onClick={() => runContextMenuAction(entry)}
-                    title={
-                      entry.disabled === true && entry.disabledReason
-                        ? entry.disabledReason
-                        : entry.tickOverdraftWarning
-                          ? `${entry.label}: uses stored energy tomorrow (overdraft).`
-                          : formatContextMenuActionWithTickCost(entry)
-                    }
-                  >
-                    <span className="iso-context-menu-action-primary">
-                      {formatContextMenuActionWithTickCost(entry)}
-                    </span>
-                    {entry.tickOverdraftWarning ? (
-                      <span className="iso-context-menu-action-warn">Uses tomorrow&apos;s energy</span>
-                    ) : null}
-                  </button>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }, [
-    rendererMode,
-    sortedVisibleIsoTiles,
-    cameraAnchorElevationPx,
-    cameraX,
-    cameraY,
-    windowSize.width,
-    windowSize.height,
-    gameState,
-    selectedTileX,
-    selectedTileY,
-    showAnchorDebug,
-    tileContextMenu,
-    availableContextActionEntries,
-    runContextMenuAction,
-    runTileQuickAction,
-    setSelectedGameTile,
-    setTilePanelMode,
-    setTileContextMenu,
-    setActionComposerStatus,
-    playerActor,
-  ]);
+  const handleIsoTileContextMenu = useCallback(({ worldX, worldY, screenX, tileTopCenterY }) => {
+    setSelectedGameTile({ x: worldX, y: worldY });
+    setTilePanelMode('context');
+    setTileContextMenu({
+      worldX,
+      worldY,
+      screenX,
+      groundY: tileTopCenterY,
+    });
+    setActionComposerStatus('Tile actions opened.');
+  }, []);
 
   if (appMode === 'title') {
     return (
@@ -3633,9 +3198,71 @@ function App() {
   if (rendererMode === 'game') {
     return (
       <>
+        {process.env.NODE_ENV === 'development' ? <CameraDebugPanel /> : null}
         <main className="app app-game-mode">
           <section className="game-stage">
-            {isometricPlayView}
+            <div
+              className="isometric-play-stage"
+              style={{
+                '--iso-canvas-width': `${windowSize.width}px`,
+                '--iso-canvas-height': `${windowSize.height}px`,
+              }}
+            >
+              <div className="isometric-canvas isometric-canvas--pixi" ref={isoCanvasRef}>
+                <PixiWorldView
+                  gameState={gameState}
+                  gameStateVersion={gameStateVersion}
+                  cameraX={cameraX}
+                  cameraY={cameraY}
+                  windowWidth={windowSize.width}
+                  windowHeight={windowSize.height}
+                  cameraAnchorElevationPx={cameraAnchorElevationPx}
+                  selectedTileX={selectedTileX}
+                  selectedTileY={selectedTileY}
+                  showAnchorDebug={showAnchorDebug}
+                  playerWorldX={Number.isInteger(playerActor?.x) ? playerActor.x : undefined}
+                  playerWorldY={Number.isInteger(playerActor?.y) ? playerActor.y : undefined}
+                  className="pixi-world-host"
+                  getTileTooltip={(wx, wy, t, p) => tileTooltip(wx, wy, t, p)}
+                  onTilePrimaryClick={handleIsoTilePrimaryClick}
+                  onTileContextMenu={handleIsoTileContextMenu}
+                />
+                {tileContextMenu && Number.isInteger(tileContextMenu.worldX) && Number.isInteger(tileContextMenu.worldY) ? (
+                  <div
+                    className="iso-context-menu"
+                    style={{ left: `${tileContextMenu.screenX + 20}px`, top: `${tileContextMenu.groundY - 18}px` }}
+                  >
+                    {availableContextActionEntries.length === 0 ? (
+                      <p className="iso-context-menu-empty">No available actions</p>
+                    ) : (
+                      availableContextActionEntries.map((entry, idx) => (
+                        <button
+                          key={`ctx-${entry.kind}-${idx}`}
+                          type="button"
+                          className={`iso-context-menu-action${entry.tickOverdraftWarning ? ' iso-context-menu-action--overdraft-warn' : ''}`}
+                          disabled={entry.disabled === true}
+                          onClick={() => runContextMenuAction(entry)}
+                          title={
+                            entry.disabled === true && entry.disabledReason
+                              ? entry.disabledReason
+                              : entry.tickOverdraftWarning
+                                ? `${entry.label}: uses stored energy tomorrow (overdraft).`
+                                : formatContextMenuActionWithTickCost(entry)
+                          }
+                        >
+                          <span className="iso-context-menu-action-primary">
+                            {formatContextMenuActionWithTickCost(entry)}
+                          </span>
+                          {entry.tickOverdraftWarning ? (
+                            <span className="iso-context-menu-action-warn">Uses tomorrow&apos;s energy</span>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </section>
           <GameModeChrome
           onSwitchToDebug={() => setRendererMode('observer')}

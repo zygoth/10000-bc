@@ -5,7 +5,7 @@ import {
   resolveInnerBarkUnitWeightKgForItem,
 } from './stockpileDefaultStackOptions.mjs';
 import { computeSpoilageProgress } from './inventorySlotDecayDryness.mjs';
-import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
+import { parsePlantPartItemId, resolveHarvestedPlantItemDisplayName } from './plantPartDescriptors.mjs';
 import { resolvePlantPartSpriteFrame } from './plantPartSpriteResolve.mjs';
 
 /**
@@ -176,7 +176,7 @@ function resolveDisplayUnitWeightKg(record, item, plantPartDescriptor) {
 }
 
 /** Mirrors `App.js` `playerInventoryEntries` mapping (what `GameModeChrome` gets as `playerInventoryStacks`). */
-export function buildPlayerInventoryGridEntry(stack, idx) {
+export function buildPlayerInventoryGridEntry(stack, idx, gameState = undefined) {
   const item = ITEM_BY_ID[stack.itemId] || null;
   const plantPartDescriptor = parsePlantPartItemId(stack.itemId);
   const quantity = Math.max(0, Number(stack.quantity) || 0);
@@ -197,8 +197,7 @@ export function buildPlayerInventoryGridEntry(stack, idx) {
   return {
     key: `${stack.itemId}-${idx}`,
     itemId: stack.itemId,
-    name: item?.name
-      || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : stack.itemId),
+    name: resolveHarvestedPlantItemDisplayName(item, plantPartDescriptor, gameState, stack.itemId),
     quantity,
     unitWeightKg,
     totalWeightKg,
@@ -217,7 +216,7 @@ export function buildPlayerInventoryGridEntry(stack, idx) {
 }
 
 /** Mirrors `App.js` `campStockpileEntries` mapping (`campStockpileStacks` prop). */
-export function buildStockpileGridEntry(stack, idx) {
+export function buildStockpileGridEntry(stack, idx, gameState = undefined) {
   const item = ITEM_BY_ID[stack.itemId] || null;
   const plantPartDescriptor = parsePlantPartItemId(stack.itemId);
   const sprite = resolvePlantPartSpriteFrame(stack.itemId);
@@ -240,8 +239,7 @@ export function buildStockpileGridEntry(stack, idx) {
     key: `${stack.itemId}-${idx}`,
     itemId: stack.itemId,
     category: typeof item?.category === 'string' ? item.category : 'misc',
-    name: item?.name
-      || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : stack.itemId),
+    name: resolveHarvestedPlantItemDisplayName(item, plantPartDescriptor, gameState, stack.itemId),
     quantity,
     unitWeightKg,
     totalWeightKg,
@@ -261,7 +259,7 @@ export function buildStockpileGridEntry(stack, idx) {
 }
 
 /** Mirrors `App.js` `selectedTileWorldItemEntries` (“On Ground” grid). */
-export function buildWorldGroundItemsGridEntry(entry, idx) {
+export function buildWorldGroundItemsGridEntry(entry, idx, gameState = undefined) {
   const item = ITEM_BY_ID[entry.itemId] || null;
   const plantPartDescriptor = parsePlantPartItemId(entry.itemId);
   const sprite = resolvePlantPartSpriteFrame(entry.itemId);
@@ -282,8 +280,7 @@ export function buildWorldGroundItemsGridEntry(entry, idx) {
   return {
     key: `${entry.itemId}-${idx}`,
     itemId: entry.itemId,
-    name: item?.name
-      || (plantPartDescriptor ? `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}` : entry.itemId),
+    name: resolveHarvestedPlantItemDisplayName(item, plantPartDescriptor, gameState, entry.itemId),
     quantity,
     unitWeightKg,
     totalWeightKg,

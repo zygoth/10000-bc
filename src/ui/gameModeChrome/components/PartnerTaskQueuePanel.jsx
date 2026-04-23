@@ -4,7 +4,10 @@ import {
   listValidPartnerTaskCandidateEntries,
   PARTNER_TASK_GROUP_LABELS,
 } from '../../debrief/partnerTaskQueueCandidates.mjs';
-import { CAMP_MAINTENANCE_TASK_KIND } from '../../../game/campMaintenance.mjs';
+import {
+  CAMP_MAINTENANCE_TASK_KIND,
+  PARTNER_PLAYER_RESCUE_TASK_KIND,
+} from '../../../game/campMaintenance.mjs';
 import { resolveProcessOptionsForItemInApp } from '../actionContextWiring.mjs';
 import { previewPartnerQueueTaskFromStockpileProcess } from '../../../game/simActions.mjs';
 import {
@@ -57,11 +60,14 @@ function taskTicksRequired(task) {
   return Number.isInteger(tr) ? tr : Math.max(1, Math.floor(Number(task?.ticksRequired) || 0));
 }
 
-function partitionMaintenanceTasks(tasks) {
+function partitionFixedPartnerTasks(tasks) {
   const list = Array.isArray(tasks) ? tasks : [];
   const maintenance = list.find((t) => t?.kind === CAMP_MAINTENANCE_TASK_KIND) || null;
-  const rest = list.filter((t) => t?.kind !== CAMP_MAINTENANCE_TASK_KIND);
-  return { maintenance, rest };
+  const rescue = list.find((t) => t?.kind === PARTNER_PLAYER_RESCUE_TASK_KIND) || null;
+  const rest = list.filter(
+    (t) => t?.kind !== CAMP_MAINTENANCE_TASK_KIND && t?.kind !== PARTNER_PLAYER_RESCUE_TASK_KIND,
+  );
+  return { maintenance, rescue, rest };
 }
 
 function reorderRestForDrop(rest, dragId, dropBeforeId) {
@@ -115,6 +121,7 @@ function TaskQueueRow({ task, indexLabel, formatTokenLabel }) {
   const stationId = STATION_BY_TASK_KIND[task.kind];
   const partnerOnly = task.kind === TECH_RESEARCH_TASK_KIND;
   const requiredDaily = task.kind === CAMP_MAINTENANCE_TASK_KIND;
+  const rescueRecovery = task.kind === PARTNER_PLAYER_RESCUE_TASK_KIND;
 
   return (
     <div className="partner-queue-row">
@@ -126,6 +133,7 @@ function TaskQueueRow({ task, indexLabel, formatTokenLabel }) {
       {subtitle ? <p className="partner-queue-row-sub debrief-note">{subtitle}</p> : null}
       <div className="partner-queue-row-badges">
         {requiredDaily ? <span className="partner-queue-badge">Required daily</span> : null}
+        {rescueRecovery ? <span className="partner-queue-badge">Locked</span> : null}
         {partnerOnly ? <span className="partner-queue-badge">Partner only</span> : null}
         {stationId ? (
           <span className="partner-queue-badge partner-queue-badge--station">{formatTokenLabel(stationId)}</span>
@@ -165,7 +173,7 @@ export default function PartnerTaskQueuePanel({
       return;
     }
     prevSyncKeyRef.current = queueSyncKey;
-    const { rest } = partitionMaintenanceTasks(queuePendingTasks);
+    const { rest } = partitionFixedPartnerTasks(queuePendingTasks);
     setRestOrder(rest);
   }, [queueSyncKey, queuePendingTasks]);
 
@@ -185,12 +193,22 @@ export default function PartnerTaskQueuePanel({
     [safePending],
   );
 
+  const rescueTask = useMemo(
+    () => safePending.find((t) => t?.kind === PARTNER_PLAYER_RESCUE_TASK_KIND) || null,
+    [safePending],
+  );
+
   const tryReorderRest = useCallback(
     (nextRest) => {
       if (typeof onPartnerQueueReorder !== 'function') {
         return;
       }
-      const full = maintenanceTask ? [maintenanceTask, ...nextRest] : nextRest;
+      let full = nextRest;
+      if (rescueTask) {
+        full = maintenanceTask ? [maintenanceTask, rescueTask, ...nextRest] : [rescueTask, ...nextRest];
+      } else if (maintenanceTask) {
+        full = [maintenanceTask, ...nextRest];
+      }
       const orderedTaskIds = full.map((t) => t.taskId).filter(Boolean);
       const v = validateAction(gameState, {
         actorId: 'player',
@@ -205,7 +223,7 @@ export default function PartnerTaskQueuePanel({
       setRestOrder(nextRest);
       onPartnerQueueReorder(orderedTaskIds);
     },
-    [gameState, validateAction, onPartnerQueueReorder, maintenanceTask],
+    [gameState, validateAction, onPartnerQueueReorder, maintenanceTask, rescueTask],
   );
 
   const tomorrowPreview = useMemo(
@@ -460,9 +478,9 @@ export default function PartnerTaskQueuePanel({
       <div className="partner-queue-section">
         <h4 className="partner-queue-subhead">Queue</h4>
         <p className="debrief-note partner-queue-dnd-hint">
-          Drag tasks to change order. Camp maintenance stays first when present.
+          Drag tasks to change order. Camp maintenance stays first when present; player rescue stays second when present.
         </p>
-        {!maintenanceTask && restOrder.length === 0 ? (
+        {!maintenanceTask && !rescueTask && restOrder.length === 0 ? (
           <p className="debrief-note">Nothing queued.</p>
         ) : (
           <ul
@@ -476,9 +494,15 @@ export default function PartnerTaskQueuePanel({
                 <TaskQueueRow task={maintenanceTask} indexLabel="#1" formatTokenLabel={formatTokenLabel} />
               </li>
             ) : null}
+            {rescueTask ? (
+              <li key={rescueTask.taskId || 'partner-rescue'} className="partner-queue-li partner-queue-li--fixed">
+                <TaskQueueRow task={rescueTask} indexLabel="#2" formatTokenLabel={formatTokenLabel} />
+              </li>
+            ) : null}
             {restOrder.map((refTask, idx) => {
               const task = taskById.get(refTask.taskId) || refTask;
-              const displayIdx = (maintenanceTask ? 2 : 1) + idx;
+              const prefix = (maintenanceTask ? 1 : 0) + (rescueTask ? 1 : 0);
+              const displayIdx = prefix + 1 + idx;
               return (
                 <li
                   key={task.taskId || `q-${idx}`}

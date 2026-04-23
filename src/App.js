@@ -33,6 +33,7 @@ import {
   validateAction,
   previewTickBudgetImpact,
 } from './game/simCore.mjs';
+import { MAX_DAILY_TICK_OVERDRAFT } from './game/simActions.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './game/techResearchCatalog.mjs';
 import {
   getDeadLogSpriteFrame,
@@ -53,8 +54,10 @@ import { ITEM_BY_ID } from './game/itemCatalog.mjs';
 import { TICKS_PER_DAY as SIM_TICKS_PER_DAY } from './game/simCore.constants.mjs';
 import { isActorWithinCampFootprint } from './game/campFootprint.mjs';
 import { advanceStateToNextMorning } from './game/debriefDayTransition.mjs';
-import { formatPlantPartLabel, parsePlantPartItemId } from './game/plantPartDescriptors.mjs';
+import { formatPlantPartLabelForPlayer, parsePlantPartItemId } from './game/plantPartDescriptors.mjs';
+import { isPlantSpeciesIdentifiedInState } from './game/plantSpeciesIdentification.mjs';
 import { getSeason, PLANT_CATALOG, PLANT_BY_ID } from './game/plantCatalog.mjs';
+import { getTribeGameOverSummary } from './game/tribeGameOver.mjs';
 import {
   patchSpriteScaleForCapacity,
   resolvePatchCapacity,
@@ -86,11 +89,11 @@ import TitleScreen from './ui/title/TitleScreen.jsx';
 import { generateWorldStartState } from './game/worldStart.mjs';
 import { getGameState as getStoredGameState, setGameState as setStoredGameState } from './game/gameStore.mjs';
 import { useGameDispatch, useGameStore } from './ui/useGameStore.js';
-import CameraDebugPanel from './rendering/CameraDebugPanel.jsx';
 import PixiWorldView from './rendering/PixiWorldView.js';
 import { cameraDebugOnGameCameraCommit } from './rendering/cameraDebug.js';
 import {
   applyClampedGameCameraFloatWrite,
+  bumpGameCameraLookAheadForMove,
   gameCameraFloatRef,
   setGameCameraClampBounds,
   setGameCameraTarget,
@@ -294,7 +297,7 @@ function titleCase(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function buildTileTrapInspectSummary(tile, fmtTokenLabel) {
+function buildTileTrapInspectSummary(tile, fmtTokenLabel, gameState) {
   const fmt = typeof fmtTokenLabel === 'function' ? fmtTokenLabel : (v) => String(v || '');
   if (!tile) {
     return null;
@@ -318,7 +321,7 @@ function buildTileTrapInspectSummary(tile, fmtTokenLabel) {
       const d = parsePlantPartItemId(bid);
       rows.push({
         label: 'Bait',
-        value: d ? formatPlantPartLabel(d, { includeSubStage: true }) : fmt(bid),
+        value: d ? formatPlantPartLabelForPlayer(gameState, d, { includeSubStage: true }) : fmt(bid),
       });
       const decayLeft = Number(s.baitStack?.decayDaysRemaining);
       if (Number.isFinite(decayLeft) && decayLeft >= 0) {
@@ -353,7 +356,7 @@ function buildTileTrapInspectSummary(tile, fmtTokenLabel) {
       const pd = parsePlantPartItemId(bid);
       rows.push({
         label: 'Bait',
-        value: pd ? formatPlantPartLabel(pd, { includeSubStage: true }) : fmt(bid),
+        value: pd ? formatPlantPartLabelForPlayer(gameState, pd, { includeSubStage: true }) : fmt(bid),
       });
       const decayLeft = Number(d.baitStack?.decayDaysRemaining);
       if (Number.isFinite(decayLeft) && decayLeft >= 0) {
@@ -423,19 +426,6 @@ function buildTileTrapInspectSummary(tile, fmtTokenLabel) {
   }
 
   return { heading, rows };
-}
-
-function isSpeciesIdentifiedInState(state, speciesId) {
-  if (!state || typeof speciesId !== 'string' || !speciesId) {
-    return false;
-  }
-  const collections = [
-    state?.identifiedPlantSpeciesIds,
-    state?.camp?.identifiedPlantSpeciesIds,
-    state?.camp?.identifiedSpeciesIds,
-    state?.camp?.research?.identifiedSpeciesIds,
-  ];
-  return collections.some((collection) => Array.isArray(collection) && collection.includes(speciesId));
 }
 
 function tileSupportsSpeciesStrict(tile, species) {
@@ -936,6 +926,8 @@ function App() {
   const [cameraY, setCameraY] = useState(35);
   const [overlayMode, setOverlayMode] = useState('moisture');
   const [rendererMode, setRendererMode] = useState('observer');
+  /** Tile hover `title` on the Pixi canvas: only after entering play from the observer/debug grid. */
+  const [playHoverTileTooltipsFromDebug, setPlayHoverTileTooltipsFromDebug] = useState(false);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState(() => PLANT_CATALOG[0]?.id || '');
   const [selectedAnimalSpeciesId, setSelectedAnimalSpeciesId] = useState(() => LAND_ANIMAL_SPECIES[0]?.id || '');
   const [selectedFishSpeciesId, setSelectedFishSpeciesId] = useState(() => FISH_SPECIES[0]?.id || '');
@@ -1021,6 +1013,10 @@ function App() {
       ? getMetrics(gameState)
       : getMetricsLight(gameState)
   ), [rendererMode, gameStateVersion]);
+  const tribeGameOverSummary = useMemo(
+    () => getTribeGameOverSummary(gameState),
+    [gameStateVersion],
+  );
   const recentDispersalSummary = useMemo(() => {
     const totalsByMethod = gameState.recentDispersal?.totalsByMethod || {};
     const entries = Object.entries(totalsByMethod).sort((a, b) => b[1] - a[1]);
@@ -1118,8 +1114,8 @@ function App() {
     playerInventoryStacks,
   ]);
   const playerInventoryEntries = useMemo(
-    () => playerInventoryStacks.map((entry, idx) => buildPlayerInventoryGridEntry(entry, idx)),
-    [playerInventoryStacks],
+    () => playerInventoryStacks.map((entry, idx) => buildPlayerInventoryGridEntry(entry, idx, gameState)),
+    [playerInventoryStacks, gameState],
   );
   const playerCarryWeightKg = useMemo(
     () => playerInventoryEntries.reduce((sum, entry) => sum + entry.totalWeightKg, 0),
@@ -1133,8 +1129,8 @@ function App() {
     [gameStateVersion],
   );
   const campStockpileEntries = useMemo(
-    () => campStockpileStacks.map((entry, idx) => buildStockpileGridEntry(entry, idx)),
-    [campStockpileStacks],
+    () => campStockpileStacks.map((entry, idx) => buildStockpileGridEntry(entry, idx, gameState)),
+    [campStockpileStacks, gameState],
   );
 
   const mealCandidatesInventoryEntries = playerInventoryEntries;
@@ -1271,8 +1267,8 @@ function App() {
     return key && Array.isArray(gameState?.worldItemsByTile?.[key]) ? gameState.worldItemsByTile[key] : [];
   }, [gameStateVersion, selectedTileX, selectedTileY]);
   const selectedTileWorldItemEntries = useMemo(
-    () => selectedTileWorldItems.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
-    [selectedTileWorldItems],
+    () => selectedTileWorldItems.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx, gameState)),
+    [selectedTileWorldItems, gameState],
   );
   const adjacentSledTile = useMemo(() => {
     if (!playerActor) {
@@ -1312,8 +1308,8 @@ function App() {
     return Array.isArray(adjacentSledTile.tile.sledStash.stacks) ? adjacentSledTile.tile.sledStash.stacks : [];
   }, [gameStateVersion, adjacentSledTile, playerActor]);
   const sledPanelStacks = useMemo(
-    () => sledPanelStacksRaw.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx)),
-    [sledPanelStacksRaw],
+    () => sledPanelStacksRaw.map((entry, idx) => buildWorldGroundItemsGridEntry(entry, idx, gameState)),
+    [sledPanelStacksRaw, gameState],
   );
   const sledPanelSubtitle = useMemo(() => {
     if (playerActor?.sledAttached === true) {
@@ -1779,7 +1775,7 @@ function App() {
       return null;
     }
 
-    const trapSummary = buildTileTrapInspectSummary(selectedTileEntity, formatTokenLabel);
+    const trapSummary = buildTileTrapInspectSummary(selectedTileEntity, formatTokenLabel, gameState);
 
     const firstPlantId = Array.isArray(selectedTileEntity.plantIds) ? selectedTileEntity.plantIds[0] : null;
     const firstPlant = firstPlantId ? gameState?.plants?.[firstPlantId] : null;
@@ -1811,7 +1807,7 @@ function App() {
         : [];
       const aboveGroundParts = activeParts.filter((entry) => entry.isUndergroundOnly !== true);
       if (aboveGroundParts.length > 0) {
-        const identified = isSpeciesIdentifiedInState(gameState, firstPlant.speciesId);
+        const identified = isPlantSpeciesIdentifiedInState(gameState, firstPlant.speciesId);
         const inspectPlantSprite = getPlantSpriteFrame(firstPlant.speciesId, firstPlant.stageName);
         const stageSize = Number(lifeStage?.size || 0);
         const inspectPreviewPx = stageSize >= 8 ? 96 : 72;
@@ -1896,6 +1892,11 @@ function App() {
     () => warningEntries.filter((entry) => !dismissedWarningIds.includes(entry.id)),
     [dismissedWarningIds, warningEntries],
   );
+  useEffect(() => {
+    if (tribeGameOverSummary.isGameOver) {
+      setIsPauseMenuOpen(false);
+    }
+  }, [tribeGameOverSummary.isGameOver]);
   const canBeginDay = hasVisitedMealTab;
   const observerTileStepPx = RENDERER_LAYOUT.observer.tilePx + RENDERER_LAYOUT.observer.tileGapPx;
   const gameViewportWidth = Math.max(4, Math.floor((windowSize.width - 24) / ISO_TILE_WIDTH_PX) + 1);
@@ -2152,6 +2153,7 @@ function App() {
     setSelectedGameTile({ x: nextState.camp.anchorX, y: nextState.camp.anchorY });
     setSnapshotStatus(`new game ready (seed ${nextState.seed}, pre-sim ${Math.max(0, Number.parseInt(preSimDaysInput, 10) || 0)} day(s))`);
     if (enterPlayMode) {
+      setPlayHoverTileTooltipsFromDebug(false);
       setRendererMode('game');
     }
   }, [buildNewGameState, preSimDaysInput, setGameState, viewportHeight, viewportWidth]);
@@ -2171,6 +2173,7 @@ function App() {
     setAppMode('running');
     if (renderer === 'game') {
       setCameraFollowActive(true);
+      setPlayHoverTileTooltipsFromDebug(false);
     }
   }, [setGameState, viewportHeight, viewportWidth]);
 
@@ -2575,6 +2578,9 @@ function App() {
       });
       return;
     }
+    if (kind === 'move') {
+      bumpGameCameraLookAheadForMove(payload?.dx, payload?.dy);
+    }
     submitPlayerAction(kind, payload);
     setActionComposerStatus(`Submitted: ${kind}`);
     appendLocalFeed({
@@ -2851,6 +2857,9 @@ function App() {
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || active?.isContentEditable) {
         return;
       }
+      if (tribeGameOverSummary.isGameOver) {
+        return;
+      }
 
       switch (event.key) {
         case 'Tab':
@@ -2911,7 +2920,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panCamera, rendererMode, selectedInspectData, isDebriefActive]);
+  }, [panCamera, rendererMode, selectedInspectData, isDebriefActive, tribeGameOverSummary.isGameOver]);
 
   const handleObserverPointerDown = (event) => {
     if (event.button !== 0) {
@@ -2969,6 +2978,13 @@ function App() {
     setSnapshotStatus('snapshot saved');
   };
 
+  const returnToTitleScreenWithoutSave = useCallback(() => {
+    setIsPauseMenuOpen(false);
+    setPlayHoverTileTooltipsFromDebug(false);
+    setTitleStatus('');
+    setAppMode('title');
+  }, []);
+
   const returnToTitleScreenWithAutoSave = useCallback(() => {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -2982,6 +2998,7 @@ function App() {
       setTitleStatus(`auto-save failed before returning to title: ${error.message}`);
     }
     setIsPauseMenuOpen(false);
+    setPlayHoverTileTooltipsFromDebug(false);
     setAppMode('title');
   }, [gameStateVersion]);
 
@@ -3198,7 +3215,6 @@ function App() {
   if (rendererMode === 'game') {
     return (
       <>
-        {process.env.NODE_ENV === 'development' ? <CameraDebugPanel /> : null}
         <main className="app app-game-mode">
           <section className="game-stage">
             <div
@@ -3220,10 +3236,10 @@ function App() {
                   selectedTileX={selectedTileX}
                   selectedTileY={selectedTileY}
                   showAnchorDebug={showAnchorDebug}
-                  playerWorldX={Number.isInteger(playerActor?.x) ? playerActor.x : undefined}
-                  playerWorldY={Number.isInteger(playerActor?.y) ? playerActor.y : undefined}
                   className="pixi-world-host"
-                  getTileTooltip={(wx, wy, t, p) => tileTooltip(wx, wy, t, p)}
+                  getTileTooltip={playHoverTileTooltipsFromDebug
+                    ? (wx, wy, t, p) => tileTooltip(wx, wy, t, p)
+                    : undefined}
                   onTilePrimaryClick={handleIsoTilePrimaryClick}
                   onTileContextMenu={handleIsoTileContextMenu}
                 />
@@ -3265,8 +3281,10 @@ function App() {
             </div>
           </section>
           <GameModeChrome
+          gameOverSummary={tribeGameOverSummary}
           onSwitchToDebug={() => setRendererMode('observer')}
           onReturnToTitleScreen={returnToTitleScreenWithAutoSave}
+          onReturnToTitleAfterGameOver={returnToTitleScreenWithoutSave}
           onSaveGame={downloadSnapshot}
           onLoadGame={() => fileInputRef.current?.click()}
           showAnchorDebug={showAnchorDebug}
@@ -3338,7 +3356,8 @@ function App() {
           stockpileWithdrawDisabledReason={selectedStockpileWithdrawUi.reason}
           isDebriefActive={isDebriefActive}
           onEndDayEnterDebrief={() => {
-            if (!playerAtCamp) {
+            const passOutMax = Number(playerActor?.overdraftTicks) >= MAX_DAILY_TICK_OVERDRAFT;
+            if (!playerAtCamp && !passOutMax) {
               window.alert('End Day requires being at camp.');
               return;
             }
@@ -3351,7 +3370,7 @@ function App() {
             }
             const currentDayTick = Math.max(0, Math.floor(Number(gameState?.dayTick) || 0));
             const ticksUntilDebrief = Math.max(0, NIGHT_TICK_THRESHOLD - currentDayTick);
-            if (ticksUntilDebrief > 0) {
+            if (ticksUntilDebrief > 0 && !(passOutMax && !playerAtCamp)) {
               advanceTickInStore({ idleTicks: ticksUntilDebrief });
             }
             advanceTickInStore({
@@ -3509,11 +3528,13 @@ function App() {
                           <>
                             <div className="station-rack-preview-row">
                               <DryingRackGrid
+                                gameState={gameState}
                                 caption="Now"
                                 slots={stationDryingRackPlacementPreview.currentSlots}
                                 showEmptyHint
                               />
                               <DryingRackGrid
+                                gameState={gameState}
                                 caption="After this addition"
                                 slots={stationDryingRackPlacementPreview.nextSlots}
                                 highlightCellKeys={stationDryingRackPlacementPreview.newCellKeys}
@@ -3530,6 +3551,7 @@ function App() {
                         ) : (
                           <>
                             <DryingRackGrid
+                              gameState={gameState}
                               caption="Current rack"
                               slots={stationDryingRackPlacementPreview.currentSlots}
                               showEmptyHint
@@ -3626,6 +3648,7 @@ function App() {
               On a clear, mild day items on the rack dry by up to about 50% toward fully dried (scaled by sun and weather; no drying while freezing or at night). Use Take off to move a stack back into your inventory.
             </p>
             <DryingRackGrid
+              gameState={gameState}
               slots={campDryingRackSlots}
               showEmptyHint
               onRemoveSlot={(slotIndex) => submitPlayerAction('camp_drying_rack_remove', { slotIndex, quantity: 1 })}
@@ -3875,7 +3898,15 @@ function App() {
         </div>
 
         <div className="control-row">
-          <button type="button" onClick={() => setRendererMode('game')}>Enter Play View</button>
+          <button
+            type="button"
+            onClick={() => {
+              setPlayHoverTileTooltipsFromDebug(true);
+              setRendererMode('game');
+            }}
+          >
+            Enter Play View
+          </button>
         </div>
 
         <div className="control-row">

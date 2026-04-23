@@ -1,8 +1,13 @@
 /**
- * Camera diagnostics: record events in memory, download as JSONL from the dev panel (or
- * `window.__10000BC_DOWNLOAD_CAMERA_LOG__()`).
+ * Camera diagnostics: when recording is enabled, mirror recent events to
+ * `window.__10000BC_CAMERA_LOG__` (ring buffer) and optionally the console.
  *
- * Legacy: `window.__10000BC_DEBUG_CAMERA__ = true` before load → recording + verbose console.
+ * Enable recording: `window.__10000BC_DEBUG_CAMERA__ = true` before load,
+ * `window.__10000BC_CAMERA_RECORDING__ = true`, or localStorage key
+ * `10000bc_debug_camera` = `1`.
+ *
+ * Verbose console: `window.__10000BC_DEBUG_CAMERA_VERBOSE__ = true` or
+ * localStorage `10000bc_debug_camera_verbose` = `1`.
  */
 
 import { tileAnchorFromFloat } from './pixi/isoCameraRoll.js';
@@ -10,11 +15,8 @@ import { tileAnchorFromFloat } from './pixi/isoCameraRoll.js';
 const STORAGE_RECORD = '10000bc_debug_camera';
 const STORAGE_VERBOSE = '10000bc_debug_camera_verbose';
 const RING_MAX = 48;
-const FULL_MAX = 25000;
 
 const ring = [];
-/** @type {object[]} */
-let fullLog = [];
 
 function pushRing(type, data) {
   ring.push({ type, ts: typeof performance !== 'undefined' ? performance.now() : 0, ...data });
@@ -26,17 +28,6 @@ function pushRing(type, data) {
   }
 }
 
-function recordFullLine(line) {
-  fullLog.push(line);
-  if (fullLog.length > FULL_MAX) {
-    fullLog = fullLog.slice(-FULL_MAX);
-  }
-  if (typeof window !== 'undefined') {
-    window.__10000BC_CAMERA_LOG_FULL__ = fullLog.slice();
-  }
-}
-
-/** Recording is on (buffer fills). */
 function isCameraRecording() {
   if (typeof window === 'undefined') {
     return false;
@@ -54,7 +45,6 @@ function isCameraRecording() {
   }
 }
 
-/** Also mirror every event to the browser console (noisy). */
 function isCameraVerbose() {
   if (typeof window === 'undefined') {
     return false;
@@ -69,65 +59,6 @@ function isCameraVerbose() {
     return window.localStorage?.getItem(STORAGE_VERBOSE) === '1';
   } catch {
     return false;
-  }
-}
-
-export function isCameraDebugEnabled() {
-  return isCameraRecording();
-}
-
-export function getCameraDebugLineCount() {
-  return fullLog.length;
-}
-
-export function clearCameraDebugBuffer() {
-  fullLog = [];
-  ring.length = 0;
-  if (typeof window !== 'undefined') {
-    window.__10000BC_CAMERA_LOG__ = [];
-    window.__10000BC_CAMERA_LOG_FULL__ = [];
-  }
-}
-
-/** Download everything recorded so far as one `.jsonl` file (browser save dialog). */
-export function downloadCameraDebugLog() {
-  if (typeof document === 'undefined') {
-    return;
-  }
-  const lines = fullLog.length > 0 ? fullLog : (typeof window !== 'undefined' && window.__10000BC_CAMERA_LOG_FULL__) || [];
-  const text = lines.map((o) => JSON.stringify(o)).join('\n');
-  const blob = new Blob([text], { type: 'application/x-ndjson;charset=utf-8' });
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  a.href = URL.createObjectURL(blob);
-  a.download = `10000bc-camera-${stamp}.jsonl`;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
-}
-
-if (typeof window !== 'undefined') {
-  window.__10000BC_DOWNLOAD_CAMERA_LOG__ = downloadCameraDebugLog;
-}
-
-/** @param {string} tag */
-export function cameraDebugLog(tag, payload = {}) {
-  if (!isCameraRecording()) {
-    return;
-  }
-  const line = {
-    kind: tag,
-    tPerf: typeof performance !== 'undefined' ? performance.now() : 0,
-    tWall: Date.now(),
-    ...payload,
-  };
-  pushRing(tag, line);
-  recordFullLine(line);
-  if (isCameraVerbose()) {
-    // eslint-disable-next-line no-console
-    console.log('[10000bc camera]', tag, line);
   }
 }
 
@@ -160,12 +91,6 @@ export function cameraDebugOnGameCameraCommit(prevX, prevY, nextX, nextY, detail
     teleport,
   };
   pushRing('commit', payload);
-  recordFullLine({
-    kind: 'commit',
-    tPerf: typeof performance !== 'undefined' ? performance.now() : 0,
-    tWall: Date.now(),
-    ...payload,
-  });
   if (isCameraVerbose()) {
     // eslint-disable-next-line no-console
     console.log('[10000bc camera] commit', payload);
@@ -191,12 +116,6 @@ export function cameraDebugOnPixiSyncAnchors(p) {
     || Math.abs(p.anchorY - p.propCameraY) > 1;
   const payload = { ...p, mismatch, severeMismatch };
   pushRing('pixiSync', payload);
-  recordFullLine({
-    kind: 'pixiSync',
-    tPerf: typeof performance !== 'undefined' ? performance.now() : 0,
-    tWall: Date.now(),
-    ...payload,
-  });
   if (isCameraVerbose()) {
     // eslint-disable-next-line no-console
     console.log('[10000bc camera] pixi sync anchors', payload);
@@ -220,12 +139,6 @@ export function cameraDebugOnFollowStep(p) {
   const badStep = step > expectedMax + 0.05 && toTarget > 0.01;
   const payload = { ...p, step, toTarget, expectedMax, badStep };
   pushRing('follow', payload);
-  recordFullLine({
-    kind: 'follow',
-    tPerf: typeof performance !== 'undefined' ? performance.now() : 0,
-    tWall: Date.now(),
-    ...payload,
-  });
   if (isCameraVerbose()) {
     // eslint-disable-next-line no-console
     console.log('[10000bc camera] follow', payload);

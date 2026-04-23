@@ -38,6 +38,7 @@ export default function DryingRackGrid({
   caption = null,
   showEmptyHint = true,
   formatWeightLabel: formatWeightLabelProp = formatWeightLabel,
+  gameState = undefined,
 }) {
   const rows = [];
   for (let gy = 0; gy < 2; gy += 1) {
@@ -51,7 +52,7 @@ export default function DryingRackGrid({
       const sx = stack && Number.isInteger(stack.slotX) ? stack.slotX : 0;
       const sy = stack && Number.isInteger(stack.slotY) ? stack.slotY : 0;
       const isAnchor = Boolean(stack && gx === sx && gy === sy);
-      const gridEntry = isAnchor && stack ? buildStockpileGridEntry(stack, slotIndex ?? 0) : null;
+      const gridEntry = isAnchor && stack ? buildStockpileGridEntry(stack, slotIndex ?? 0, gameState) : null;
       const qty = stack ? Math.max(0, Math.floor(Number(stack.quantity) || 0)) : 0;
       const tooltip = gridEntry
         ? buildInventoryGridItemTooltipTitle({

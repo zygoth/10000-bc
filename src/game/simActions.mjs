@@ -25,11 +25,11 @@ import {
   plantSpeciesEligibleForSimpleSnareBait,
 } from './trapBaitLand.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
-import { CAMP_MAINTENANCE_TASK_KIND } from './campMaintenance.mjs';
+import { CAMP_MAINTENANCE_TASK_KIND, PARTNER_PLAYER_RESCUE_TASK_KIND } from './campMaintenance.mjs';
 import { getTechForestChildResearchBlocker, getTechForestNode } from './techForestGen.mjs';
 import { isActorWithinCampFootprint, isTileWithinCampFootprint } from './campFootprint.mjs';
 import { resolveStewIngredientDescriptor as resolveStewIngredientDescriptorShared } from './stewIngredientDescriptor.mjs';
-import { resolveVisionRecipes } from './medicineDebrief.mjs';
+import { hasEligibleVisionRecipesOnMap } from './medicineDebrief.mjs';
 
 const ACTION_KINDS = [
   'move',
@@ -2709,11 +2709,13 @@ function isDebriefActive(state) {
 }
 
 function validateDebriefEnterAction(state, action, actor) {
-  if (!isActorWithinCampFootprint(state, actor)) {
+  const passOutExhausted = Number(actor?.overdraftTicks) >= MAX_DAILY_TICK_OVERDRAFT;
+  const atCamp = isActorWithinCampFootprint(state, actor);
+  if (!atCamp && !passOutExhausted) {
     return {
       ok: false,
       code: 'actor_not_at_camp',
-      message: 'debrief_enter requires actor within camp',
+      message: 'debrief_enter requires actor within camp (or max daily overdraft / pass-out)',
     };
   }
   if (isDebriefActive(state)) {
@@ -2723,20 +2725,24 @@ function validateDebriefEnterAction(state, action, actor) {
       message: 'debrief_enter rejected because debrief is already active',
     };
   }
-  if ((Number(state?.dayTick) || 0) < NIGHTLY_DEBRIEF_START_TICK) {
+  if (!passOutExhausted && (Number(state?.dayTick) || 0) < NIGHTLY_DEBRIEF_START_TICK) {
     return {
       ok: false,
       code: 'debrief_not_available_yet',
       message: `debrief_enter requires dayTick >= ${NIGHTLY_DEBRIEF_START_TICK}`,
     };
   }
+  const passOutFromOutsideCamp = passOutExhausted && !atCamp;
   return {
     ok: true,
     code: null,
     message: 'ok',
     normalizedAction: {
       ...action,
-      payload: {},
+      payload: {
+        ...(action.payload && typeof action.payload === 'object' ? action.payload : {}),
+        passOutFromOutsideCamp,
+      },
     },
   };
 }
@@ -2865,8 +2871,7 @@ function validatePartnerVisionRequestAction(state, action, actor) {
       message: 'partner_vision_request blocked until pending vision confirmation is resolved',
     };
   }
-  const visionRecipes = resolveVisionRecipes(state);
-  if (!Array.isArray(visionRecipes) || visionRecipes.length <= 0) {
+  if (!hasEligibleVisionRecipesOnMap(state)) {
     return {
       ok: false,
       code: 'vision_no_eligible_sources',
@@ -5187,6 +5192,21 @@ function validateHarvestAction(state, action, actor) {
       }
     }
 
+    const requiresAnyTools = Array.isArray(subStageDef?.harvest_requires_any_tools)
+      ? subStageDef.harvest_requires_any_tools.filter((k) => typeof k === 'string' && k)
+      : [];
+    if (requiresAnyTools.length > 0) {
+      const hasAny = requiresAnyTools.some((toolKey) => hasHarvestToolForModifier(actor, toolKey));
+      if (!hasAny) {
+        return {
+          ok: false,
+          code: 'missing_required_tool',
+          message: 'harvest requires tool:axe or tool:flint_knife in inventory',
+          requiredToolId: 'tool:axe',
+        };
+      }
+    }
+
     const reachTier = resolveEffectiveReachTier(subStageDef, plant.stageName);
     const reachTools = getHarvestReachToolState(actor);
     const poolState = getHarvestActionPoolState(subStageEntry, reachTier);
@@ -5984,6 +6004,14 @@ function validatePartnerQueueReorderAction(state, action) {
       message: 'Camp maintenance must remain first in the partner queue.',
     };
   }
+  const rescue = queued.find((t) => t?.kind === PARTNER_PLAYER_RESCUE_TASK_KIND);
+  if (rescue && orderedTaskIds[1] !== rescue.taskId) {
+    return {
+      ok: false,
+      code: 'player_rescue_must_follow_maintenance',
+      message: 'Player rescue recovery must remain second in the partner queue (after camp maintenance).',
+    };
+  }
   return {
     ok: true,
     code: null,
@@ -6136,6 +6164,14 @@ function validatePartnerTaskSetAction(state, action) {
       ok: false,
       code: 'reserved_task_kind',
       message: 'Camp maintenance is scheduled automatically and cannot be set manually.',
+    };
+  }
+
+  if (taskKind === PARTNER_PLAYER_RESCUE_TASK_KIND) {
+    return {
+      ok: false,
+      code: 'reserved_task_kind',
+      message: 'Player rescue recovery is scheduled automatically after pass-out away from camp.',
     };
   }
 

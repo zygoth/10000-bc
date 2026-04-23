@@ -1,6 +1,6 @@
 import { ANIMAL_BY_ID } from '../../game/animalCatalog.mjs';
 import { ITEM_BY_ID } from '../../game/itemCatalog.mjs';
-import { formatPlantPartLabel, parsePlantPartItemId } from '../../game/plantPartDescriptors.mjs';
+import { formatPlantPartLabelForPlayer, parsePlantPartItemId } from '../../game/plantPartDescriptors.mjs';
 import { PLANT_BY_ID } from '../../game/plantCatalog.mjs';
 import { EARTHWORM_ITEM_ID } from '../../game/simCore.constants.mjs';
 import { SIMPLE_SNARE_TARGET_SPECIES_ID } from '../../game/trapBaitLand.mjs';
@@ -28,11 +28,11 @@ function inventoryQuantityForItem(player, itemId) {
   return sum;
 }
 
-function landTrapBaitMenuLabel(trapKind, itemId, formatTokenLabel) {
+function landTrapBaitMenuLabel(gameState, trapKind, itemId, formatTokenLabel) {
   const prefix = trapKind === 'snare' ? 'Bait snare' : 'Bait deadfall';
   const descriptor = parsePlantPartItemId(itemId);
   if (descriptor) {
-    return `${prefix} (${formatPlantPartLabel(descriptor, { includeSubStage: true })})`;
+    return `${prefix} (${formatPlantPartLabelForPlayer(gameState, descriptor, { includeSubStage: true })})`;
   }
   const catalogName = ITEM_BY_ID[itemId]?.name;
   if (catalogName) {
@@ -214,7 +214,7 @@ function appendLandTrapBaitEntries({
     }
     entries.push({
       kind: 'trap_bait',
-      label: landTrapBaitMenuLabel(trapKind, itemId, formatTokenLabel),
+      label: landTrapBaitMenuLabel(gameState, trapKind, itemId, formatTokenLabel),
       tickCost: Number(v.normalizedAction?.tickCost) || getActionTickCost('trap_bait', v.normalizedAction?.payload || payload),
       payload: v.normalizedAction.payload,
     });

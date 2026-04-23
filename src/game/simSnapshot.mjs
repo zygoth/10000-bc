@@ -611,6 +611,9 @@ function normalizeCampState(camp, width, height) {
     lastPartnerMaintenanceDayCompleted: Number.isInteger(camp?.lastPartnerMaintenanceDayCompleted)
       ? camp.lastPartnerMaintenanceDayCompleted
       : null,
+    partnerPlayerRescuePlanDay: Number.isInteger(camp?.partnerPlayerRescuePlanDay)
+      ? camp.partnerPlayerRescuePlanDay
+      : null,
     nightlyPlayerSafeThirstUntilDawn: camp?.nightlyPlayerSafeThirstUntilDawn === true,
     identifiedPlantSpeciesIds: Array.isArray(camp?.identifiedPlantSpeciesIds)
       ? camp.identifiedPlantSpeciesIds.filter((entry) => typeof entry === 'string' && entry)

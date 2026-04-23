@@ -191,6 +191,9 @@ export function cloneCampState(camp, fallbackX = 0, fallbackY = 0) {
     lastPartnerMaintenanceDayCompleted: Number.isInteger(camp?.lastPartnerMaintenanceDayCompleted)
       ? camp.lastPartnerMaintenanceDayCompleted
       : null,
+    partnerPlayerRescuePlanDay: Number.isInteger(camp?.partnerPlayerRescuePlanDay)
+      ? camp.partnerPlayerRescuePlanDay
+      : null,
     nightlyPlayerSafeThirstUntilDawn: camp?.nightlyPlayerSafeThirstUntilDawn === true,
     identifiedPlantSpeciesIds: cloneStringArray(camp?.identifiedPlantSpeciesIds),
     debrief: {

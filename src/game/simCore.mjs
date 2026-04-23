@@ -51,6 +51,8 @@ import { defaultLandTrapBaitStackFromItemId } from './trapBaitLand.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
 import {
   CAMP_MAINTENANCE_TASK_KIND,
+  PARTNER_PLAYER_RESCUE_TASK_KIND,
+  PARTNER_PLAYER_RESCUE_TICKS,
   getCampMaintenanceReserveTicks,
   getPartnerQueuePlanningDay,
 } from './campMaintenance.mjs';
@@ -1293,6 +1295,8 @@ function defaultCampState(width, height) {
     lastMealResult: null,
     nextDayStewTickBonus: 0,
     lastPartnerMaintenanceDayCompleted: null,
+    /** Calendar day index: partner queue row for recovering the player after pass-out outside camp. */
+    partnerPlayerRescuePlanDay: null,
     identifiedPlantSpeciesIds: [],
     debrief: {
       active: false,
@@ -1528,6 +1532,77 @@ function ensurePartnerCampMaintenanceQueued(state) {
       meta: { locked: true, maintenanceDay: day },
     }),
   );
+  mirrorPartnerTaskQueueToActor(state);
+}
+
+function ensurePartnerPlayerRescueQueued(state) {
+  const queue = state?.camp?.partnerTaskQueue;
+  const partner = state?.actors?.partner;
+  if (!queue || !partner) {
+    return;
+  }
+  if (!Array.isArray(queue.queued)) {
+    queue.queued = [];
+  }
+
+  const planDay = getPartnerQueuePlanningDay(state);
+  const rescueDay = Number.isInteger(state?.camp?.partnerPlayerRescuePlanDay)
+    ? state.camp.partnerPlayerRescuePlanDay
+    : null;
+
+  queue.queued = queue.queued.filter((t) => t?.kind !== PARTNER_PLAYER_RESCUE_TASK_KIND);
+
+  if (rescueDay != null && planDay > rescueDay) {
+    state.camp.partnerPlayerRescuePlanDay = null;
+    if (queue.active?.kind === PARTNER_PLAYER_RESCUE_TASK_KIND) {
+      appendPartnerTaskHistory(state, {
+        taskId: queue.active.taskId,
+        kind: PARTNER_PLAYER_RESCUE_TASK_KIND,
+        status: 'failed',
+        failureReason: 'stale_rescue_plan',
+      });
+      queue.active = null;
+    }
+    mirrorPartnerTaskQueueToActor(state);
+    return;
+  }
+
+  if (queue.active?.kind === PARTNER_PLAYER_RESCUE_TASK_KIND) {
+    const md = Number(queue.active.meta?.rescuePlanDay);
+    if (rescueDay == null || md !== rescueDay || rescueDay !== planDay) {
+      appendPartnerTaskHistory(state, {
+        taskId: queue.active.taskId,
+        kind: PARTNER_PLAYER_RESCUE_TASK_KIND,
+        status: 'failed',
+        failureReason: 'superseded_rescue_plan',
+      });
+      queue.active = null;
+    }
+  }
+
+  if (rescueDay == null || rescueDay !== planDay) {
+    mirrorPartnerTaskQueueToActor(state);
+    return;
+  }
+
+  const maintIdx = queue.queued.findIndex((t) => t?.kind === CAMP_MAINTENANCE_TASK_KIND);
+  const taskId = `partner-player-rescue-day-${planDay}`;
+  const rescueTask = normalizePartnerTask({
+    taskId,
+    kind: PARTNER_PLAYER_RESCUE_TASK_KIND,
+    ticksRequired: PARTNER_PLAYER_RESCUE_TICKS,
+    ticksRemaining: PARTNER_PLAYER_RESCUE_TICKS,
+    inputs: [],
+    outputs: [],
+    requirements: { stations: [], unlocks: [] },
+    meta: { locked: true, rescuePlanDay: planDay },
+  });
+
+  if (maintIdx >= 0) {
+    queue.queued.splice(maintIdx + 1, 0, rescueTask);
+  } else {
+    queue.queued.unshift(rescueTask);
+  }
   mirrorPartnerTaskQueueToActor(state);
 }
 
@@ -2946,6 +3021,14 @@ function progressPartnerTaskQueueOneTick(state) {
         status: 'completed',
         failureReason: null,
       });
+    } else if (finishing.kind === PARTNER_PLAYER_RESCUE_TASK_KIND) {
+      state.camp.partnerPlayerRescuePlanDay = null;
+      appendPartnerTaskHistory(state, {
+        taskId: finishing.taskId,
+        kind: finishing.kind,
+        status: 'completed',
+        failureReason: null,
+      });
     } else {
       const didConsumeInputs = consumePartnerTaskInputs(state, finishing);
       if (didConsumeInputs) {
@@ -3010,6 +3093,7 @@ function applyActionEffect(state, action) {
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
     ensurePartnerCampMaintenanceQueued,
+    ensurePartnerPlayerRescueQueued,
     addActorInventoryItem,
     maxQuantityActorInventoryCanAccept,
     pickupAddOptionsFromWorldStack,
@@ -4404,6 +4488,7 @@ export function advanceDayInPlace(state, steps = 1, options = {}) {
     mutateInPlace: true,
   });
   ensurePartnerCampMaintenanceQueued(next);
+  ensurePartnerPlayerRescueQueued(next);
   return next;
 }
 

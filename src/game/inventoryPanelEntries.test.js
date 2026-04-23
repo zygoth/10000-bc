@@ -85,4 +85,16 @@ describe('inventoryPanelEntries — same pipeline as App → GameModeChrome', ()
     expect(style.backgroundPosition).toBe('-96px -32px');
     expect(style.backgroundSize).toBe('128px 128px');
   });
+
+  it('masks species but keeps part and sub-stage in name when unidentified', () => {
+    const state = { camp: { identifiedPlantSpeciesIds: [] } };
+    const entry = buildPlayerInventoryGridEntry(harvestedRootStack, 0, state);
+    expect(entry.name).toBe('Unidentified plant (Root - First Year)');
+  });
+
+  it('shows composed name when species is identified in gameState', () => {
+    const state = { camp: { identifiedPlantSpeciesIds: ['daucus_carota'] } };
+    const entry = buildPlayerInventoryGridEntry(harvestedRootStack, 0, state);
+    expect(entry.name).toBe('Wild Carrot Root');
+  });
 });

@@ -4,6 +4,12 @@ import { WINDBREAK_REFLECTOR_WALL_STATION_ID } from './simCore.constants.mjs';
 /** Partner queue task kind for daily auto camp upkeep (fire, stew prep, water). */
 export const CAMP_MAINTENANCE_TASK_KIND = 'camp_maintenance';
 
+/** Partner queue row after pass-out outside camp — carries the player home; fixed, non-removable (GDD §2.2). */
+export const PARTNER_PLAYER_RESCUE_TASK_KIND = 'partner_player_rescue';
+
+/** Tick cost for the rescue row (matches partner next-day penalty in GDD §2.2). */
+export const PARTNER_PLAYER_RESCUE_TICKS = 30;
+
 /**
  * Calendar day index used for partner queue maintenance rows.
  * During nightly debrief we plan the *next* sim day while totalDaysSimulated is still "today".

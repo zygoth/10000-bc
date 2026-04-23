@@ -6,6 +6,7 @@ import {
   getSelectedStackEntry,
 } from './GameModeChromeDisplayLogic.js';
 import PauseOverlay from './components/PauseOverlay.jsx';
+import GameOverOverlay from './components/GameOverOverlay.jsx';
 import HudTopBar from './components/HudTopBar.jsx';
 import VitalsStrip from './components/VitalsStrip.jsx';
 import WarningsStrip from './components/WarningsStrip.jsx';
@@ -126,6 +127,8 @@ function GameModeChromePanel({
   validateAction,
   onPartnerTaskAppend,
   onPartnerQueueReorder,
+  gameOverSummary = null,
+  onReturnToTitleAfterGameOver,
 }) {
   const [itemContextMenu, setItemContextMenu] = useState(null);
   const selectedStockpileEntry = getSelectedStackEntry(campStockpileStacks, selectedStockpileItemId);
@@ -159,10 +162,25 @@ function GameModeChromePanel({
     capacityKg: playerCarryCapacityKg,
   });
 
+  const isGameOver = gameOverSummary?.isGameOver === true;
+
   return (
     <>
+      {isGameOver ? (
+        <GameOverOverlay
+          deceasedLabels={Array.isArray(gameOverSummary?.deceasedLabels) ? gameOverSummary.deceasedLabels : []}
+          survivedDays={Math.max(0, Math.floor(Number(gameOverSummary?.survivedDays) || 0))}
+          calendarLabel={calendarLabel}
+          onReturnToTitleScreen={
+            typeof onReturnToTitleAfterGameOver === 'function'
+              ? onReturnToTitleAfterGameOver
+              : onReturnToTitleScreen
+          }
+        />
+      ) : null}
+
       <PauseOverlay
-        isOpen={isPauseMenuOpen}
+        isOpen={isPauseMenuOpen && !isGameOver}
         onClosePauseMenu={onClosePauseMenu}
         onSwitchToDebug={onSwitchToDebug}
         onReturnToTitleScreen={onReturnToTitleScreen}
@@ -199,6 +217,7 @@ function GameModeChromePanel({
       <EndDayButton
         isDebriefActive={isDebriefActive}
         playerAtCamp={playerAtCamp}
+        playerOverdraftTicks={playerOverdraftTicks}
         onEndDayEnterDebrief={onEndDayEnterDebrief}
       />
 
@@ -210,6 +229,7 @@ function GameModeChromePanel({
       />
 
       <InventoryPanel
+        gameState={gameState}
         isDebriefActive={isDebriefActive}
         isOpen={isInventoryPanelOpen && !isDebriefActive}
         carryWeightSeverity={carryWeightSeverity}

@@ -24,8 +24,6 @@ export default function PixiWorldView({
   selectedTileX,
   selectedTileY,
   showAnchorDebug,
-  playerWorldX,
-  playerWorldY,
   className,
   getTileTooltip,
   onTilePrimaryClick,
@@ -92,6 +90,8 @@ export default function PixiWorldView({
     const plant = plantId ? gameState.plants[plantId] : null;
     if (typeof getTileTooltip === 'function') {
       setHoverTitle(getTileTooltip(hit.worldX, hit.worldY, hit.tile, plant) || '');
+    } else {
+      setHoverTitle('');
     }
   }, [pickAtClient, gameState, getTileTooltip]);
 
@@ -141,8 +141,6 @@ export default function PixiWorldView({
           selectedTileX,
           selectedTileY,
           showAnchorDebug,
-          playerWorldX,
-          playerWorldY,
         });
         if (app) {
           app.stage.hitArea = app.screen;
@@ -150,6 +148,7 @@ export default function PixiWorldView({
         const cf2 = gameCameraFloatRef?.current;
         if (cf2) {
           scene.applyCameraPixelRoll(cf2.x, cf2.y);
+          scene.stepPlayerVisual(gs, cf2.x, cf2.y);
         }
         refreshHoverAfterSceneSync();
       });
@@ -161,8 +160,6 @@ export default function PixiWorldView({
     selectedTileX,
     selectedTileY,
     showAnchorDebug,
-    playerWorldX,
-    playerWorldY,
     refreshHoverAfterSceneSync,
   ]);
 
@@ -228,8 +225,6 @@ export default function PixiWorldView({
     selectedTileX,
     selectedTileY,
     showAnchorDebug,
-    playerWorldX,
-    playerWorldY,
     runSceneSync,
   ]);
 
@@ -250,6 +245,7 @@ export default function PixiWorldView({
       if (!cf) {
         return;
       }
+      scene.stepPlayerVisual(gameStateRef.current, cf.x, cf.y);
       const ax = Math.floor(Number(cf.x) + 1e-9);
       const ay = Math.floor(Number(cf.y) + 1e-9);
       scene.applyCameraPixelRoll(cf.x, cf.y);

@@ -11,13 +11,25 @@ export default function TitleScreen({
 }) {
   const loading = generationStatus === 'generating';
   const progressPct = Math.max(0, Math.min(100, Math.round((Number(generationProgress) || 0) * 100)));
+  const publicBase = process.env.PUBLIC_URL || '';
 
   return (
     <main className="title-screen" role="main">
-      <section className="title-card">
-        <h1>10,000 BC</h1>
-        <p className="title-tagline">Build a family camp and survive the long seasons.</p>
+      <div className="title-screen-bg" aria-hidden="true">
+        <img
+          className="title-screen-bg-img"
+          src={`${publicBase}art/WIP_title_image.png`}
+          alt=""
+        />
+        <div className="title-screen-bg-scrim" />
+      </div>
 
+      <div className="title-screen-center">
+        <h1 className="title-heading">10,000 BC</h1>
+        <p className="title-tagline">Learn the plants and animals around you to feed your family and survive for 5 years.</p>
+      </div>
+
+      <div className="title-screen-bottom-left">
         {loading ? (
           <div className="worldgen-progress-wrap" aria-live="polite">
             <p className="worldgen-stage">{generationStatus === 'generating' ? 'Generating world...' : 'Preparing...'}</p>
@@ -42,7 +54,7 @@ export default function TitleScreen({
         )}
 
         {titleStatus ? <p className="title-status">{titleStatus}</p> : null}
-      </section>
+      </div>
     </main>
   );
 }

@@ -1,6 +1,11 @@
 import { PLANT_BY_ID, getSeason } from './plantCatalog.mjs';
 import { GROUND_FUNGUS_CATALOG } from './groundFungusCatalog.mjs';
-import { formatPlantPartLabel, parsePlantPartItemId } from './plantPartDescriptors.mjs';
+import {
+  formatPlantPartLabelForPlayer,
+  parsePlantPartItemId,
+  UNIDENTIFIED_PLANT_DISPLAY_NAME,
+} from './plantPartDescriptors.mjs';
+import { isPlantSpeciesIdentifiedInState } from './plantSpeciesIdentification.mjs';
 
 const TREATMENT_RECIPES_BY_TAG = Object.freeze({
   tannin_tea: {
@@ -31,6 +36,7 @@ export function runDebriefMedicinePass(state, options = {}) {
 
   const medicineRequests = [];
   const medicineNotifications = [];
+  const plantHarvestCounts = buildPlantHarvestKeyCounts(state);
 
   for (const [actorId, actor] of Object.entries(state?.actors || {})) {
     if ((Number(actor?.health) || 0) <= 0) {
@@ -60,7 +66,7 @@ export function runDebriefMedicinePass(state, options = {}) {
       if (!descriptor) {
         continue;
       }
-      if (!isPlantPartObtainableOnMap(state, recipe.itemId, recipe.quantity)) {
+      if (!isPlantPartObtainableOnMap(state, recipe.itemId, recipe.quantity, plantHarvestCounts)) {
         continue;
       }
 
@@ -74,6 +80,10 @@ export function runDebriefMedicinePass(state, options = {}) {
         const consumed = Math.floor(Number(removed?.consumed) || 0);
         if (consumed >= recipe.quantity) {
           condition.treated = true;
+          const displayLabel = formatPlantPartLabelForPlayer(state, descriptor, { includeSubStage: true });
+          const plantNameUi = isPlantSpeciesIdentifiedInState(state, descriptor.speciesId)
+            ? descriptor.speciesName
+            : UNIDENTIFIED_PLANT_DISPLAY_NAME;
           medicineNotifications.push({
             actorId,
             actorLabel,
@@ -83,16 +93,17 @@ export function runDebriefMedicinePass(state, options = {}) {
             itemId: recipe.itemId,
             quantity: recipe.quantity,
             speciesId: descriptor.speciesId,
-            plantName: descriptor.speciesName,
+            plantName: plantNameUi,
             partName: descriptor.partName,
             subStageId: descriptor.subStageId,
-            label: formatPlantPartLabel(descriptor, { includeSubStage: true }),
-            message: `Partner treated ${actorLabel}'s ${conditionLabel} with ${descriptor.speciesName}.`,
+            label: displayLabel,
+            message: `Partner treated ${actorLabel}'s ${conditionLabel} with ${displayLabel}.`,
           });
           continue;
         }
       }
 
+      const displayName = formatPlantPartLabelForPlayer(state, descriptor, { includeSubStage: true });
       medicineRequests.push({
         requestType: 'medicine',
         actorId,
@@ -104,12 +115,14 @@ export function runDebriefMedicinePass(state, options = {}) {
         itemId: recipe.itemId,
         quantity: recipe.quantity,
         speciesId: descriptor.speciesId,
-        plantName: descriptor.speciesName,
+        plantName: isPlantSpeciesIdentifiedInState(state, descriptor.speciesId)
+          ? descriptor.speciesName
+          : UNIDENTIFIED_PLANT_DISPLAY_NAME,
         partName: descriptor.partName,
         subStageId: descriptor.subStageId,
         partLabel: descriptor.partLabel,
         subStageLabel: descriptor.subStageLabel,
-        displayName: formatPlantPartLabel(descriptor, { includeSubStage: true }),
+        displayName,
         spriteRef: resolveMedicinePlantSpriteRef(recipe.itemId),
       });
     }
@@ -143,7 +156,56 @@ function getCampStockpileQuantity(camp, itemId) {
   return total;
 }
 
-function isPlantPartObtainableOnMap(state, itemId, requiredQuantity) {
+/** One pass over plants: counts harvestable stacks per `speciesId:partName:subStageId` (vision + medicine). */
+export function buildPlantHarvestKeyCounts(state) {
+  const counts = new Map();
+  for (const plant of Object.values(state?.plants || {})) {
+    if (!plant || plant.alive === false) {
+      continue;
+    }
+    const subs = plant.activeSubStages;
+    if (!Array.isArray(subs)) {
+      continue;
+    }
+    for (const entry of subs) {
+      const pn = entry?.partName;
+      const ss = entry?.subStageId;
+      if (typeof pn !== 'string' || typeof ss !== 'string' || !plant.speciesId) {
+        continue;
+      }
+      const key = `${plant.speciesId}:${pn}:${ss}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** One pass over tiles: tile count per ground-fungus species id (vision eligibility). */
+function buildGroundFungusTileCountsBySpecies(state) {
+  const counts = new Map();
+  for (const tile of state?.tiles || []) {
+    const sid = tile?.groundFungusZone?.speciesId;
+    if (typeof sid === 'string' && sid) {
+      counts.set(sid, (counts.get(sid) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function plantHarvestCountMeetsRequirement(counts, itemId, requiredQuantity) {
+  const need = Math.max(1, Number(requiredQuantity) || 1);
+  return (counts.get(itemId) || 0) >= need;
+}
+
+function groundFungusTilesMeetRequirement(tileCounts, speciesId, requiredQuantity) {
+  const need = Math.max(1, Number(requiredQuantity) || 1);
+  return (tileCounts.get(speciesId) || 0) >= need;
+}
+
+function isPlantPartObtainableOnMap(state, itemId, requiredQuantity, plantCountsPre = null) {
+  if (plantCountsPre) {
+    return plantHarvestCountMeetsRequirement(plantCountsPre, itemId, requiredQuantity);
+  }
   const descriptor = parsePlantPartItemId(itemId);
   if (!descriptor) {
     return false;
@@ -267,12 +329,14 @@ export function runDebriefVisionRequest(state, options = {}) {
         itemId: entry.itemId,
         quantity: entry.quantity,
         speciesId: entry.descriptor.speciesId,
-        plantName: entry.descriptor.speciesName,
+        plantName: isPlantSpeciesIdentifiedInState(state, entry.descriptor.speciesId)
+          ? entry.descriptor.speciesName
+          : UNIDENTIFIED_PLANT_DISPLAY_NAME,
         partName: entry.descriptor.partName,
         subStageId: entry.descriptor.subStageId,
         partLabel: entry.descriptor.partLabel,
         subStageLabel: entry.descriptor.subStageLabel,
-        displayName: formatPlantPartLabel(entry.descriptor, { includeSubStage: true }),
+        displayName: formatPlantPartLabelForPlayer(state, entry.descriptor, { includeSubStage: true }),
         sourceType: entry.sourceType,
         visionCategories: entry.visionCategories,
       })),
@@ -292,12 +356,14 @@ export function runDebriefVisionRequest(state, options = {}) {
       itemId: recipe.itemId,
       quantity: recipe.quantity,
       speciesId: recipe.descriptor.speciesId,
-      plantName: recipe.descriptor.speciesName,
+      plantName: isPlantSpeciesIdentifiedInState(state, recipe.descriptor.speciesId)
+        ? recipe.descriptor.speciesName
+        : UNIDENTIFIED_PLANT_DISPLAY_NAME,
       partName: recipe.descriptor.partName,
       subStageId: recipe.descriptor.subStageId,
       partLabel: recipe.descriptor.partLabel,
       subStageLabel: recipe.descriptor.subStageLabel,
-      displayName: formatPlantPartLabel(recipe.descriptor, { includeSubStage: true }),
+      displayName: formatPlantPartLabelForPlayer(state, recipe.descriptor, { includeSubStage: true }),
       spriteRef: recipe.sourceType === 'ground_fungus'
         ? recipe.descriptor.speciesId
         : resolveMedicinePlantSpriteRef(recipe.itemId),
@@ -364,11 +430,13 @@ export function runDebriefVisionConfirm(state, options = {}) {
       {
         itemId: selected.itemId,
         speciesId: selected.descriptor.speciesId,
-        plantName: selected.descriptor.speciesName,
+        plantName: isPlantSpeciesIdentifiedInState(state, selected.descriptor.speciesId)
+          ? selected.descriptor.speciesName
+          : UNIDENTIFIED_PLANT_DISPLAY_NAME,
         partName: selected.descriptor.partName,
         subStageId: selected.descriptor.subStageId,
         quantity: selected.quantity,
-        message: `Partner prepared ${selected.descriptor.speciesName} for a vision.`,
+        message: `Partner prepared ${formatPlantPartLabelForPlayer(state, selected.descriptor, { includeSubStage: true })} for a vision.`,
       },
     ],
     pendingVisionRevelation: {
@@ -382,7 +450,47 @@ export function runDebriefVisionConfirm(state, options = {}) {
   };
 }
 
+/**
+ * Fast boolean for validation / UI probe (no recipe array allocation).
+ * Uses the same eligibility rules as {@link resolveVisionRecipes}.
+ */
+export function hasEligibleVisionRecipesOnMap(state) {
+  const tileCounts = buildGroundFungusTileCountsBySpecies(state);
+  const plantCounts = buildPlantHarvestKeyCounts(state);
+  for (const species of GROUND_FUNGUS_CATALOG) {
+    const effect = findHallucinogenVisionEffect(species?.ingestion);
+    if (!effect) {
+      continue;
+    }
+    const quantity = Math.max(1, Math.floor(Number(species?.ingestion?.vision_item?.quantity_per_dose || 1)));
+    if (!groundFungusTilesMeetRequirement(tileCounts, species.id, quantity)) {
+      continue;
+    }
+    return true;
+  }
+  for (const species of Object.values(PLANT_BY_ID)) {
+    const parts = Array.isArray(species?.parts) ? species.parts : [];
+    for (const part of parts) {
+      const subStages = Array.isArray(part?.subStages) ? part.subStages : [];
+      for (const subStage of subStages) {
+        const effect = findHallucinogenVisionEffect(subStage?.ingestion);
+        if (!effect) {
+          continue;
+        }
+        const itemId = `${species.id}:${part.name}:${subStage.id}`;
+        if (!plantHarvestCountMeetsRequirement(plantCounts, itemId, 1)) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function resolveVisionRecipes(state) {
+  const tileCounts = buildGroundFungusTileCountsBySpecies(state);
+  const plantCounts = buildPlantHarvestKeyCounts(state);
   const recipes = [];
   for (const species of GROUND_FUNGUS_CATALOG) {
     const effect = findHallucinogenVisionEffect(species?.ingestion);
@@ -399,7 +507,7 @@ export function resolveVisionRecipes(state) {
       partLabel: 'Fruiting Body',
       subStageLabel: 'Whole',
     };
-    if (!isGroundFungusObtainableOnMap(state, species.id, quantity)) {
+    if (!groundFungusTilesMeetRequirement(tileCounts, species.id, quantity)) {
       continue;
     }
     recipes.push({
@@ -427,7 +535,7 @@ export function resolveVisionRecipes(state) {
           continue;
         }
         const quantity = 1;
-        if (!isPlantPartObtainableOnMap(state, itemId, quantity)) {
+        if (!plantHarvestCountMeetsRequirement(plantCounts, itemId, quantity)) {
           continue;
         }
         recipes.push({
@@ -487,16 +595,6 @@ function findHallucinogenVisionEffect(ingestion) {
     }
   }
   return null;
-}
-
-function isGroundFungusObtainableOnMap(state, speciesId, requiredQuantity) {
-  let matchingTiles = 0;
-  for (const tile of state?.tiles || []) {
-    if (tile?.groundFungusZone?.speciesId === speciesId) {
-      matchingTiles += 1;
-    }
-  }
-  return matchingTiles >= Math.max(1, Number(requiredQuantity) || 1);
 }
 
 export function resolveVisionRevelationChoices(pendingRevelation) {

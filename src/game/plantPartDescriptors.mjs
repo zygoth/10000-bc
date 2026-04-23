@@ -1,4 +1,8 @@
 import { PLANT_BY_ID } from './plantCatalog.mjs';
+import { isPlantSpeciesIdentifiedInState } from './plantSpeciesIdentification.mjs';
+
+/** Player-facing label when a harvested plant part belongs to a species not yet identified. */
+export const UNIDENTIFIED_PLANT_DISPLAY_NAME = 'Unidentified plant';
 
 export function parsePlantPartItemId(itemId) {
   if (typeof itemId !== 'string' || !itemId) {
@@ -45,6 +49,52 @@ export function formatPlantPartLabel(descriptor, options = {}) {
   }
   const subStageLabel = descriptor.subStageLabel || toTitleCase(descriptor.subStageId || '');
   return `${descriptor.speciesName} (${partLabel} - ${subStageLabel})`;
+}
+
+/**
+ * Same shape as {@link formatPlantPartLabel} but hides species: "Unidentified plant (Part - Sub-stage)".
+ */
+export function unidentifiedPlantPartDisplayLabel(descriptor, options = {}) {
+  if (!descriptor) {
+    return UNIDENTIFIED_PLANT_DISPLAY_NAME;
+  }
+  const includeSubStage = options.includeSubStage !== false;
+  const partLabel = descriptor.partLabel || toTitleCase(descriptor.partName || '');
+  if (!includeSubStage) {
+    return `${UNIDENTIFIED_PLANT_DISPLAY_NAME} (${partLabel})`;
+  }
+  const subStageLabel = descriptor.subStageLabel || toTitleCase(descriptor.subStageId || '');
+  return `${UNIDENTIFIED_PLANT_DISPLAY_NAME} (${partLabel} - ${subStageLabel})`;
+}
+
+/**
+ * Label for tooltips/menus/inventory when the player should not see the real species name yet.
+ * Pass `gameState` from runtime UI; omit in tests or dev-only tools that need raw catalog names.
+ */
+export function formatPlantPartLabelForPlayer(gameState, descriptor, options = {}) {
+  if (!descriptor) {
+    return '';
+  }
+  if (gameState && !isPlantSpeciesIdentifiedInState(gameState, descriptor.speciesId)) {
+    return unidentifiedPlantPartDisplayLabel(descriptor, options);
+  }
+  return formatPlantPartLabel(descriptor, options);
+}
+
+/**
+ * Display name for inventory-like rows: catalog item, unidentified plant part, or composed plant part label.
+ */
+export function resolveHarvestedPlantItemDisplayName(item, plantPartDescriptor, gameState, fallbackItemId) {
+  if (plantPartDescriptor && gameState && !isPlantSpeciesIdentifiedInState(gameState, plantPartDescriptor.speciesId)) {
+    return unidentifiedPlantPartDisplayLabel(plantPartDescriptor, { includeSubStage: true });
+  }
+  if (item && typeof item.name === 'string' && item.name) {
+    return item.name;
+  }
+  if (plantPartDescriptor) {
+    return `${plantPartDescriptor.speciesName} ${plantPartDescriptor.partLabel}`;
+  }
+  return typeof fallbackItemId === 'string' ? fallbackItemId : '';
 }
 
 function toTitleCase(value) {

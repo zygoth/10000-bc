@@ -381,6 +381,10 @@
             "axe": 1.5,
             "knife": 1.2
           },
+          "harvest_requires_any_tools": [
+            "axe",
+            "knife"
+          ],
           "harvest_yield": {
             "units_per_action": [
               2,
@@ -452,6 +456,10 @@
             "axe": 1.5,
             "knife": 1.4
           },
+          "harvest_requires_any_tools": [
+            "axe",
+            "knife"
+          ],
           "harvest_yield": {
             "units_per_action": [
               2,
@@ -514,6 +522,10 @@
             "axe": 1.5,
             "knife": 1.4
           },
+          "harvest_requires_any_tools": [
+            "axe",
+            "knife"
+          ],
           "harvest_yield": {
             "units_per_action": [
               2,

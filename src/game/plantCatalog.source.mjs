@@ -161,7 +161,7 @@ const PLANT_CATALOG_SOURCE = [
             "craft_tags": [],
             "ingestion": null,
             "potency_multiplier": 1,
-            "harvest_base_ticks": 3,
+            "harvest_base_ticks": 1,
             "harvest_tool_modifiers": {
               "knife": 1.5
             },
@@ -301,7 +301,7 @@ const PLANT_CATALOG_SOURCE = [
             "craft_tags": [],
             "ingestion": null,
             "potency_multiplier": 0.5,
-            "harvest_base_ticks": 2,
+            "harvest_base_ticks": 1,
             "harvest_tool_modifiers": {},
             "harvest_yield": {
               "units_per_action": [
@@ -361,7 +361,7 @@ const PLANT_CATALOG_SOURCE = [
             "craft_tags": [],
             "ingestion": null,
             "potency_multiplier": 1,
-            "harvest_base_ticks": 2,
+            "harvest_base_ticks": 1,
             "harvest_tool_modifiers": {
               "knife": 1.2
             },
@@ -477,7 +477,7 @@ const PLANT_CATALOG_SOURCE = [
             ],
             "ingestion": null,
             "potency_multiplier": 0,
-            "harvest_base_ticks": 3,
+            "harvest_base_ticks": 1,
             "harvest_tool_modifiers": {
               "knife": 1.5,
               "axe": 1.2
@@ -2001,6 +2001,10 @@ const PLANT_CATALOG_SOURCE = [
               "axe": 1.5,
               "knife": 1.2
             },
+            "harvest_requires_any_tools": [
+              "axe",
+              "knife"
+            ],
             "harvest_yield": {
               "units_per_action": [
                 2,
@@ -2072,6 +2076,10 @@ const PLANT_CATALOG_SOURCE = [
               "axe": 1.5,
               "knife": 1.4
             },
+            "harvest_requires_any_tools": [
+              "axe",
+              "knife"
+            ],
             "harvest_yield": {
               "units_per_action": [
                 2,
@@ -2134,6 +2142,10 @@ const PLANT_CATALOG_SOURCE = [
               "axe": 1.5,
               "knife": 1.4
             },
+            "harvest_requires_any_tools": [
+              "axe",
+              "knife"
+            ],
             "harvest_yield": {
               "units_per_action": [
                 2,

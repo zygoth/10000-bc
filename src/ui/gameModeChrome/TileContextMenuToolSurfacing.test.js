@@ -1,5 +1,5 @@
 import { ANIMAL_BY_ID } from '../../game/animalCatalog.mjs';
-import { createInitialGameState } from '../../game/simCore.mjs';
+import { createInitialGameState, validateAction } from '../../game/simCore.mjs';
 import { PLANT_BY_ID } from '../../game/plantCatalog.mjs';
 import { EARTHWORM_ITEM_ID } from '../../game/simCore.constants.mjs';
 import { getTileContextMenuEntriesForTest } from './tileContextMenuTestHelpers.js';
@@ -470,5 +470,78 @@ describe('Tile context menu tool surfacing (headless)', () => {
         delete state.plants[plantId];
       }
     }
+  });
+
+  test('black walnut bark/inner_bark harvest requires axe or flint knife (hidden from menu without tool)', () => {
+    const state = createInitialGameState(91013, { width: 22, height: 22 });
+    const plantId = 'walnut_bark_tool_gate';
+    const tile = state.tiles.find((t) => t && !t.waterType && !t.rockType);
+    expect(tile).toBeDefined();
+
+    state.plants[plantId] = {
+      id: plantId,
+      speciesId: 'juglans_nigra',
+      age: 500,
+      x: tile.x,
+      y: tile.y,
+      stageName: 'mature_vegetative',
+      alive: true,
+      vitality: 1,
+      activeSubStages: [
+        {
+          partName: 'bark',
+          subStageId: 'rough',
+          initialActionsGround: 5,
+          remainingActionsGround: 5,
+          initialActionsElevated: 0,
+          remainingActionsElevated: 0,
+          initialActionsCanopy: 0,
+          remainingActionsCanopy: 0,
+          remainingActions: 5,
+        },
+      ],
+      source: 'test',
+    };
+    tile.plantIds = [plantId];
+
+    state.actors.player.x = tile.x;
+    state.actors.player.y = tile.y;
+    state.actors.player.inventory.stacks = [];
+
+    const payload = {
+      plantId,
+      partName: 'bark',
+      subStageId: 'rough',
+      actions: 1,
+      x: tile.x,
+      y: tile.y,
+    };
+    const vBare = validateAction(state, { actorId: 'player', kind: 'harvest', payload });
+    expect(vBare.ok).toBe(false);
+    expect(vBare.code).toBe('missing_required_tool');
+
+    const entriesBare = getTileContextMenuEntriesForTest(state, {
+      player: state.actors.player,
+      selectedTileX: tile.x,
+      selectedTileY: tile.y,
+      selectedTileEntity: tile,
+    });
+    expect(entriesBare.some((e) => e.kind === 'harvest' && e.payload?.partName === 'bark')).toBe(false);
+
+    state.actors.player.inventory.stacks = [{ itemId: 'tool:axe', quantity: 1 }];
+    const vAxe = validateAction(state, { actorId: 'player', kind: 'harvest', payload });
+    expect(vAxe.ok).toBe(true);
+
+    const entriesAxe = getTileContextMenuEntriesForTest(state, {
+      player: state.actors.player,
+      selectedTileX: tile.x,
+      selectedTileY: tile.y,
+      selectedTileEntity: tile,
+    });
+    expect(entriesAxe.some((e) => e.kind === 'harvest' && e.payload?.subStageId === 'rough')).toBe(true);
+
+    state.actors.player.inventory.stacks = [{ itemId: 'tool:flint_knife', quantity: 1 }];
+    const vKnife = validateAction(state, { actorId: 'player', kind: 'harvest', payload });
+    expect(vKnife.ok).toBe(true);
   });
 });

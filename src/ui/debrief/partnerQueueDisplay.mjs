@@ -1,5 +1,5 @@
 import { getTechResearchMeta, TECH_RESEARCH_TASK_KIND } from '../../game/techResearchCatalog.mjs';
-import { CAMP_MAINTENANCE_TASK_KIND } from '../../game/campMaintenance.mjs';
+import { CAMP_MAINTENANCE_TASK_KIND, PARTNER_PLAYER_RESCUE_TASK_KIND } from '../../game/campMaintenance.mjs';
 
 export function humanizeDebriefTaskKind(kind) {
   if (typeof kind !== 'string' || !kind) {
@@ -27,6 +27,9 @@ export function partnerQueueTaskTitle(task, formatTokenLabel) {
   }
   if (kind === CAMP_MAINTENANCE_TASK_KIND) {
     return 'Camp maintenance';
+  }
+  if (kind === PARTNER_PLAYER_RESCUE_TASK_KIND) {
+    return 'Bring you home from the field';
   }
   if (task.meta?.source === 'stockpile_process' && typeof task.meta.itemId === 'string') {
     return `${humanizeDebriefTaskKind(kind)}: ${formatTokenLabel(task.meta.itemId)}`;

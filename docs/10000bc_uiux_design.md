@@ -454,7 +454,7 @@ The debrief is the game's planning headquarters. It is full-screen and has no ti
 
 ### 9.1 Entry
 
-The debrief is triggered when the player selects "End Day" while inside the camp tiles. The "End Day" button only appears in the HUD when the player is within the camp area — it is not accessible from the field. If the player's budget hits zero in the field, the pass-out mechanic resolves first and they are returned to camp before the debrief opens.
+The debrief is triggered when the player selects "End Day" while inside the camp tiles. The "End Day" button only appears in the HUD when the player is within the camp area — it is not accessible from the field. If the player **hits the pass-out threshold** (40+ overdraft ticks in one day), the flow is the same: they are at camp before debrief, then the full debrief opens — including the Meal tab — with **no** special "player skipped dinner" state. If they passed out **outside** the camp footprint, a brief interstitial explains that the partner brought them back; then debrief proceeds normally.
 
 ### 9.2 Tab Structure
 
@@ -476,7 +476,7 @@ The Summary tab shows current household status — it is not a day recap, but a 
 
 **Spoilage alerts:** Any stockpile item that will fully spoil before the next debrief is listed here by name.
 
-**Overdraft notice** (if applicable): "You overworked today — tomorrow starts at tick [N]."
+**Overdraft notice** (if applicable): "You overworked today — tomorrow starts at tick [N]." If pass-out happened **outside** camp, add a line that the partner spent effort on the rescue: e.g. "Partner will start tomorrow with 30 fewer ticks" (wording should match the sim).
 
 ### 9.4 Navigating Between Tabs
 
@@ -714,9 +714,9 @@ At debrief open: items that will fully spoil before the next debrief are highlig
 
 **Overdraft starting:** The budget bar turns red and shows "-N overdraft" when the player exceeds their budget. No sound, no popup — the visual is sufficient. The player is making an intentional choice to push further.
 
-**Pass-out (40+ overdraft ticks in field):** The screen cuts to black briefly. A brief text appears: "You pushed too far — you don't remember getting back to camp." Then the debrief runs normally. The consequence (missing stew, next day starting at tick 40 or 70) is shown in the Summary tab.
+**Pass-out (40+ overdraft ticks in one day):** The screen cuts to black briefly. If the player was **inside** camp when they passed out, a short line such as: "You pushed too far — you come to by the fire." If they were **outside** camp: "You pushed too far — your partner brought you back." Then the debrief runs **normally**, including stew planning and eating — same Meal tab as any night. Consequences appear on the Summary tab: next day starts at tick 40 for the player; if the pass-out was outside camp, the partner's next-day tick penalty (see GDD §2.2) is called out there too.
 
-**Pass-out in winter without coat:** Immediate game-over screen. This is a dramatic failure state — it should be treated as such. Brief pause, then the death screen with context: "You passed out in the cold without protection. There was no one to bring you home."
+**Cold / winter:** Pass-out does **not** trigger a dedicated game-over for lack of a coat. Cold danger while still on your feet is communicated through the existing outdoor cold / vignette flow (§14.2 and related); debrief is always a safe, at-camp planning phase.
 
 ### 14.5 Child Birth & Epoch Transitions
 

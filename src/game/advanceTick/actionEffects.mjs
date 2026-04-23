@@ -16,6 +16,7 @@ import {
 } from '../harvestYieldResolve.mjs';
 import { HUNGER_BAR_CALORIES } from '../simCore.constants.mjs';
 import { isTileWithinCampFootprint } from '../campFootprint.mjs';
+import { getPartnerQueuePlanningDay } from '../campMaintenance.mjs';
 import {
   autoRodBaitStackFromInventoryStack,
   defaultLandTrapBaitStackFromItemId,
@@ -65,6 +66,7 @@ export function applyActionEffectImpl(state, action, deps) {
     normalizePartnerTask,
     mirrorPartnerTaskQueueToActor,
     ensurePartnerCampMaintenanceQueued,
+    ensurePartnerPlayerRescueQueued,
     addActorInventoryItem,
     maxQuantityActorInventoryCanAccept,
     pickupAddOptionsFromWorldStack,
@@ -2540,7 +2542,11 @@ export function applyActionEffectImpl(state, action, deps) {
     debrief.pendingVisionRevelation = null;
     debrief.pendingVisionChoices = [];
     debrief.chosenVisionRewards = [];
+    if (action.payload?.passOutFromOutsideCamp === true && state.camp && typeof state.camp === 'object') {
+      state.camp.partnerPlayerRescuePlanDay = getPartnerQueuePlanningDay(state);
+    }
     ensurePartnerCampMaintenanceQueued(state);
+    ensurePartnerPlayerRescueQueued(state);
     return;
   }
 
@@ -2779,6 +2785,7 @@ export function applyActionEffectImpl(state, action, deps) {
       };
       queue.queued = [];
       ensurePartnerCampMaintenanceQueued(state);
+      ensurePartnerPlayerRescueQueued(state);
       return;
     }
 
@@ -2811,6 +2818,7 @@ export function applyActionEffectImpl(state, action, deps) {
     }
 
     ensurePartnerCampMaintenanceQueued(state);
+    ensurePartnerPlayerRescueQueued(state);
   }
 
   if (action.kind === 'partner_queue_reorder') {
@@ -2833,5 +2841,7 @@ export function applyActionEffectImpl(state, action, deps) {
     }
     queue.queued = next;
     mirrorPartnerTaskQueueToActor(state);
+    ensurePartnerCampMaintenanceQueued(state);
+    ensurePartnerPlayerRescueQueued(state);
   }
 }

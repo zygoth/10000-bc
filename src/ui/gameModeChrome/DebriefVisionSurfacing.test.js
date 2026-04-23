@@ -110,7 +110,8 @@ describe('Debrief Vision surfacing (headless)', () => {
 
     let m = panel(state);
     expect(m.partnerRequestCard).not.toBeNull();
-    expect(m.partnerRequestCard.plantName).toBeTruthy();
+    expect(m.partnerRequestCard.summaryLine).toBeTruthy();
+    expect(m.partnerRequestCard.itemId).toBeTruthy();
     expect(m.confirmItem.show).toBe(false);
     expect(m.requestVision.disabled).toBe(false);
 

@@ -141,8 +141,11 @@ export function buildDebriefVisionPanelModel({
   let partnerRequestCard = null;
   if (visionRequest) {
     partnerRequestCard = {
-      plantName: visionRequest.plantName || visionRequest.speciesId || '',
-      partLine: `${visionRequest.partLabel || visionRequest.partName || ''} (${visionRequest.subStageLabel || visionRequest.subStageId || ''})`,
+      summaryLine: typeof visionRequest.displayName === 'string' && visionRequest.displayName
+        ? visionRequest.displayName
+        : visionRequest.plantName || visionRequest.speciesId || '',
+      itemId: typeof visionRequest.itemId === 'string' ? visionRequest.itemId : '',
+      speciesId: typeof visionRequest.speciesId === 'string' ? visionRequest.speciesId : '',
       quantity: visionRequest.quantity,
       message: visionRequest.message || '',
     };

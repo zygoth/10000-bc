@@ -137,6 +137,7 @@ This document contains all information needed to generate valid plant object JSO
           "potency_multiplier": null,
           "harvest_base_ticks": 0,
           "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
           "harvest_yield": {
             "units_per_action": [0, 0],
             "actions_until_depleted": [0, 0],
@@ -368,13 +369,28 @@ For `contact_rash`, `health_hit` is `null` and `debuff` is populated:
     - `null` = always active when age requirement is met (used for age-gated stages like seedling)
     - `{"start_day": 1, "end_day": 20}` = active only during these in-game days of year (1-40)
     - **CRITICAL:** `start_day` and `end_day` use in-game days (1-40)
-  - `size` (int 1-10): Active stage biomass/canopy scale used by rendering and shade broadcast
+  - `size` (int 1-10): Active stage biomass/canopy scale used by **rendering (including sprite scale)** and shade broadcast. The integer maps to a **reference typical mature height** for that stage’s growth form—use it so plants of the same `size` read at a consistent scale on the map. Bands intentionally touch at boundaries; pick the integer that matches dominant height and silhouette for the stage.
     - 1-2: seedling/small herb (no shade broadcast)
     - 3-5: larger herb/shrublet (range-1 shade broadcast)
     - 6-10: shrub/tree canopy classes (range-2 shade broadcast)
     - **For perennial trees:** once mature canopy size is reached (typically 8-10), keep that size through seasonal stage changes unless there is a strong species-specific reason.
     - **For annuals/herbaceous plants:** Size can vary more dramatically through the lifecycle
     - Plants never shade their own tile; shade is broadcast only to surrounding tiles from active-stage size.
+
+    **Reference height by `size` (typical mature stature for that stage’s form):**
+
+    | `size` | Typical height | Growth form (examples) |
+    |--------|----------------|-------------------------|
+    | 1 | ≤0.4 m (≤1.5 ft) | Ground cover, prostrate herbs |
+    | 2 | 0.2–0.5 m | Low herb, very small seedling |
+    | 3 | 0.4–0.8 m | Knee-high herb |
+    | 4 | 0.8–1.3 m | Waist-high forb (e.g. milkweed, carrot bolt) |
+    | 5 | 1.2–1.8 m | Tall forb |
+    | 6 | 1.5–3 m | Shrub (e.g. Nanking cherry–scale) |
+    | 7 | 2.5–5 m | Large shrub or multistem small tree (e.g. serviceberry) |
+    | 8 | 5–10 m | Small tree (orchard-scale, pole-stage, woodland edge) |
+    | 9 | 10–20 m | Medium tree (yard or forest mid-canopy; e.g. mature walnut before full forest scale) |
+    | 10 | ~18 m and up (~60 ft+) | Large / upper-canopy tree (species near maximum height; silhouette reads as full forest-tree scale). Where **9** and **10** both apply (~18–20 m), use **10** when the species or stage is meant to read as **upper canopy** or at **maximum** stature for that plant. |
   - `field_description` (string, required): Visual description of plant at this growth stage; always visible regardless of identification status; should not mention parts not yet present. Should be descriptive of the distinguishing features of the plant even if this repeats text from other life stages.
 
 #### Life Stage Granularity and Sprite Pipeline
@@ -711,6 +727,12 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - Empty object `{}` if no tool bonuses (common for underground parts that rely on automatic digging tool modifiers)
 - Valid tool names: `"knife"`, `"blickey"`, `"axe"` (do not use `"shovel"` or `"digging_stick"` here)
 - **Note:** `"gloves"` is a valid key in `on_harvest_injury.tool_probability_modifiers` (injury modifier), but must NOT appear in this `harvest_tool_modifiers` object
+
+**`harvest_requires_any_tools`** (array of strings, optional — omit or `[]` if not applicable)
+- **Hard gate:** the player must have **at least one** of the listed tools (inventory or equipped, per the same rules as `harvest_tool_modifiers`) or the harvest action is invalid and **will not appear** in the tile context menu.
+- Use the **same short keys** as `harvest_tool_modifiers`: `"knife"`, `"blickey"`, `"axe"` (`"knife"` resolves to `tool:flint_knife` in the sim).
+- Omit entirely, or use `[]`, when any hand harvest is allowed; only list tools that are strictly required (e.g. stripping **outer bark** or **inner bark** from a tree: `["axe", "knife"]`).
+- **Differs from `harvest_tool_modifiers`:** modifiers only reduce tick cost when a tool is present; they do **not** block bare-handed harvest. This field blocks harvest until a matching tool exists.
 
 **`harvest_yield`** (object or null, required)
 - Defines the **full-strength** harvest economics for this sub-stage at the reference age (see `harvest_yield_full_age_days`). The engine scales both the per-action unit midpoint and the `actions_until_depleted` midpoint by plant age relative to that reference (floor scale 0.1). Pools resync on harvest validation/apply using current `plant.age`; no global daily scan.
@@ -1095,6 +1117,7 @@ Plus anything else that makes sense for the plant.
 - `seasonal_window` uses format: `"early_spring"`, `"mid_spring"`, `"late_spring"`, `"early_summer"`, `"mid_summer"`, `"late_summer"`, `"early_fall"`, `"mid_fall"`, `"late_fall"`, `"winter"`
 - `available_life_stages` must reference stages defined in `life_stages` array
 - `harvest_tool_modifiers` keys should be valid tool names: `"knife"`, `"blickey"`, `"axe"` (do NOT use `"shovel"` or `"digging_stick"` — these are applied automatically for parts with `dig_ticks_to_discover`)
+- `harvest_requires_any_tools`, when used, must list the same style of short keys as `harvest_tool_modifiers` (it is a hard inventory gate, not a speed bonus)
 - `on_tile_entry_injury` uses `equipment_probability_modifiers` with slots `"gloves"` and `"coat"` only
 - `on_harvest_injury` uses `tool_probability_modifiers` with tool ids as keys (e.g. `"knife"`, `"gloves"`) — never `equipment_probability_modifiers`
 - `contact_rash` injury type requires `debuff` object with `treatment_tag: "antihistamine_poultice"`; `health_hit` must be `null`

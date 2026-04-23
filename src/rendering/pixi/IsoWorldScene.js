@@ -10,6 +10,7 @@ import {
 } from '../../game/plantSpriteCatalog.mjs';
 import { PLANT_BY_ID } from '../../game/plantCatalog.mjs';
 import {
+  lifeStageSizeVisualScaleMultiplier,
   patchSpriteScaleForCapacity,
   resolvePatchCapacity,
   resolvePatchLayout,
@@ -39,14 +40,25 @@ import { computeVisibleIsoTiles, sortVisibleIsoTiles } from './isoMath.js';
 import { computeWorldPanLayerPixels } from './isoCameraRoll.js';
 import { getSubTextureForSprite } from './textureCache.js';
 
+/** Tile-to-tile player label motion (ms). */
+const PLAYER_MOVE_TWEEN_MS = 280;
+
+function easeOutCubic(t) {
+  const u = Math.min(1, Math.max(0, t));
+  return 1 - (1 - u) ** 3;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 function isoPlantScale(plant) {
   if (!plant) {
     return ISO_BASE_SCALE;
   }
   const species = PLANT_BY_ID[plant.speciesId] || null;
-  const stage = species?.lifeStages?.find((entry) => entry.stage === plant.stageName) || null;
-  const size = Number(stage?.size || 0);
-  return size >= 8 ? ISO_BASE_SCALE : (ISO_BASE_SCALE * 0.5);
+  const stageSize = stageSizeForPlant(species, plant);
+  return ISO_BASE_SCALE * lifeStageSizeVisualScaleMultiplier(stageSize);
 }
 
 function applyAnchoredSprite(pixiSprite, sprite, scale, anchorScreenX, anchorScreenY, texture, options = null) {
@@ -81,6 +93,97 @@ function deepWaterTint() {
   return 0x8aa8c4;
 }
 
+/** Stable serialization for dead-log fungi in render signatures. */
+function isoDeadLogFungiSig(deadLog) {
+  if (!deadLog?.fungi?.length) {
+    return '';
+  }
+  return [...deadLog.fungi]
+    .map((f) => `${f.species_id || ''}:${Number(f.yield_current_grams) || 0}`)
+    .sort()
+    .join(',');
+}
+
+/** Stable serialization for world item stacks on a tile. */
+function isoWorldItemsSig(worldItems) {
+  if (!Array.isArray(worldItems) || worldItems.length === 0) {
+    return '';
+  }
+  return worldItems
+    .map((e) => `${typeof e?.itemId === 'string' ? e.itemId : ''}:${Math.floor(Number(e?.quantity) || 0)}`)
+    .sort()
+    .join(',');
+}
+
+/**
+ * Content-only signature: changes when sim/world data affecting this tile's visuals changes.
+ * Excludes camera anchor and window layout (handled by `_lastIsoLayoutSig` on the scene).
+ */
+function computeIsoTileContentSignature(gameState, worldX, worldY, tile) {
+  if (!tile) {
+    return `missing|${worldX}|${worldY}`;
+  }
+  const south = getTileAt(gameState, worldX, worldY + 1);
+  const east = getTileAt(gameState, worldX + 1, worldY);
+  const firstPlantId = tile.plantIds?.[0] || '';
+  const plant = firstPlantId && gameState.plants?.[firstPlantId] ? gameState.plants[firstPlantId] : null;
+  const speciesDef = plant ? (PLANT_BY_ID[plant.speciesId] || null) : null;
+  const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
+  const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
+  const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
+  const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
+
+  const zone = tile.groundFungusZone;
+  const zoneSig = zone
+    ? `${zone.speciesId || ''}:${Number(zone.yieldCurrentGrams) || 0}`
+    : '';
+
+  const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
+    ? gameState.worldItemsByTile[`${worldX},${worldY}`]
+    : [];
+  const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
+  const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
+  const drying = gameState?.camp?.dryingRackUnlocked ? '1' : '0';
+
+  const southSig = south
+    ? `${Number(south.elevation) || 0}:${south.waterType ? 'w' : ''}`
+    : 'x';
+  const eastSig = east
+    ? `${Number(east.elevation) || 0}:${east.waterType ? 'w' : ''}`
+    : 'x';
+
+  const parts = [
+    worldX,
+    worldY,
+    Number(tile.elevation) || 0,
+    tile.waterType || '',
+    tile.waterFrozen ? 1 : 0,
+    tile.waterDepth || '',
+    tile.rockType || '',
+    firstPlantId,
+    plant ? `${plant.speciesId}:${plant.stageName}:${plant.id}` : '',
+    patchCapacity,
+    patchScale,
+    plantOrLogScale,
+    tile.deadLog ? `dl:${isoDeadLogFungiSig(tile.deadLog)}` : '',
+    zoneSig,
+    tile.beehive ? 'b' : '',
+    tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? `c:${Math.floor(Number(tile.squirrelCache.nutContentGrams) || 0)}` : '',
+    tile.simpleSnare?.active ? 's' : '',
+    tile.deadfallTrap?.active ? 'd' : '',
+    tile.fishTrap?.active ? 'f' : '',
+    tile.autoRod?.active ? 'a' : '',
+    tile.sapTap?.active ? 'p' : '',
+    tile.leachingBasket?.active ? 'l' : '',
+    isCampTile ? `camp:${drying}` : '',
+    stationAtTile || '',
+    isoWorldItemsSig(worldItems),
+    southSig,
+    eastSig,
+  ];
+  return parts.join('\u001f');
+}
+
 export class IsoWorldScene {
   constructor() {
     this.root = new Container();
@@ -94,6 +197,22 @@ export class IsoWorldScene {
     this.hoverMoveTargetGraphics = new Graphics();
     this.worldPanLayer.addChild(this.tilesRoot);
     this.worldPanLayer.addChild(this.tileLabelOverlayRoot);
+    /** `[player]` is tweened between tiles; tile tokens omit the player. */
+    this.playerTokenRoot = new Container();
+    this.playerTokenText = new Text({
+      text: '[player]',
+      style: {
+        fontFamily: 'system-ui, Segoe UI, sans-serif',
+        fontSize: 11,
+        fontWeight: '700',
+        fill: 0xfff4d8,
+        align: 'center',
+        stroke: { color: 0x000000, width: 4 },
+      },
+    });
+    this.playerTokenText.anchor.set(0.5, 1);
+    this.playerTokenRoot.addChild(this.playerTokenText);
+    this.worldPanLayer.addChild(this.playerTokenRoot);
     this.worldPanLayer.addChild(this.selectionGraphics);
     this.worldPanLayer.addChild(this.hoverMoveTargetGraphics);
     this.root.addChild(this.worldPanLayer);
@@ -102,6 +221,56 @@ export class IsoWorldScene {
     this.lastOrigin = { originX: 0, originY: 0 };
     /** Bumps each sync so late texture loads do not touch destroyed sprites. */
     this._syncGeneration = 0;
+    /** When window/origin/debug changes, all tiles must rebuild (screen math changes). */
+    this._lastIsoLayoutSig = null;
+
+    /** @type {{ x: number, y: number } | null} */
+    this._playerLastSim = null;
+    /** @type {null | { fromW: { x: number, y: number }, toW: { x: number, y: number }, tileAx: number, tileAy: number, tileBx: number, tileBy: number, startMs: number }} */
+    this._playerTween = null;
+  }
+
+  _topFaceReferenceAnchorYForTile(gameState, worldX, worldY) {
+    const tile = getTileAt(gameState, worldX, worldY);
+    if (!tile) {
+      return ISO_SOURCE_TILE_WIDTH * ISO_BASE_SCALE;
+    }
+    const grassSprite = !tile.waterType ? getTerrainSpriteFrame('grass') : null;
+    const dirtSprite = !tile.waterType ? getTerrainSpriteFrame('dirt') : null;
+    const waterSprite = tile.waterType ? getTerrainSpriteFrame('water') : null;
+    const topFaceReferenceSprite = grassSprite || dirtSprite || waterSprite || null;
+    return (
+      topFaceReferenceSprite?.frame?.anchorY
+      ?? topFaceReferenceSprite?.frame?.sourceH
+      ?? topFaceReferenceSprite?.frame?.h
+      ?? ISO_SOURCE_TILE_WIDTH
+    ) * ISO_BASE_SCALE;
+  }
+
+  /**
+   * Screen position for the `[player]` label at fractional world coords, lerping
+   * elevation / top-face anchor between two integer tiles (for smooth diagonal moves).
+   */
+  _computePlayerTokenAtWorldFloat(gameState, wx, wy, baseCamX, baseCamY, elevT, tileAx, tileAy, tileBx, tileBy) {
+    const { originX, originY } = this.lastOrigin;
+    const elevA = elevationToIsoOffsetPx(getTileAt(gameState, tileAx, tileAy)?.elevation);
+    const elevB = elevationToIsoOffsetPx(getTileAt(gameState, tileBx, tileBy)?.elevation);
+    const elevOff = lerp(elevA, elevB, elevT);
+    const topRefA = this._topFaceReferenceAnchorYForTile(gameState, tileAx, tileAy);
+    const topRefB = this._topFaceReferenceAnchorYForTile(gameState, tileBx, tileBy);
+    const topRef = lerp(topRefA, topRefB, elevT);
+    const localX = wx - baseCamX;
+    const localY = wy - baseCamY;
+    const screenX = (localX - localY) * ISO_TILE_HALF_WIDTH_PX + originX;
+    const flatY = (localX + localY) * ISO_TILE_HALF_HEIGHT_PX + originY;
+    const groundY = flatY + ISO_TILE_HALF_HEIGHT_PX - elevOff;
+    const tileTopCenterY = computeTileTopCenterYFromGroundAnchor(
+      groundY,
+      topRef,
+      ISO_TILE_HALF_HEIGHT_PX,
+    );
+    const tokenY = tileTopCenterY - 24 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX;
+    return { screenX, tokenY };
   }
 
   /**
@@ -111,6 +280,196 @@ export class IsoWorldScene {
   applyCameraPixelRoll(cameraFx, cameraFy) {
     const { px, py } = computeWorldPanLayerPixels(cameraFx, cameraFy);
     this.worldPanLayer.position.set(px, py);
+  }
+
+  /**
+   * Per-frame player label position (tweened between sim tiles). Call from the Pixi rAF loop.
+   */
+  stepPlayerVisual(gameState, cameraFx, cameraFy) {
+    if (!this.playerTokenRoot || !this.playerTokenText) {
+      return;
+    }
+    const p = gameState?.actors?.player;
+    const sx = p?.x;
+    const sy = p?.y;
+    if (!Number.isInteger(sx) || !Number.isInteger(sy)) {
+      this.playerTokenRoot.visible = false;
+      this._playerLastSim = null;
+      this._playerTween = null;
+      return;
+    }
+    if (!Array.isArray(this.lastSorted) || this.lastSorted.length === 0) {
+      return;
+    }
+
+    const baseCamX = Math.floor(Number(cameraFx) + 1e-9);
+    const baseCamY = Math.floor(Number(cameraFy) + 1e-9);
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    if (this._playerLastSim === null) {
+      this._playerLastSim = { x: sx, y: sy };
+      const pos = this._computePlayerTokenAtWorldFloat(
+        gameState, sx, sy, baseCamX, baseCamY, 1, sx, sy, sx, sy,
+      );
+      if (pos) {
+        this.playerTokenText.position.set(pos.screenX, pos.tokenY);
+        this.playerTokenRoot.visible = true;
+      }
+      return;
+    }
+
+    if (sx !== this._playerLastSim.x || sy !== this._playerLastSim.y) {
+      let fromWx;
+      let fromWy;
+      let tileAx;
+      let tileAy;
+      if (this._playerTween) {
+        const { fromW, toW, startMs } = this._playerTween;
+        const uPrev = Math.min(1, (now - startMs) / PLAYER_MOVE_TWEEN_MS);
+        const ePrev = easeOutCubic(uPrev);
+        fromWx = fromW.x + (toW.x - fromW.x) * ePrev;
+        fromWy = fromW.y + (toW.y - fromW.y) * ePrev;
+        tileAx = Math.round(fromWx);
+        tileAy = Math.round(fromWy);
+      } else {
+        fromWx = this._playerLastSim.x;
+        fromWy = this._playerLastSim.y;
+        tileAx = this._playerLastSim.x;
+        tileAy = this._playerLastSim.y;
+      }
+      this._playerTween = {
+        fromW: { x: fromWx, y: fromWy },
+        toW: { x: sx, y: sy },
+        tileAx,
+        tileAy,
+        tileBx: sx,
+        tileBy: sy,
+        startMs: now,
+      };
+      this._playerLastSim = { x: sx, y: sy };
+    }
+
+    if (this._playerTween) {
+      const { fromW, toW, tileAx, tileAy, tileBx, tileBy, startMs } = this._playerTween;
+      const u = Math.min(1, (now - startMs) / PLAYER_MOVE_TWEEN_MS);
+      const e = easeOutCubic(u);
+      const wx = fromW.x + (toW.x - fromW.x) * e;
+      const wy = fromW.y + (toW.y - fromW.y) * e;
+      const pos = this._computePlayerTokenAtWorldFloat(
+        gameState, wx, wy, baseCamX, baseCamY, e, tileAx, tileAy, tileBx, tileBy,
+      );
+      if (pos) {
+        this.playerTokenText.position.set(pos.screenX, pos.tokenY);
+        this.playerTokenRoot.visible = true;
+      }
+      if (u >= 1) {
+        this._playerTween = null;
+      }
+    } else {
+      const pos = this._computePlayerTokenAtWorldFloat(
+        gameState, sx, sy, baseCamX, baseCamY, 1, sx, sy, sx, sy,
+      );
+      if (pos) {
+        this.playerTokenText.position.set(pos.screenX, pos.tokenY);
+        this.playerTokenRoot.visible = true;
+      }
+    }
+  }
+
+  _isoGlobalLayoutSig(originX, originY, windowWidth, windowHeight, cameraAnchorElevationPx, showAnchorDebug) {
+    return `${originX}\u001f${originY}\u001f${windowWidth}\u001f${windowHeight}\u001f${cameraAnchorElevationPx}\u001f${showAnchorDebug ? 1 : 0}`;
+  }
+
+  _applyIsoTileCameraPanOffset(tileC, baseCamX, baseCamY) {
+    const ref = tileC.__isoBuildBaseCam;
+    if (!ref) {
+      return;
+    }
+    const dbcx = baseCamX - ref.x;
+    const dbcy = baseCamY - ref.y;
+    tileC.position.set(
+      (-dbcx + dbcy) * ISO_TILE_HALF_WIDTH_PX,
+      (-dbcx - dbcy) * ISO_TILE_HALF_HEIGHT_PX,
+    );
+  }
+
+  /**
+   * Label / debug overlay nodes for one tile (rebuilt every sync; terrain may be skipped).
+   */
+  _appendIsoTileOverlayLabels(
+    labelOverlayQueue,
+    {
+      depthKey,
+      worldX,
+      screenX,
+      tileTopCenterY,
+      occupantAnchorY,
+      plant,
+      occupantSprite,
+      combinedOverlaySymbol,
+      tileEntityTokens,
+      showAnchorDebug,
+    },
+  ) {
+    if (!occupantSprite && plant) {
+      const t = new Text({
+        text: plant.speciesId[0]?.toUpperCase() || '?',
+        style: {
+          fontFamily: 'system-ui, Segoe UI, sans-serif',
+          fontSize: 11,
+          fontWeight: '700',
+          fill: 0xfff4d8,
+          align: 'center',
+          stroke: { color: 0x000000, width: 3 },
+        },
+      });
+      t.anchor.set(0.5, 1);
+      t.position.set(screenX, tileTopCenterY - 12 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
+      labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
+    }
+
+    if (showAnchorDebug) {
+      const g = new Graphics();
+      g.roundPixels = true;
+      g.circle(0, 0, 4);
+      g.fill({ color: 0xff00ff, alpha: 0.9 });
+      g.position.set(screenX, occupantAnchorY);
+      labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: g });
+    }
+
+    if (combinedOverlaySymbol) {
+      const t = new Text({
+        text: combinedOverlaySymbol,
+        style: {
+          fontFamily: 'system-ui, Segoe UI, sans-serif',
+          fontSize: 22,
+          fontWeight: '800',
+          fill: 0xffe6b2,
+          align: 'center',
+          stroke: { color: 0x000000, width: 3 },
+        },
+      });
+      t.anchor.set(0.5, 1);
+      t.position.set(screenX, tileTopCenterY - 8 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
+      labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
+    }
+
+    tileEntityTokens.forEach((token, idx) => {
+      const t = new Text({
+        text: token,
+        style: {
+          fontFamily: 'system-ui, Segoe UI, sans-serif',
+          fontSize: 11,
+          fontWeight: '700',
+          fill: 0xfff4d8,
+          align: 'center',
+          stroke: { color: 0x000000, width: 4 },
+        },
+      });
+      t.anchor.set(0.5, 1);
+      t.position.set(screenX, tileTopCenterY - 24 - (idx * 16) + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
+      labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
+    });
   }
 
   /**
@@ -126,9 +485,6 @@ export class IsoWorldScene {
     selectedTileX,
     selectedTileY,
     showAnchorDebug,
-    /** Integer tile coords; avoids full `player` object in deps and matches sync to float anchor. */
-    playerWorldX,
-    playerWorldY,
   }) {
     this._syncGeneration += 1;
     const syncGen = this._syncGeneration;
@@ -166,6 +522,17 @@ export class IsoWorldScene {
     const texturePromises = [];
     const labelOverlayQueue = [];
 
+    const layoutSig = this._isoGlobalLayoutSig(
+      originX,
+      originY,
+      windowWidth,
+      windowHeight,
+      cameraAnchorElevationPx,
+      showAnchorDebug,
+    );
+    const layoutChanged = this._lastIsoLayoutSig !== layoutSig;
+    this._lastIsoLayoutSig = layoutSig;
+
     for (const { worldX, worldY, tile } of sorted) {
       const key = `${worldX},${worldY}`;
       let tileC = this.tileContainers.get(key);
@@ -174,7 +541,11 @@ export class IsoWorldScene {
         this.tileContainers.set(key, tileC);
         this.tilesRoot.addChild(tileC);
       }
-      tileC.removeChildren();
+
+      const contentSig = computeIsoTileContentSignature(gameState, worldX, worldY, tile);
+      const canSkip = !layoutChanged
+        && tileC.__isoContentSig === contentSig
+        && tileC.children.length > 0;
 
       const depthKey = worldY + worldX;
       const localX = worldX - baseCamX;
@@ -194,13 +565,6 @@ export class IsoWorldScene {
       const patchCapacity = (plant && speciesDef) ? resolvePatchCapacity(speciesDef, plant) : 1;
       const stageSize = (plant && speciesDef) ? stageSizeForPlant(speciesDef, plant) : 1;
       const patchScale = patchSpriteScaleForCapacity(patchCapacity, stageSize, 1);
-      const occupantCopies = (plant && occupantSprite && patchCapacity > 1)
-        ? resolvePatchLayout(patchCapacity, `iso:${worldX},${worldY}:${plant.id}`, {
-          radiusPx: Math.max(8, ISO_TILE_HALF_WIDTH_PX * 0.24),
-          minSpacingPx: Math.max(5, ISO_TILE_HALF_WIDTH_PX * 0.1),
-          jitterPx: 2,
-        })
-        : [{ x: 0, y: 0, depthY: 0 }];
       const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
 
       const zone = tile.groundFungusZone;
@@ -221,22 +585,19 @@ export class IsoWorldScene {
       const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
         ? gameState.worldItemsByTile[`${worldX},${worldY}`]
         : [];
-      const isPlayerTile = Number(playerWorldX) === worldX && Number(playerWorldY) === worldY;
       const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
       const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
       const tileEntityTokens = buildTileEntityTokens(tile, {
-        isPlayerTile,
+        isPlayerTile: false,
         isCampTile,
         stationAtTile,
         worldItems,
         camp: gameState?.camp,
       });
 
-      const rockSprite = tile.rockType ? getRockSpriteFrame(tile.rockType) : null;
       const grassSprite = !tile.waterType ? getTerrainSpriteFrame('grass') : null;
       const dirtSprite = !tile.waterType ? getTerrainSpriteFrame('dirt') : null;
       const waterSprite = tile.waterType ? getTerrainSpriteFrame('water') : null;
-      const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
       const missingTerrainSprites = tile.waterType
         ? !waterSprite
         : (!dirtSprite && !grassSprite);
@@ -253,6 +614,36 @@ export class IsoWorldScene {
         ISO_TILE_HALF_HEIGHT_PX,
       );
       const occupantAnchorY = computeOccupantAnchorYFromTileTop(tileTopCenterY, ISO_OCCUPANT_VISUAL_NUDGE_PX);
+
+      if (canSkip) {
+        this._applyIsoTileCameraPanOffset(tileC, baseCamX, baseCamY);
+        this._appendIsoTileOverlayLabels(labelOverlayQueue, {
+          depthKey,
+          worldX,
+          screenX,
+          tileTopCenterY,
+          occupantAnchorY,
+          plant,
+          occupantSprite,
+          combinedOverlaySymbol,
+          tileEntityTokens,
+          showAnchorDebug,
+        });
+        continue;
+      }
+
+      tileC.position.set(0, 0);
+      tileC.removeChildren();
+
+      const occupantCopies = (plant && occupantSprite && patchCapacity > 1)
+        ? resolvePatchLayout(patchCapacity, `iso:${worldX},${worldY}:${plant.id}`, {
+          radiusPx: Math.max(12, ISO_TILE_HALF_WIDTH_PX * 0.32),
+          minSpacingPx: Math.max(7, ISO_TILE_HALF_WIDTH_PX * 0.12),
+        })
+        : [{ x: 0, y: 0, depthY: 0 }];
+
+      const rockSprite = tile.rockType ? getRockSpriteFrame(tile.rockType) : null;
+      const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
       const southTile = getTileAt(gameState, worldX, worldY + 1);
       const eastTile = getTileAt(gameState, worldX + 1, worldY);
       const southElevationOffsetPx = southTile ? elevationToIsoOffsetPx(southTile.elevation) : 0;
@@ -339,65 +730,20 @@ export class IsoWorldScene {
         });
       }
 
-      if (!occupantSprite && plant) {
-        const t = new Text({
-          text: plant.speciesId[0]?.toUpperCase() || '?',
-          style: {
-            fontFamily: 'system-ui, Segoe UI, sans-serif',
-            fontSize: 11,
-            fontWeight: '700',
-            fill: 0xfff4d8,
-            align: 'center',
-            stroke: { color: 0x000000, width: 3 },
-          },
-        });
-        t.anchor.set(0.5, 1);
-        t.position.set(screenX, tileTopCenterY - 12 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
-        labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
-      }
-
-      if (showAnchorDebug) {
-        const g = new Graphics();
-        g.roundPixels = true;
-        g.circle(0, 0, 4);
-        g.fill({ color: 0xff00ff, alpha: 0.9 });
-        g.position.set(screenX, occupantAnchorY);
-        labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: g });
-      }
-
-      if (combinedOverlaySymbol) {
-        const t = new Text({
-          text: combinedOverlaySymbol,
-          style: {
-            fontFamily: 'system-ui, Segoe UI, sans-serif',
-            fontSize: 22,
-            fontWeight: '800',
-            fill: 0xffe6b2,
-            align: 'center',
-            stroke: { color: 0x000000, width: 3 },
-          },
-        });
-        t.anchor.set(0.5, 1);
-        t.position.set(screenX, tileTopCenterY - 8 + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
-        labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
-      }
-
-      tileEntityTokens.forEach((token, idx) => {
-        const t = new Text({
-          text: token,
-          style: {
-            fontFamily: 'system-ui, Segoe UI, sans-serif',
-            fontSize: 11,
-            fontWeight: '700',
-            fill: 0xfff4d8,
-            align: 'center',
-            stroke: { color: 0x000000, width: 4 },
-          },
-        });
-        t.anchor.set(0.5, 1);
-        t.position.set(screenX, tileTopCenterY - 24 - (idx * 16) + ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX);
-        labelOverlayQueue.push({ depth: depthKey, wx: worldX, node: t });
+      this._appendIsoTileOverlayLabels(labelOverlayQueue, {
+        depthKey,
+        worldX,
+        screenX,
+        tileTopCenterY,
+        occupantAnchorY,
+        plant,
+        occupantSprite,
+        combinedOverlaySymbol,
+        tileEntityTokens,
+        showAnchorDebug,
       });
+      tileC.__isoContentSig = contentSig;
+      tileC.__isoBuildBaseCam = { x: baseCamX, y: baseCamY };
     }
 
     labelOverlayQueue.sort((a, b) => {
@@ -517,6 +863,8 @@ export class IsoWorldScene {
   destroy() {
     this._syncGeneration += 1;
     this.tileContainers.clear();
+    this._playerLastSim = null;
+    this._playerTween = null;
     this.worldPanLayer.destroy({ children: true });
     this.root.destroy({ children: true });
   }

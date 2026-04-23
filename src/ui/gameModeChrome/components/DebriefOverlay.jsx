@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   buildDebriefVisionPanelModel,
   getDebriefVisionTabShowsAlert,
@@ -6,6 +6,7 @@ import {
 import { getTechForestEntrySurface } from '../TechForestDisplayLogic.js';
 import MealPlanningPanel from './MealPlanningPanel.jsx';
 import PartnerTaskQueuePanel from './PartnerTaskQueuePanel.jsx';
+import PartnerRequestedPlantPreview from './PartnerRequestedPlantPreview.jsx';
 import { partnerHistorySummaryLine } from '../../debrief/partnerQueueDisplay.mjs';
 
 export default function DebriefOverlay({
@@ -46,6 +47,7 @@ export default function DebriefOverlay({
   onFocusConditionInstance,
   onAdministerCondition,
 }) {
+  const [partnerVisionRequestBusy, setPartnerVisionRequestBusy] = useState(false);
   const simDay = Number.isInteger(gameState?.totalDaysSimulated) ? gameState.totalDaysSimulated : null;
   const partnerHistoryToday = useMemo(() => {
     if (!isDebriefActive || simDay == null) {
@@ -212,10 +214,21 @@ export default function DebriefOverlay({
               <p className="debrief-note">{visionPanel.helpLine}</p>
               <button
                 type="button"
-                onClick={() => onRunQuickAction('partner_vision_request')}
-                disabled={visionPanel.requestVision.disabled}
+                onClick={() => {
+                  if (partnerVisionRequestBusy || visionPanel.requestVision.disabled) {
+                    return;
+                  }
+                  setPartnerVisionRequestBusy(true);
+                  requestAnimationFrame(() => {
+                    onRunQuickAction('partner_vision_request');
+                    requestAnimationFrame(() => {
+                      setPartnerVisionRequestBusy(false);
+                    });
+                  });
+                }}
+                disabled={visionPanel.requestVision.disabled || partnerVisionRequestBusy}
               >
-                Request Vision
+                {partnerVisionRequestBusy ? 'Searching map…' : 'Request Vision'}
               </button>
               {!visionPanel.requestVision.disabled ? null : visionPanel.requestVision.blockedMessage ? (
                 <p className="debrief-note debrief-vision-block-reason">{visionPanel.requestVision.blockedMessage}</p>
@@ -257,8 +270,11 @@ export default function DebriefOverlay({
               ))}
               {visionPanel.partnerRequestCard ? (
                 <div className="debrief-request-card">
-                  <p><strong>Plant:</strong> {visionPanel.partnerRequestCard.plantName}</p>
-                  <p><strong>Part:</strong> {visionPanel.partnerRequestCard.partLine}</p>
+                  <p><strong>Need:</strong> {visionPanel.partnerRequestCard.summaryLine}</p>
+                  <PartnerRequestedPlantPreview
+                    itemId={visionPanel.partnerRequestCard.itemId}
+                    speciesId={visionPanel.partnerRequestCard.speciesId}
+                  />
                   <p><strong>Qty:</strong> {visionPanel.partnerRequestCard.quantity}</p>
                   <p>{visionPanel.partnerRequestCard.message}</p>
                 </div>
@@ -277,8 +293,11 @@ export default function DebriefOverlay({
                   <h3>Medicine Requests</h3>
                   {medicineRequests.map((request) => (
                     <div key={request.conditionInstanceId || `${request.actorId}:${request.conditionId}`} className="debrief-request-card">
-                      <p><strong>Plant:</strong> {request.plantName || request.speciesId}</p>
-                      <p><strong>Part:</strong> {request.partLabel || request.partName} ({request.subStageLabel || request.subStageId})</p>
+                      <p><strong>Need:</strong> {request.displayName || request.plantName || request.speciesId}</p>
+                      <PartnerRequestedPlantPreview
+                        itemId={request.itemId}
+                        speciesId={request.speciesId}
+                      />
                       <p><strong>Qty:</strong> {request.quantity}</p>
                       <p><strong>For:</strong> {request.actorLabel} — {request.conditionLabel}</p>
                       <div className="hud-item-btns">

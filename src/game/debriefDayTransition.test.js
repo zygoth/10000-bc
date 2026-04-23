@@ -1,6 +1,7 @@
 import { advanceStateToNextMorning } from './debriefDayTransition.mjs';
 import { advanceTick, createInitialGameState, validateAction } from './simCore.mjs';
 import { TICKS_PER_DAY, THIRST_ACTIVITY_DRAIN_PER_TICK } from './simCore.constants.mjs';
+import { PARTNER_PLAYER_RESCUE_TASK_KIND } from './campMaintenance.mjs';
 
 function minimalPlayState() {
   return createInitialGameState(4242, { width: 40, height: 40 });
@@ -116,5 +117,29 @@ describe('advanceStateToNextMorning', () => {
       actions: [{ actionId: 't-enter', actorId: 'player', kind: 'debrief_enter', payload: {} }],
     });
     expect(state.camp.debrief.active).toBe(true);
+  });
+
+  it('max overdraft outside camp debrief_enter queues locked partner rescue task', () => {
+    let state = minimalPlayState();
+    state.dayTick = 220;
+    const ax = Number(state.camp.anchorX);
+    state.actors.player.x = ax + 10;
+    state.actors.player.y = Number(state.camp.anchorY);
+    state.actors.player.overdraftTicks = 40;
+
+    const v = validateAction(state, { actorId: 'player', kind: 'debrief_enter', payload: {} });
+    expect(v.ok).toBe(true);
+    expect(v.normalizedAction?.payload?.passOutFromOutsideCamp).toBe(true);
+
+    state = advanceTick(state, {
+      actions: [{ actionId: 't-enter', actorId: 'player', kind: 'debrief_enter', payload: {} }],
+    });
+    const planningDay = Number(state.totalDaysSimulated) + 1;
+    expect(state.camp.partnerPlayerRescuePlanDay).toBe(planningDay);
+    const queued = state.camp.partnerTaskQueue.queued;
+    const rescue = queued.find((t) => t.kind === PARTNER_PLAYER_RESCUE_TASK_KIND);
+    expect(rescue).toBeTruthy();
+    expect(rescue.meta?.locked).toBe(true);
+    expect(Number(rescue.ticksRequired)).toBe(30);
   });
 });

@@ -88,6 +88,7 @@ function sortStockpileEntriesForDebrief(entries, mode) {
 }
 
 export default function InventoryPanel({
+  gameState = undefined,
   isDebriefActive,
   isOpen,
   carryWeightSeverity,
@@ -395,6 +396,7 @@ export default function InventoryPanel({
                 Right-click the rack tile → Inspect Drying Rack for details.
               </p>
               <DryingRackGrid
+                gameState={gameState}
                 slots={campDryingRackSlots}
                 showEmptyHint
                 onRemoveSlot={onDryingRackRemove}

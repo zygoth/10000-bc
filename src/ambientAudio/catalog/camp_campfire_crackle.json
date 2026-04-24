@@ -1,0 +1,32 @@
+{
+  "species_id": "camp_campfire_crackle",
+  "display_name": "Campfire",
+  "audio_role": "camp_campfire",
+  "placement": { "strategy": "camp_anchor_tile" },
+  "population_response": null,
+  "audibility": {
+    "requires_listener_in_camp_footprint": true,
+    "max_chebyshev_tiles_from_camp_anchor": 3
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 200, "relative": 1 },
+      { "from_tick": 200, "to_tick": 400, "relative": 0.4 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "crackle_loop",
+      "url": "/sounds/ambient/campfire_loop.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Small campfire crackle loop, close wood pops, no voices, 8–12s seamless loop"
+    }
+  ],
+  "scheduling": {
+    "playback_style": "loop_while_eligible",
+    "crossfade_ms": 600
+  }
+}

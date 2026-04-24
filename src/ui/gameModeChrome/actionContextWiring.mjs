@@ -32,7 +32,7 @@ export function inferTileContextActions(tile) {
   }
 
   const actions = ['inspect', 'move', 'item_drop', 'item_pickup', 'marker_place', 'marker_remove'];
-  if (tile.plantIds?.length > 0 || tile.rockType || tile.squirrelCache) {
+  if (tile.plantIds?.length > 0 || tile.rockType || tile.squirrelCache || tile.beehive) {
     actions.push('harvest');
   }
   if (tile.plantIds?.length > 0) {

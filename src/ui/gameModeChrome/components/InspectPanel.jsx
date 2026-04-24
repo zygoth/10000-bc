@@ -11,6 +11,7 @@ export default function InspectPanel({
     return null;
   }
   const trapSummary = selectedInspectData.trapSummary;
+  const beehiveSummary = selectedInspectData.beehiveSummary;
   const hasPlant = Boolean(selectedInspectData.plantName);
   return (
     <aside className={`hud-inspect-panel ${isInventoryPanelOpen ? 'hud-inspect-panel-shift' : ''}`} aria-label="Tile inspection">
@@ -18,6 +19,16 @@ export default function InspectPanel({
         <div className="hud-inspect-trap-block">
           <h3>{trapSummary.heading}</h3>
           {trapSummary.rows.map((row) => (
+            <p key={row.label} className="hud-inspect-row">
+              <strong>{row.label}:</strong> {row.value}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {beehiveSummary ? (
+        <div className="hud-inspect-trap-block">
+          <h3>{beehiveSummary.heading}</h3>
+          {beehiveSummary.rows.map((row) => (
             <p key={row.label} className="hud-inspect-row">
               <strong>{row.label}:</strong> {row.value}
             </p>

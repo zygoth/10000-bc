@@ -14,7 +14,12 @@ import {
   harvestYieldScaleFactor,
   scaledUnitsPerHarvestActionMidpoint,
 } from '../harvestYieldResolve.mjs';
-import { HUNGER_BAR_CALORIES } from '../simCore.constants.mjs';
+import {
+  FORAGE_BEESWAX_ITEM_ID,
+  FORAGE_BUMBLE_HONEY_ITEM_ID,
+  FORAGE_BUMBLE_LARVAE_ITEM_ID,
+  HUNGER_BAR_CALORIES,
+} from '../simCore.constants.mjs';
 import { isTileWithinCampFootprint } from '../campFootprint.mjs';
 import { getPartnerQueuePlanningDay } from '../campMaintenance.mjs';
 import {
@@ -2384,6 +2389,61 @@ export function applyActionEffectImpl(state, action, deps) {
         unitWeightKg: Number(action.payload?.outputUnitWeightKg),
       });
       fungusEntry.yield_current_grams = Math.max(0, availableGrams - harvestedGrams);
+      return;
+    }
+
+    if (targetType === 'beehive') {
+      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+      if (!inBounds(targetX, targetY, state.width, state.height)) {
+        return;
+      }
+      const tile = getTile(targetX, targetY);
+      const bh = tile?.beehive;
+      if (!bh || bh.active !== true) {
+        return;
+      }
+      const honeyG = Math.max(0, Math.floor(Number(bh.yieldCurrentHoneyGrams) || 0));
+      const larvaeG = Math.max(0, Math.floor(Number(bh.yieldCurrentLarvaeGrams) || 0));
+      const waxG = Math.max(0, Math.floor(Number(bh.yieldCurrentBeeswaxGrams) || 0));
+      if (honeyG + larvaeG + waxG <= 0) {
+        return;
+      }
+      const honeyItemId = typeof action.payload?.honeyItemId === 'string' && action.payload.honeyItemId
+        ? action.payload.honeyItemId
+        : FORAGE_BUMBLE_HONEY_ITEM_ID;
+      const larvaeItemId = typeof action.payload?.larvaeItemId === 'string' && action.payload.larvaeItemId
+        ? action.payload.larvaeItemId
+        : FORAGE_BUMBLE_LARVAE_ITEM_ID;
+      const waxItemId = typeof action.payload?.beeswaxItemId === 'string' && action.payload.beeswaxItemId
+        ? action.payload.beeswaxItemId
+        : FORAGE_BEESWAX_ITEM_ID;
+      if (honeyG > 0) {
+        addActorInventoryItemWithOverflowDrop(state, actor, honeyItemId, honeyG, {
+          unitWeightKg: 0.001,
+          decayDaysRemaining: 365,
+        });
+      }
+      if (larvaeG > 0) {
+        addActorInventoryItemWithOverflowDrop(state, actor, larvaeItemId, larvaeG, {
+          unitWeightKg: 0.001,
+          decayDaysRemaining: 2,
+        });
+      }
+      if (waxG > 0) {
+        addActorInventoryItemWithOverflowDrop(state, actor, waxItemId, waxG, {
+          unitWeightKg: 0.001,
+        });
+      }
+      bh.yieldCurrentHoneyGrams = 0;
+      bh.yieldCurrentLarvaeGrams = 0;
+      bh.yieldCurrentBeeswaxGrams = 0;
+      bh.lastHarvestYear = Number.isInteger(state.year) ? state.year : null;
+      bh.lastHarvestDay = Number.isInteger(state.dayOfYear) ? state.dayOfYear : null;
+      const h = ((targetX * 73856093) ^ (targetY * 19349663) ^ ((Number(state.totalDaysSimulated) || 0) * 1315423911)) >>> 0;
+      if ((h % 10_000) / 10_000 < 0.6) {
+        actor.health = clamp01((Number(actor.health) || 0) - 0.05);
+      }
       return;
     }
 

@@ -16,6 +16,12 @@ export function canGenerateAnimalZonesInternal(state) {
   return Number(state?.totalDaysSimulated) >= MIN_DAYS_FOR_ANIMAL_ZONE_GENERATION;
 }
 
+/**
+ * Trapping / forage-simulation density for a **land** animal (0..1) from `state.animalDensityByZone` after
+ * `generateAnimalZones` has run. **Not** used for ambient gobbles/cicadas yet: mobile ambient “population” for
+ * sound uses `../../ambientAudio/buildAmbientLayer.mjs` (habitat `population_response`). Catalog field
+ * `shared_trapping_species_id` on an ambient entry is the hook to align sound with *this* map and catch depletion.
+ */
 export function getAnimalDensityAtTile(state, animalId, x, y) {
   if (!state?.animalZonesGenerated || !animalId) {
     return 0;

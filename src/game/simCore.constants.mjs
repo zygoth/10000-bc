@@ -57,6 +57,11 @@ export const BEEHIVE_SPECIES_ID = 'bombus_pennsylvanicus_colony';
 export const BEEHIVE_HONEY_RANGE_GRAMS = [50, 200];
 export const BEEHIVE_LARVAE_RANGE_GRAMS = [50, 150];
 export const BEEHIVE_BEESWAX_RANGE_GRAMS = [20, 60];
+/** GDD §13.1 — cost to harvest a wild bumblebee colony tile. */
+export const BEEHIVE_HARVEST_TICK_COST = 30;
+export const FORAGE_BUMBLE_HONEY_ITEM_ID = 'forage:bumble_honey';
+export const FORAGE_BUMBLE_LARVAE_ITEM_ID = 'forage:bumble_larvae';
+export const FORAGE_BEESWAX_ITEM_ID = 'forage:beeswax';
 export const SAP_TAP_DAILY_FILL_UNITS = 1;
 export const SAP_TAP_VESSEL_CAPACITY_UNITS = 10;
 export const SAP_FILLED_VESSEL_ITEM_ID = 'tool:hide_pitch_vessel_filled_sap';

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Application } from 'pixi.js';
+import { getGameState } from '../game/gameStore.mjs';
 import { getTileAt } from '../game/simCore.mjs';
 import { cameraDebugOnPixiSyncAnchors } from './cameraDebug.js';
 import { IsoWorldScene } from './pixi/IsoWorldScene.js';
 import { pickTopTileAtScreen } from './pixi/isoMath.js';
 import { gameCameraFloatRef, stepGameCameraFollow } from './standaloneGameCamera.js';
+import { runAmbientDebugThrottled } from '../ambientAudio/ambientDebug.mjs';
+import { AmbientAudioBridge } from '../ambientAudio/ambientAudioBridge.mjs';
 
 /**
  * Pixi isometric world + picking. React owns context menu UI (sibling in App).
@@ -41,6 +44,7 @@ export default function PixiWorldView({
   gameStateVersionRef.current = gameStateVersion;
   /** Last tile anchor we built sprites for (float floor); avoids duplicate sync from rAF + effect. */
   const lastSyncedFloorRef = useRef({ x: NaN, y: NaN });
+  const ambientBridgeRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [hoverTitle, setHoverTitle] = useState('');
 
@@ -209,6 +213,21 @@ export default function PixiWorldView({
     };
   }, []);
 
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!ready || !host) {
+      return undefined;
+    }
+    const bridge = new AmbientAudioBridge(host);
+    ambientBridgeRef.current = bridge;
+    return () => {
+      bridge.dispose();
+      if (ambientBridgeRef.current === bridge) {
+        ambientBridgeRef.current = null;
+      }
+    };
+  }, [ready]);
+
   /** World / layout / selection changes — not tied to React camera integers (float ref is authoritative). */
   useEffect(() => {
     if (!ready || !sceneRef.current) {
@@ -246,6 +265,24 @@ export default function PixiWorldView({
         return;
       }
       scene.stepPlayerVisual(gameStateRef.current, cf.x, cf.y);
+      /** Authoritative sim state (same as camera follow). React `gameState` can lag a tick behind the store. */
+      const gs = getGameState() || gameStateRef.current;
+      const p = gs?.actors?.player;
+      const px = Number(p?.x);
+      const py = Number(p?.y);
+      const usePlayer = Number.isFinite(px) && Number.isFinite(py);
+      const earX = usePlayer ? px + 0.5 : cf.x;
+      const earY = usePlayer ? py + 0.5 : cf.y;
+      runAmbientDebugThrottled('ear', 500, () => {
+        // eslint-disable-next-line no-console
+        console.log('[ambient] ear (Pixi rAF)', {
+          usePlayer: usePlayer ? 1 : 0,
+          player: usePlayer ? { x: p?.x, y: p?.y } : null,
+          camFloat: { x: cf.x, y: cf.y },
+          ear: { x: earX, y: earY },
+        });
+      });
+      ambientBridgeRef.current?.tick(gs, earX, earY);
       const ax = Math.floor(Number(cf.x) + 1e-9);
       const ay = Math.floor(Number(cf.y) + 1e-9);
       scene.applyCameraPixelRoll(cf.x, cf.y);

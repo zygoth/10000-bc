@@ -1,0 +1,82 @@
+{
+  "species_id": "magicicada_septendecim",
+  "display_name": "Pharaoh cicada (17-year)",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 36,
+    "max_emitters_per_tile": 2
+  },
+  "population_response": {
+    "version": 1,
+    "base": 0.07,
+    "calendar_timeline": {
+      "kind": "day_segments",
+      "default_relative": 0,
+      "segments": [
+        { "from_day": 6, "to_day": 8, "relative": 0.25 },
+        { "from_day": 9, "to_day": 18, "relative": 1 },
+        { "from_day": 19, "to_day": 22, "relative": 0.2 }
+      ]
+    },
+    "terms": [
+      {
+        "id": "warm_mesic",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.52,
+        "half_width": 0.38,
+        "floor": 0.1,
+        "ceiling": 1
+      },
+      {
+        "id": "deciduous_canopy",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.4,
+        "half_width": 0.3,
+        "floor": 0.18,
+        "ceiling": 1
+      },
+      {
+        "id": "land_bias",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.2, "river": 0.35, "land": 1 }
+      },
+      {
+        "id": "near_hardwood",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["juglans_nigra"],
+        "max_distance": 4,
+        "at_distance_0": 1.35,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 10]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 200, "relative": 0.35 },
+      { "from_tick": 200, "to_tick": 400, "relative": 1 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "chorus_buzz",
+      "url": "/sounds/ambient/magicicada_septendecim_buzz.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Periodical cicada male chorus buzz, warm hardwood forest edge Indiana, dense harmonic drone slice 1–3s loopable"
+    }
+  ],
+  "scheduling": {
+    "min_seconds_between_calls_same_species": 2,
+    "min_seconds_between_calls_same_emitter": 1.8,
+    "max_simultaneous_voices_for_species": 5,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "species_id": "melospiza_melodia",
+  "display_name": "Song sparrow",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.48,
+  "population_response": {
+    "version": 1,
+    "base": 0.048,
+    "season_multiplier_by_key": {
+      "spring": 1.18,
+      "summer": 1,
+      "fall": 0.55,
+      "winter": 0.12
+    },
+    "terms": [
+      {
+        "id": "moist_floodplain",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.58,
+        "half_width": 0.3,
+        "floor": 0.1,
+        "ceiling": 1
+      },
+      {
+        "id": "scrubby_shade",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.36,
+        "half_width": 0.28,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "water_edge",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 1.1, "river": 1.2, "land": 0.5 }
+      },
+      {
+        "id": "brush_near_water_plants",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["asclepias_syriaca", "urtica_dioica"],
+        "max_distance": 4,
+        "at_distance_0": 1.32,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 92, "relative": 1 },
+      { "from_tick": 92, "to_tick": 280, "relative": 0.5 },
+      { "from_tick": 280, "to_tick": 375, "relative": 0.86 },
+      { "from_tick": 375, "to_tick": 400, "relative": 0.2 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "buzzy_trill",
+      "url": "/sounds/ambient/melospiza_melodia_song.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Song sparrow introductory notes then buzzy trill, wet brush near ditch Indiana, 1.5–3.5s, no voices, mid-range"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.3,
+    "min_seconds_between_calls_same_species": 11,
+    "min_seconds_between_calls_same_emitter": 18,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

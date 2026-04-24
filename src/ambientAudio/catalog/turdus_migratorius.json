@@ -1,0 +1,83 @@
+{
+  "species_id": "turdus_migratorius",
+  "display_name": "American robin",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 22,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.5,
+  "population_response": {
+    "version": 1,
+    "base": 0.052,
+    "season_multiplier_by_key": {
+      "spring": 1.2,
+      "summer": 1,
+      "fall": 0.72,
+      "winter": 0.22
+    },
+    "terms": [
+      {
+        "id": "mesic_suburb",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.48,
+        "half_width": 0.3,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "open_edge_shade",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.38,
+        "half_width": 0.3,
+        "floor": 0.14,
+        "ceiling": 1
+      },
+      {
+        "id": "land_over_water",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.35, "river": 0.55, "land": 1 }
+      },
+      {
+        "id": "near_open_hardwood",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["juglans_nigra", "echinacea_purpurea"],
+        "max_distance": 5,
+        "at_distance_0": 1.35,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 95, "relative": 1 },
+      { "from_tick": 95, "to_tick": 285, "relative": 0.48 },
+      { "from_tick": 285, "to_tick": 385, "relative": 0.88 },
+      { "from_tick": 385, "to_tick": 400, "relative": 0.25 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "song_tut",
+      "url": "/sounds/ambient/turdus_migratorius_song.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "American robin song, cheery tut-tut carol, open lawn to woodland edge Indiana, 2–5s, no voices, dry close perspective"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.28,
+    "min_seconds_between_calls_same_species": 12,
+    "min_seconds_between_calls_same_emitter": 20,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

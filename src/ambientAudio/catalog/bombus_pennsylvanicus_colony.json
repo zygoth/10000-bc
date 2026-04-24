@@ -1,0 +1,32 @@
+{
+  "species_id": "bombus_pennsylvanicus_colony",
+  "display_name": "Bumblebee colony (hive buzz)",
+  "audio_role": "sim_beehive",
+  "placement": { "strategy": "implicit_at_tile_beehive" },
+  "population_response": null,
+  "audibility": {
+    "requires_listener_chebyshev_adjacent": true,
+    "requires_beehive_active": true
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 200, "relative": 0.85 },
+      { "from_tick": 200, "to_tick": 400, "relative": 0.35 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "hive_buzz_loop",
+      "url": "/sounds/ambient/beehive_buzz_loop.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Low bumblebee hive hum, very close mic, steady loop, no voices, 6–10s"
+    }
+  ],
+  "scheduling": {
+    "playback_style": "loop_while_eligible",
+    "crossfade_ms": 350
+  }
+}

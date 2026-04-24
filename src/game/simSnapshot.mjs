@@ -1,4 +1,5 @@
 import { inBounds, tileIndex } from './simWorld.mjs';
+import { resolveMagicicadaEmergenceOffset } from './magicicadaEmergence.mjs';
 import { ensureTechForestOnLoad } from './techForestGen.mjs';
 import { defaultLandTrapBaitStackFromItemId } from './trapBaitLand.mjs';
 
@@ -1045,6 +1046,7 @@ function normalizeStateForLoad(candidate) {
     currentDayActionLog,
   };
   ensureTechForestOnLoad(loaded);
+  loaded.magicicadaSeptendecimEmergenceOffset = resolveMagicicadaEmergenceOffset(loaded);
   return loaded;
 }
 

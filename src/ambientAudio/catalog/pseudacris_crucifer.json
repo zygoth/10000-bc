@@ -1,0 +1,79 @@
+{
+  "species_id": "pseudacris_crucifer",
+  "display_name": "Spring peeper",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 26,
+    "max_emitters_per_tile": 1
+  },
+  "population_response": {
+    "version": 1,
+    "base": 0.055,
+    "season_multiplier_by_key": {
+      "spring": 1.2,
+      "summer": 0.85,
+      "fall": 0.5,
+      "winter": 0
+    },
+    "terms": [
+      {
+        "id": "wet_vernal",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.62,
+        "half_width": 0.32,
+        "floor": 0.08,
+        "ceiling": 1
+      },
+      {
+        "id": "shallow_water_or_floodplain",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 1.25, "river": 1, "land": 0.45 }
+      },
+      {
+        "id": "scrub_shade",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.35,
+        "half_width": 0.28,
+        "floor": 0.2,
+        "ceiling": 1
+      },
+      {
+        "id": "near_wet_meadow_plants",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["asclepias_syriaca"],
+        "max_distance": 4,
+        "at_distance_0": 1.3,
+        "beyond_max": 0.82,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 200, "relative": 0.3 },
+      { "from_tick": 200, "to_tick": 400, "relative": 1 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "peep",
+      "url": "/sounds/ambient/pseudacris_crucifer_peep.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Spring peeper single high peep, thaw pond edge Indiana woods, no voices, 0.2–0.5s"
+    }
+  ],
+  "scheduling": {
+    "min_seconds_between_calls_same_species": 2.2,
+    "min_seconds_between_calls_same_emitter": 4.5,
+    "max_simultaneous_voices_for_species": 3,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

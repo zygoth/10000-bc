@@ -1,0 +1,37 @@
+{
+  "species_id": "camp_work_maintenance_shuffle",
+  "display_name": "Camp maintenance (shuffle)",
+  "audio_role": "partner_station_work",
+  "task_match": {
+    "task_kind": "camp_maintenance"
+  },
+  "placement": {
+    "strategy": "camp_anchor_tile",
+    "fallback_tile": "camp_anchor"
+  },
+  "population_response": null,
+  "audibility": {
+    "requires_listener_in_camp_footprint": true
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 200, "relative": 0.9 },
+      { "from_tick": 200, "to_tick": 400, "relative": 0.5 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "shuffle_loop",
+      "url": "/sounds/ambient/camp_maintenance_shuffle_loop.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Soft camp chore shuffle, firewood, fabric rustle, no speech, 10s loop"
+    }
+  ],
+  "scheduling": {
+    "playback_style": "loop_while_eligible",
+    "crossfade_ms": 500
+  }
+}

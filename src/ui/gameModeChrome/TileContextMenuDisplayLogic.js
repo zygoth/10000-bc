@@ -295,12 +295,18 @@ export function getTileContextMenuEntries({
       }
     }
   } else {
-    // Tile-based harvest for squirrel cache / log fungus (not rock).
     const tileHarvestPayload = { x: selectedTileX, y: selectedTileY };
     const tileHarvestValidation = validateAction(gameState, { actorId: 'player', kind: 'harvest', payload: tileHarvestPayload });
     if (tileHarvestValidation.ok) {
       const targetType = tileHarvestValidation?.normalizedAction?.payload?.targetType;
-      if (targetType === 'squirrel_cache' || targetType === 'log_fungus') {
+      if (targetType === 'beehive') {
+        entries.push({
+          kind: 'harvest',
+          label: 'Harvest beehive',
+          tickCost: Number(tileHarvestValidation?.normalizedAction?.tickCost) || getActionTickCost('harvest', tileHarvestPayload),
+          payload: tileHarvestValidation.normalizedAction?.payload || tileHarvestPayload,
+        });
+      } else if (targetType === 'squirrel_cache' || targetType === 'log_fungus') {
         const fungusSpeciesId = tileHarvestValidation?.normalizedAction?.payload?.speciesId;
         entries.push({
           kind: 'harvest',
@@ -389,12 +395,13 @@ export function getTileContextMenuEntries({
     || selectedTileEntity?.fishTrap?.active
     || selectedTileEntity?.autoRod?.active,
   );
+  const hasInspectableBeehive = Boolean(selectedTileEntity?.beehive);
   const inferredTileKinds = inferTileContextActions(selectedTileEntity);
   const otherKinds = inferredTileKinds.filter(
     (k) => k !== 'move' && k !== 'harvest' && k !== 'item_pickup' && k !== 'trap_bait' && k !== 'fish_rod_cast',
   );
   for (const kind of otherKinds) {
-    if (kind === 'inspect' && !hasInspectablePlant && !hasInspectableTrap) {
+    if (kind === 'inspect' && !hasInspectablePlant && !hasInspectableTrap && !hasInspectableBeehive) {
       continue;
     }
     if (kind === 'dig') {

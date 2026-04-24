@@ -13,6 +13,10 @@ import {
   TICKS_PER_DAY,
   NIGHTLY_DEBRIEF_START_TICK,
   HUNGER_BAR_CALORIES,
+  BEEHIVE_HARVEST_TICK_COST,
+  FORAGE_BEESWAX_ITEM_ID,
+  FORAGE_BUMBLE_HONEY_ITEM_ID,
+  FORAGE_BUMBLE_LARVAE_ITEM_ID,
 } from './simCore.constants.mjs';
 import { parsePlantPartItemId } from './plantPartDescriptors.mjs';
 import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
@@ -5387,6 +5391,40 @@ function validateHarvestAction(state, action, actor) {
           outputUnitWeightKg: 0.001,
         },
         tickCost: 2,
+      },
+    };
+  }
+
+  const beehive = tile?.beehive;
+  if (beehive && typeof beehive === 'object') {
+    if (beehive.active !== true) {
+      return { ok: false, code: 'beehive_inactive', message: 'The colony is dormant; nothing can be harvested now' };
+    }
+    const honeyG = Math.max(0, Math.floor(Number(beehive.yieldCurrentHoneyGrams) || 0));
+    const larvaeG = Math.max(0, Math.floor(Number(beehive.yieldCurrentLarvaeGrams) || 0));
+    const waxG = Math.max(0, Math.floor(Number(beehive.yieldCurrentBeeswaxGrams) || 0));
+    if (honeyG + larvaeG + waxG <= 0) {
+      return { ok: false, code: 'beehive_empty', message: 'The hive has no stored honey, brood, or wax to take' };
+    }
+    return {
+      ok: true,
+      code: null,
+      message: 'ok',
+      normalizedAction: {
+        ...action,
+        payload: {
+          ...action.payload,
+          targetType: 'beehive',
+          x: target.x,
+          y: target.y,
+          honeyGrams: honeyG,
+          larvaeGrams: larvaeG,
+          beeswaxGrams: waxG,
+          honeyItemId: FORAGE_BUMBLE_HONEY_ITEM_ID,
+          larvaeItemId: FORAGE_BUMBLE_LARVAE_ITEM_ID,
+          beeswaxItemId: FORAGE_BEESWAX_ITEM_ID,
+        },
+        tickCost: BEEHIVE_HARVEST_TICK_COST,
       },
     };
   }

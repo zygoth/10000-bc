@@ -33,6 +33,9 @@ import {
   validateAction,
   previewTickBudgetImpact,
 } from './game/simCore.mjs';
+import { tileIndex } from './game/simWorld.mjs';
+import { getAmbientEntriesByRole } from './ambientAudio/ambientCatalog.mjs';
+import { syncAmbientLayerCache } from './ambientAudio/ambientLayerCache.mjs';
 import { MAX_DAILY_TICK_OVERDRAFT } from './game/simActions.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './game/techResearchCatalog.mjs';
 import {
@@ -90,6 +93,7 @@ import { generateWorldStartState } from './game/worldStart.mjs';
 import { getGameState as getStoredGameState, setGameState as setStoredGameState } from './game/gameStore.mjs';
 import { useGameDispatch, useGameStore } from './ui/useGameStore.js';
 import PixiWorldView from './rendering/PixiWorldView.js';
+import { useGameMusic } from './music/useGameMusic.js';
 import { cameraDebugOnGameCameraCommit } from './rendering/cameraDebug.js';
 import {
   applyClampedGameCameraFloatWrite,
@@ -158,6 +162,7 @@ const OVERLAY_OPTIONS = [
   { value: 'mushroomZones', label: 'Mushroom Zones' },
   { value: 'beehives', label: 'Beehives' },
   { value: 'squirrelCaches', label: 'Squirrel Caches' },
+  { value: 'ambientMobile', label: 'Ambient mobile (weights + emitters)' },
 ];
 
 const DRAINAGE_ORDER = ['poor', 'moderate', 'well', 'excellent'];
@@ -498,6 +503,11 @@ function animalDensityColor(density) {
   return blendColor([88, 74, 58], [82, 168, 92], density);
 }
 
+/** Normalized 0–1 population weight for ambient_mobile debug overlay. */
+function ambientMobilePopulationColor(norm) {
+  return blendColor([52, 48, 62], [214, 186, 92], norm);
+}
+
 function fishDensityColor(density) {
   return blendColor([39, 67, 96], [78, 200, 223], density);
 }
@@ -558,6 +568,8 @@ function overlayColor(
   speciesSupport = null,
   animalDensity = null,
   fishDensity = null,
+  ambientMobileWeight = null,
+  ambientMobileWeightMax = 1,
 ) {
   if (mode === 'heightmap') {
     return heightColor(tile.elevation);
@@ -609,6 +621,16 @@ function overlayColor(
       return '#4a4338';
     }
     return fishDensityColor(Number(fishDensity) || 0);
+  }
+
+  if (mode === 'ambientMobile') {
+    if (tile.waterType) {
+      return tile.waterDepth === 'deep' ? '#245282' : '#3e7eb8';
+    }
+    const maxW = Math.max(1e-9, Number(ambientMobileWeightMax) || 0);
+    const w = Number(ambientMobileWeight) || 0;
+    const norm = Math.min(1, Math.max(0, w / maxW));
+    return ambientMobilePopulationColor(norm);
   }
 
   if (mode === 'beehives') {
@@ -665,6 +687,9 @@ function tileTooltip(
   selectedAnimalDensity = null,
   selectedFishId = null,
   selectedFishDensity = null,
+  selectedAmbientMobileSpeciesId = null,
+  ambientMobileWeight = null,
+  ambientMobileEmitter = false,
 ) {
   const occupancy = linkedPlantExists === null
     ? (tile.plantIds.length > 0 ? 'occupied' : 'empty')
@@ -761,6 +786,14 @@ function tileTooltip(
   if (selectedFishId) {
     parts.push(`fish_species=${selectedFishId}`);
     parts.push(`fish_density=${(Number(selectedFishDensity) || 0).toFixed(3)}`);
+  }
+
+  if (selectedAmbientMobileSpeciesId) {
+    parts.push(`ambient_mobile_species=${selectedAmbientMobileSpeciesId}`);
+    if (ambientMobileWeight != null && Number.isFinite(Number(ambientMobileWeight))) {
+      parts.push(`ambient_weight=${Number(ambientMobileWeight).toFixed(4)}`);
+    }
+    parts.push(`ambient_emitter=${ambientMobileEmitter ? 'yes' : 'no'}`);
   }
 
   return parts.join(' | ');
@@ -931,6 +964,9 @@ function App() {
   const [selectedSpeciesId, setSelectedSpeciesId] = useState(() => PLANT_CATALOG[0]?.id || '');
   const [selectedAnimalSpeciesId, setSelectedAnimalSpeciesId] = useState(() => LAND_ANIMAL_SPECIES[0]?.id || '');
   const [selectedFishSpeciesId, setSelectedFishSpeciesId] = useState(() => FISH_SPECIES[0]?.id || '');
+  const [selectedAmbientMobileSpeciesId, setSelectedAmbientMobileSpeciesId] = useState(
+    () => getAmbientEntriesByRole('ambient_mobile')[0]?.species_id || '',
+  );
   const [snapshotStatus, setSnapshotStatus] = useState('');
   const [titleStatus, setTitleStatus] = useState('');
   const [generationStatus, setGenerationStatus] = useState('idle');
@@ -1043,6 +1079,45 @@ function App() {
     return supports;
   }, [gameStateVersion, selectedSpecies]);
 
+  const ambientMobileSnapshot = useMemo(() => {
+    if (rendererMode !== 'observer' || overlayMode !== 'ambientMobile') {
+      return null;
+    }
+    return syncAmbientLayerCache(gameState, getAmbientEntriesByRole('ambient_mobile'), {});
+  }, [rendererMode, overlayMode, gameState, gameStateVersion]);
+
+  const ambientMobileWeightMax = useMemo(() => {
+    if (!ambientMobileSnapshot?.weightMaps || !selectedAmbientMobileSpeciesId) {
+      return 1;
+    }
+    const arr = ambientMobileSnapshot.weightMaps.get(selectedAmbientMobileSpeciesId);
+    if (!arr || arr.length === 0) {
+      return 1;
+    }
+    let m = 0;
+    for (let i = 0; i < arr.length; i += 1) {
+      if (arr[i] > m) {
+        m = arr[i];
+      }
+    }
+    return m > 0 ? m : 1;
+  }, [ambientMobileSnapshot, selectedAmbientMobileSpeciesId]);
+
+  const ambientMobileEmitterKeySet = useMemo(() => {
+    const set = new Set();
+    if (!ambientMobileSnapshot?.emitters?.length || !selectedAmbientMobileSpeciesId) {
+      return set;
+    }
+    for (const e of ambientMobileSnapshot.emitters) {
+      if (e?.speciesId === selectedAmbientMobileSpeciesId
+        && Number.isInteger(e.x)
+        && Number.isInteger(e.y)) {
+        set.add(`${e.x},${e.y}`);
+      }
+    }
+    return set;
+  }, [ambientMobileSnapshot, selectedAmbientMobileSpeciesId]);
+
   const rendererLayout = RENDERER_LAYOUT[rendererMode] || RENDERER_LAYOUT.observer;
   const familyVitalGroups = useMemo(() => {
     const actorOrder = ['player', 'partner', 'child'];
@@ -1082,6 +1157,12 @@ function App() {
     [debriefState.medicineNotifications],
   );
   const isDebriefActive = debriefState.active === true;
+  useGameMusic({
+    appMode,
+    isDebriefActive,
+    dayOfYear: gameState?.dayOfYear,
+    gameStateVersion,
+  });
   const playerActor = gameState?.actors?.player || null;
   const partnerActor = gameState?.actors?.partner || null;
   const playerAtCamp = isActorWithinCampFootprint(gameState, playerActor);
@@ -1777,6 +1858,33 @@ function App() {
 
     const trapSummary = buildTileTrapInspectSummary(selectedTileEntity, formatTokenLabel, gameState);
 
+    let beehiveSummary = null;
+    if (selectedTileEntity.beehive && typeof selectedTileEntity.beehive === 'object') {
+      const bh = selectedTileEntity.beehive;
+      const totalG = Math.max(0, Math.round(
+        (Number(bh.yieldCurrentHoneyGrams) || 0)
+          + (Number(bh.yieldCurrentLarvaeGrams) || 0)
+          + (Number(bh.yieldCurrentBeeswaxGrams) || 0),
+      ));
+      let sizePhrase = 'Hard to tell from outside';
+      if (bh.active === true && totalG > 0) {
+        if (totalG < 130) {
+          sizePhrase = 'Small';
+        } else if (totalG < 280) {
+          sizePhrase = 'Moderate';
+        } else {
+          sizePhrase = 'Substantial';
+        }
+      }
+      beehiveSummary = {
+        heading: 'Bee nest',
+        rows: [
+          { label: 'Notice', value: 'A wild bee nest in a tree hollow.' },
+          { label: 'Size', value: sizePhrase },
+        ],
+      };
+    }
+
     const firstPlantId = Array.isArray(selectedTileEntity.plantIds) ? selectedTileEntity.plantIds[0] : null;
     const firstPlant = firstPlantId ? gameState?.plants?.[firstPlantId] : null;
 
@@ -1839,13 +1947,14 @@ function App() {
       }
     }
 
-    if (!trapSummary && !plantBlock) {
+    if (!trapSummary && !plantBlock && !beehiveSummary) {
       return null;
     }
 
     return {
       canInspect: true,
       trapSummary,
+      beehiveSummary,
       ...plantBlock,
       activeParts: plantBlock?.activeParts ?? [],
     };
@@ -3130,6 +3239,14 @@ function App() {
         const selectedFishDensity = activeOverlayMode === 'fishDensity'
           ? getFishDensityAtTile(gameState, selectedFishSpeciesId, worldX, worldY)
           : null;
+        const ambWeightArr = activeOverlayMode === 'ambientMobile' && ambientMobileSnapshot?.weightMaps
+          ? ambientMobileSnapshot.weightMaps.get(selectedAmbientMobileSpeciesId)
+          : null;
+        const ambientMobileTileWeight = ambWeightArr && Number.isInteger(gameState.width)
+          ? ambWeightArr[tileIndex(worldX, worldY, gameState.width)] ?? 0
+          : null;
+        const ambientMobileEmitterHere = activeOverlayMode === 'ambientMobile'
+          && ambientMobileEmitterKeySet.has(supportKey);
         const bg = overlayColor(
           activeOverlayMode,
           tile,
@@ -3137,6 +3254,8 @@ function App() {
           speciesSupport,
           selectedAnimalDensity,
           selectedFishDensity,
+          ambientMobileTileWeight,
+          ambientMobileWeightMax,
         );
         const sprite = plant
           ? getPlantSpriteFrame(plant.speciesId, plant.stageName)
@@ -3179,6 +3298,9 @@ function App() {
               selectedAnimalDensity,
               activeOverlayMode === 'fishDensity' ? selectedFishSpeciesId : null,
               selectedFishDensity,
+              activeOverlayMode === 'ambientMobile' ? selectedAmbientMobileSpeciesId : null,
+              ambientMobileTileWeight,
+              ambientMobileEmitterHere,
             )}
           >
             {sprite ? (
@@ -3199,6 +3321,9 @@ function App() {
             )}
             {combinedOverlaySymbol ? (
               <span className="mushroom-overlay-symbol">{combinedOverlaySymbol}</span>
+            ) : null}
+            {ambientMobileEmitterHere ? (
+              <span className="ambient-emitter-marker" title="Ambient emitter (this sim day)">◆</span>
             ) : null}
             {tileEntityTokens.length > 0 ? (
               <span className="tile-entity-token">{tileEntityTokens.slice(0, 2).join(' ')}</span>
@@ -3969,6 +4094,26 @@ function App() {
             </select>
           </div>
         ) : null}
+
+        {overlayMode === 'ambientMobile' ? (
+          <div className="control-row">
+            <label htmlFor="ambient-mobile-species">Ambient mobile</label>
+            <select
+              id="ambient-mobile-species"
+              value={selectedAmbientMobileSpeciesId}
+              onChange={(event) => setSelectedAmbientMobileSpeciesId(event.target.value)}
+            >
+              {getAmbientEntriesByRole('ambient_mobile').map((entry) => (
+                <option key={entry.species_id} value={entry.species_id}>
+                  {entry.display_name || entry.species_id}
+                </option>
+              ))}
+            </select>
+            <span>
+              Emitters today: {ambientMobileEmitterKeySet.size}
+            </span>
+          </div>
+        ) : null}
       </header>
 
       <section className="panel metrics">
@@ -4041,6 +4186,13 @@ function App() {
         {overlayMode === 'squirrelCaches' ? (
           <p className="legend">
             Squirrel cache overlay: highlighted tiles contain cache feature objects (C marker); caches are generated with an 80/20 ground/dead-tree split.
+          </p>
+        ) : null}
+        {overlayMode === 'ambientMobile' ? (
+          <p className="legend">
+            Ambient mobile layer for <strong>{selectedAmbientMobileSpeciesId || 'none'}</strong>: tile color is the
+            year-bucket population weight (warmer = higher). Water stays blue. Gold <strong>◆</strong> marks tiles
+            chosen as one-shot sound emitters for the current simulated day (same data as the play-mode ambient bridge).
           </p>
         ) : null}
         <p className="legend">Drag the observer grid to pan quickly; arrow buttons still support fixed-step movement.</p>

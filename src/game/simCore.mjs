@@ -47,6 +47,7 @@ import {
   mulberry32,
   tileIndex,
 } from './simWorld.mjs';
+import { deriveMagicicadaEmergenceOffset } from './magicicadaEmergence.mjs';
 import { defaultLandTrapBaitStackFromItemId } from './trapBaitLand.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './techResearchCatalog.mjs';
 import {
@@ -4397,6 +4398,7 @@ export function createInitialGameState(seed = 10000, options = {}) {
     techUnlockPartnerResearch: {},
     dayOfYear: 5,
     year: 1,
+    magicicadaSeptendecimEmergenceOffset: deriveMagicicadaEmergenceOffset(normalizedSeed),
     totalDaysSimulated: 0,
     tiles,
     plants: {},

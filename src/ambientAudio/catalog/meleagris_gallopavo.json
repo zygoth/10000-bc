@@ -1,0 +1,98 @@
+{
+  "species_id": "meleagris_gallopavo",
+  "display_name": "Wild turkey",
+  "audio_role": "ambient_mobile",
+  "shared_trapping_species_id": "meleagris_gallopavo",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.5,
+  "population_response": {
+    "version": 1,
+    "base": 0.05,
+    "season_multiplier_by_key": {
+      "spring": 1.1,
+      "summer": 1,
+      "fall": 1.05,
+      "winter": 0.35
+    },
+    "terms": [
+      {
+        "id": "mesic_woodland",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.5,
+        "half_width": 0.3,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "oak_hickory_edge",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.42,
+        "half_width": 0.28,
+        "floor": 0.15,
+        "ceiling": 1
+      },
+      {
+        "id": "not_open_water",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.05, "river": 0.15, "land": 1 }
+      },
+      {
+        "id": "near_mast_trees",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["juglans_nigra"],
+        "max_distance": 5,
+        "at_distance_0": 1.45,
+        "beyond_max": 0.75,
+        "interpolation": "linear_by_distance"
+      },
+      {
+        "id": "some_understory",
+        "feature": "plant_present",
+        "kind": "bool_weight",
+        "if_true": 1,
+        "if_false": 0.25
+      }
+    ],
+    "weight_clamp": [0, 6]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 240, "relative": 1 },
+      { "from_tick": 240, "to_tick": 400, "relative": 0.35 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "gobble_yelp",
+      "url": "/sounds/ambient/meleagris_gallopavo_gobble.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": ["territory"],
+      "generation_prompt": "Eastern wild turkey gobble and yelps, hardwood bottomland Indiana, distant to mid-range, no voices, 3–6s"
+    },
+    {
+      "call_id": "wing_thrush_flyover",
+      "url": "/sounds/ambient/meleagris_gallopavo_flyover.ogg",
+      "pick_weight": 0.3,
+      "flight_call": true,
+      "flight_pan_sweep_ms": 1100,
+      "tags": [],
+      "generation_prompt": "Turkey wing beats with brief alarm notes passing overhead, no voices, under 2s"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.12,
+    "min_seconds_between_calls_same_emitter": 180,
+    "min_seconds_between_calls_same_species": 180,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

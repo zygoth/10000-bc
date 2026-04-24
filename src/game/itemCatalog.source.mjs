@@ -483,6 +483,47 @@ const ITEM_CATALOG_SOURCE = [
     footprintW: 2,
     footprintH: 2,
   },
+  {
+    id: 'forage:bumble_honey',
+    name: 'Bumblebee Honey (wild)',
+    category: 'food',
+    unit_weight_g: 1,
+    decay_days: 365,
+    can_dry: false,
+    can_freeze: true,
+    field_edibility_score: 0.95,
+    nutrition: {
+      calories: 3,
+      protein: 0,
+      carbs: 1,
+      fat: 0,
+    },
+  },
+  {
+    id: 'forage:bumble_larvae',
+    name: 'Bumblebee Brood (larvae)',
+    category: 'food',
+    unit_weight_g: 1,
+    decay_days: 2,
+    can_dry: false,
+    can_freeze: true,
+    field_edibility_score: 0.45,
+    nutrition: {
+      calories: 2,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    },
+  },
+  {
+    id: 'forage:beeswax',
+    name: 'Beeswax (raw)',
+    category: 'intermediate',
+    unit_weight_g: 1,
+    can_dry: false,
+    can_freeze: true,
+    craft_tags: ['beeswax'],
+  },
 ];
 
 export default ITEM_CATALOG_SOURCE;

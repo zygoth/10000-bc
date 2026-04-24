@@ -1,0 +1,92 @@
+{
+  "species_id": "spinus_tristis",
+  "display_name": "American goldfinch",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.5,
+  "population_response": {
+    "version": 1,
+    "base": 0.05,
+    "season_multiplier_by_key": {
+      "spring": 0.88,
+      "summer": 1.12,
+      "fall": 0.95,
+      "winter": 0.2
+    },
+    "calendar_timeline": {
+      "kind": "day_segments",
+      "default_relative": 1,
+      "segments": [
+        { "from_day": 1, "to_day": 7, "relative": 0.6 },
+        { "from_day": 8, "to_day": 32, "relative": 1 },
+        { "from_day": 33, "to_day": 40, "relative": 0.4 }
+      ]
+    },
+    "terms": [
+      {
+        "id": "weedy_sunny_mesic",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.46,
+        "half_width": 0.32,
+        "floor": 0.1,
+        "ceiling": 1
+      },
+      {
+        "id": "open_meadow_shade",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.28,
+        "half_width": 0.26,
+        "floor": 0.1,
+        "ceiling": 1
+      },
+      {
+        "id": "land_slight_river",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.4, "river": 0.5, "land": 1 }
+      },
+      {
+        "id": "near_milkweed_weedy_edge",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["asclepias_syriaca", "daucus_carota"],
+        "max_distance": 5,
+        "at_distance_0": 1.4,
+        "beyond_max": 0.75,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 98, "relative": 1 },
+      { "from_tick": 98, "to_tick": 275, "relative": 0.55 },
+      { "from_tick": 275, "to_tick": 380, "relative": 0.9 },
+      { "from_tick": 380, "to_tick": 400, "relative": 0.3 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "potato_chip",
+      "url": "/sounds/ambient/spinus_tristis_call.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "American goldfinch perching flight call, bright potato-chip twitters, weedy field Indiana, 0.5–1.2s, no voices"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.32,
+    "min_seconds_between_calls_same_species": 10,
+    "min_seconds_between_calls_same_emitter": 16,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

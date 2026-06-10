@@ -1,6 +1,9 @@
 import { resolveEffectiveReachTier } from './harvestReachTier.mjs';
 import { scaledHarvestActionsCap } from './harvestYieldResolve.mjs';
 
+/** When `reach_tier` is `elevated` and `ground_action_fraction` is omitted, reserve this fraction of actions for from-the-ground harvest (stool/ladder for the rest). Tuned so a face-height bush never leaves more than ~40% of actions “above reach” by default. */
+const DEFAULT_ELEVATED_GROUND_ACTION_FRACTION = 0.6;
+
 export function findPartAndSubStage(species, partName, subStageId) {
   const part = (species.parts || []).find((candidate) => candidate.name === partName);
   if (!part) {
@@ -57,6 +60,15 @@ function resolveHarvestCyclePoolDefaults(subStage, fallbackActions, effectiveRea
         return { ground, elevated, canopy };
       }
       return { ground: 0, elevated: 0, canopy: fallback };
+    }
+    if (reachTier === 'elevated') {
+      const gafRaw = Number(hy?.ground_action_fraction);
+      const gaf = Number.isFinite(gafRaw)
+        ? Math.max(0, Math.min(1, gafRaw))
+        : DEFAULT_ELEVATED_GROUND_ACTION_FRACTION;
+      const ground = Math.max(0, Math.floor(fallback * gaf));
+      const elevatedPool = Math.max(0, fallback - ground);
+      return { ground, elevated: elevatedPool, canopy: 0 };
     }
     return { ground: 0, elevated: fallback, canopy: 0 };
   }

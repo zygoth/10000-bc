@@ -227,6 +227,7 @@ export function processDormantSeedsImpl(state, rng, deps) {
 
 export function cleanupDeadPlantsImpl(state, deps) {
   const { maybeCreateDeadLog, tileIndex, afterPlantRemovedForDynamicShade } = deps;
+  let plantsMapCloned = false;
   for (const plantId of Object.keys(state.plants)) {
     const plant = state.plants[plantId];
     if (plant.alive) {
@@ -240,6 +241,10 @@ export function cleanupDeadPlantsImpl(state, deps) {
     maybeCreateDeadLog(state, plant);
     const tile = getTileForWrite(state, plant.x, plant.y);
     tile.plantIds = tile.plantIds.filter((id) => id !== plantId);
+    if (!plantsMapCloned && typeof state.getMutablePlant === 'function') {
+      state.plants = { ...state.plants };
+      plantsMapCloned = true;
+    }
     delete state.plants[plantId];
   }
 }

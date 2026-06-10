@@ -80,6 +80,8 @@ import {
 import {
   canGenerateSquirrelCachesInternal,
   clearSquirrelCaches,
+  collectPresentNutCacheSourceSpeciesIds,
+  filterSquirrelCacheItemPoolByWorldNutSources,
   resolveSquirrelCacheItemPool,
   selectSquirrelCacheCandidatesWithSpread,
 } from './advanceDay/squirrelCaches.mjs';
@@ -1151,10 +1153,12 @@ function isResumablePlayerAction(action) {
 }
 
 function isTileBlockedForPlantLife(tile) {
+  const groundFungusFruiting = Number(tile?.groundFungusZone?.yieldCurrentGrams) > 0;
   return !tile
     || tile.waterType
     || tile.deadLog
     || isRockTile(tile)
+    || groundFungusFruiting
     || tile?.simpleSnare?.active === true
     || tile?.deadfallTrap?.active === true;
 }
@@ -3089,6 +3093,7 @@ function applyActionEffect(state, action) {
     applyActorInventoryRelocation,
     resolveItemFootprint,
     maybeCreateDeadLog,
+    cleanupDeadPlants,
     applyHarvestAction,
     applyHarvestInjuryFromSubStage,
     normalizePartnerTask,
@@ -3158,6 +3163,7 @@ function generateGroundFungusZonesInternal(state, rng) {
     rangeRollIntRandom,
     tileIndex,
     inBounds,
+    isTileWithinCampFootprint,
     assignGroundFungusZoneToTile,
   });
 }
@@ -3183,7 +3189,13 @@ function generateSquirrelCachesInternal(state, rng, options = {}) {
     clearSquirrelCaches(state);
   }
 
-  const cacheItemPool = resolveSquirrelCacheItemPool(PLANT_CATALOG);
+  const baseCacheItemPool = resolveSquirrelCacheItemPool(PLANT_CATALOG);
+  const presentNutSpeciesIds = collectPresentNutCacheSourceSpeciesIds(state, {
+    lifeStageSize,
+    maturityThreshold: SQUIRREL_NUT_TREE_MATURITY_SIZE,
+    plantById: PLANT_BY_ID,
+  });
+  const cacheItemPool = filterSquirrelCacheItemPoolByWorldNutSources(baseCacheItemPool, presentNutSpeciesIds);
   const runSpeciesPool = [...new Set(cacheItemPool.map((item) => item.speciesId))];
   const squirrelDensityByTile = buildSquirrelDensityByTile(state, {
     lifeStageSize,
@@ -3692,6 +3704,9 @@ function addPlantInstance(state, speciesId, x, y, age, source = 'founder') {
 
   state.plants[id] = plantInstance;
   tile.plantIds.push(id);
+  if (tile.groundFungusZone && Number(tile.groundFungusZone.yieldCurrentGrams) > 0) {
+    getTileForWrite(state, x, y).groundFungusZone.yieldCurrentGrams = 0;
+  }
   refreshDynamicShadeAfterPlantCanopyChange(
     state,
     x,
@@ -4434,6 +4449,8 @@ export function createInitialGameState(seed = 10000, options = {}) {
     currentDayActionLog: [],
   };
 
+  // Terrain-derived shade (rock neighbors) must exist before founder tolerance checks; raw map tiles start at shade 0.
+  bootstrapDynamicShade(state);
   placeFounders(state, mulberry32(normalizedSeed * 17 + 9));
   generateInitialDeadTrees(state, mulberry32(normalizedSeed * 29 + 13));
   clearPlantsFromCampFootprint(state);

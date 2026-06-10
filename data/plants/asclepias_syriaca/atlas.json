@@ -1,0 +1,576 @@
+{
+  "textures": [
+    {
+      "image": "sheet_merged_from_vm_no_bg",
+      "format": "SVG",
+      "size": {
+        "w": 2560.0,
+        "h": 2560.0
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_seedling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_vegetative"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_flowering"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_fruiting"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_seed_set"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_senescent"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_shoot_young"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_leaf_young"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_leaf_mature"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_flower_fresh"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_pod_green"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_pod_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_stalk_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_root_rhizome"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_seed_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_fluff_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "asclepias_syriaca_pod_husk_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_17"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_18"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_19"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_20"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_21"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_22"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_23"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_24"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "SvgMergedSheetRemoveBgAndAtlas",
+    "version": "1.0",
+    "viewBox": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 2560.0,
+      "h": 2560.0
+    },
+    "grid_size": 5
+  }
+}

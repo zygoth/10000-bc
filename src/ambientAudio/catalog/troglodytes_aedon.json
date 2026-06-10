@@ -1,0 +1,83 @@
+{
+  "species_id": "troglodytes_aedon",
+  "display_name": "House wren",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.47,
+  "population_response": {
+    "version": 1,
+    "base": 0.043,
+    "season_multiplier_by_key": {
+      "spring": 1.22,
+      "summer": 0.88,
+      "fall": 0.35,
+      "winter": 0.1
+    },
+    "terms": [
+      {
+        "id": "lawn_edge_moist",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.5,
+        "half_width": 0.3,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "tangles_mid_shade",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.46,
+        "half_width": 0.3,
+        "floor": 0.14,
+        "ceiling": 1
+      },
+      {
+        "id": "settlement_edge",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.4, "river": 0.5, "land": 1 }
+      },
+      {
+        "id": "near_hedgerow_brush",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["urtica_dioica", "juglans_nigra"],
+        "max_distance": 4,
+        "at_distance_0": 1.3,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 102, "relative": 1 },
+      { "from_tick": 102, "to_tick": 280, "relative": 0.5 },
+      { "from_tick": 280, "to_tick": 365, "relative": 0.7 },
+      { "from_tick": 365, "to_tick": 400, "relative": 0.1 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "bubbling_song",
+      "url": "/sounds/ambient/troglodytes_aedon_song.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "House wren jumbled bubbly song, tangles near yard edge Indiana, 1.5–4s, no voices, fast and chattery"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.34,
+    "min_seconds_between_calls_same_species": 8,
+    "min_seconds_between_calls_same_emitter": 14,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

@@ -9,7 +9,8 @@
       "/sounds/ambient/campfire_loop.ogg"
     ],
     "/sounds/ambient/cardinalis_cardinalis_song.ogg": [
-      "/sounds/ambient/cardinalis_cardinalis_song.ogg"
+      "/sounds/ambient/cardinalis_cardinalis_song.ogg",
+      "/sounds/ambient/cardinalis_cardinalis_song_v1.ogg"
     ],
     "/sounds/ambient/magicicada_septendecim_buzz.ogg": [
       "/sounds/ambient/magicicada_septendecim_buzz.ogg"
@@ -21,7 +22,8 @@
       "/sounds/ambient/meleagris_gallopavo_flyover.ogg"
     ],
     "/sounds/ambient/melospiza_melodia_song.ogg": [
-      "/sounds/ambient/melospiza_melodia_song.ogg"
+      "/sounds/ambient/melospiza_melodia_song.ogg",
+      "/sounds/ambient/melospiza_melodia_song_v1.ogg"
     ],
     "/sounds/ambient/neotibicen_canicularis_buzz.ogg": [
       "/sounds/ambient/neotibicen_canicularis_buzz.ogg"
@@ -30,10 +32,14 @@
       "/sounds/ambient/pseudacris_crucifer_peep.ogg"
     ],
     "/sounds/ambient/spinus_tristis_call.ogg": [
-      "/sounds/ambient/spinus_tristis_call.ogg"
+      "/sounds/ambient/spinus_tristis_call.ogg",
+      "/sounds/ambient/spinus_tristis_call_v1.ogg",
+      "/sounds/ambient/spinus_tristis_call_v2.ogg"
     ],
     "/sounds/ambient/turdus_migratorius_song.ogg": [
-      "/sounds/ambient/turdus_migratorius_song.ogg"
+      "/sounds/ambient/turdus_migratorius_song.ogg",
+      "/sounds/ambient/turdus_migratorius_song_v1.ogg",
+      "/sounds/ambient/turdus_migratorius_song_v2.ogg"
     ]
   }
 }

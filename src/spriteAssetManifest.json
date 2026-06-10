@@ -1,0 +1,202 @@
+{
+  "version": 2,
+  "comment": "World / inventory art not covered by per-species data/plants/*/atlas.json. spriteSheet groups rows for merged SVG + atlas.json authoring (one sheet id = one target atlas). Omitted: squirrel cache (invisible), beehive (bee VFX + audio on host tree/log, no hive sprite). Food shares crafting_intermediates sheet with other intermediates.",
+  "spriteSheets": {
+    "actors": {
+      "label": "Actors",
+      "description": "Player, partner — iso/world props.",
+      "authoringPathHint": "data/sprite_sheets/actors/",
+      "atlasAuthoringHint": "Merged SVG + atlas.json (format SVG) beside plant pipeline; see data/plants/juglans_nigra/atlas.json."
+    },
+    "camp": {
+      "label": "Camp and stations",
+      "description": "Wigwam, drying rack, workbench, and other camp stations.",
+      "authoringPathHint": "data/sprite_sheets/camp/",
+      "atlasAuthoringHint": "One merged sheet per category; frame spriteId stable e.g. station_drying_rack."
+    },
+    "placeables": {
+      "label": "Placeables and tile features",
+      "description": "Traps, weir/leaching tile art, on-tree tap/vessel.",
+      "authoringPathHint": "data/sprite_sheets/placeables/",
+      "atlasAuthoringHint": "World/tile sprites; may pair with tools sheet for inventory icons of same item."
+    },
+    "tools": {
+      "label": "Tool icons",
+      "description": "Inventory icons and ground-rescale drops for tools (including waterskin empty/full).",
+      "authoringPathHint": "data/sprite_sheets/tools/",
+      "atlasAuthoringHint": "Grid cells for tool:* item icons; suggestedAtlasSpriteId in report uses item id slug."
+    },
+    "crafting_intermediates": {
+      "label": "Crafting intermediates and food",
+      "description": "Non-tool, non-plant-part inventory icons: cordage, pemmican, bark, etc. Food lives here too.",
+      "authoringPathHint": "data/sprite_sheets/crafting_intermediates/",
+      "atlasAuthoringHint": "One atlas for all intermediate + food icons; suggestedAtlasSpriteId from item id."
+    },
+    "animal_parts": {
+      "label": "Animal carcasses and body parts (per species)",
+      "description": "Inventory and world icons for `speciesId:partId` items; atlas `spriteId` = speciesId_partId.",
+      "authoringPathHint": "data/sprite_sheets/animal_parts/",
+      "atlasAuthoringHint": "Merged SVG + format SVG `atlas.json` like other sprite sheets; frame `spriteId` = species + underscore + part (colons in item id become one underscore before part)."
+    }
+  },
+  "entries": [
+    {
+      "id": "actor.player",
+      "category": "actor",
+      "spriteSheet": "actors",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "Iso world currently uses text token [player]."
+    },
+    {
+      "id": "actor.partner",
+      "category": "actor",
+      "spriteSheet": "actors",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "camp.wigwam",
+      "category": "camp",
+      "spriteSheet": "camp",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "GDD: full-tile camp anchor / stockpile focal art."
+    },
+    {
+      "id": "station.raised_sleeping_platform",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "raised_sleeping_platform",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.windbreak_reflector_wall",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "windbreak_reflector_wall",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.drying_rack",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "drying_rack",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.workbench",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "workbench",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.thread_spinner",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "thread_spinner",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.hide_frame",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "hide_frame",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.mortar_pestle",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "mortar_pestle",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "station.sugar_boiling_station",
+      "category": "station",
+      "spriteSheet": "camp",
+      "stationId": "sugar_boiling_station",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null
+    },
+    {
+      "id": "trap.simple_snare",
+      "category": "tile_feature",
+      "spriteSheet": "placeables",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "tile.simpleSnare.active"
+    },
+    {
+      "id": "trap.deadfall",
+      "category": "tile_feature",
+      "spriteSheet": "placeables",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "tile.deadfallTrap.active"
+    },
+    {
+      "id": "trap.fish_trap_weir",
+      "category": "tile_feature",
+      "spriteSheet": "placeables",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "tile.fishTrap.active — distinct from inventory icon for tool:fish_trap_weir (see report bucket placeable_tools_inventory_plus_tile_feature)."
+    },
+    {
+      "id": "trap.auto_rod",
+      "category": "tile_feature",
+      "spriteSheet": "placeables",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "tile.autoRod.active"
+    },
+    {
+      "id": "tool.carved_wooden_spout.on_tree",
+      "category": "item_world",
+      "spriteSheet": "placeables",
+      "itemId": "tool:carved_wooden_spout",
+      "worldPlacement": "on_tree",
+      "strategy": "composite_with_tree_or_separate_sprite",
+      "views": ["inventory", "on_tree"],
+      "expectedPath": null,
+      "notes": "Sap tap placement on living tree; inventory icon still targets tools sheet via item catalog row."
+    },
+    {
+      "id": "tool.hide_pitch_vessel.on_tree",
+      "category": "item_world",
+      "spriteSheet": "placeables",
+      "itemId": "tool:hide_pitch_vessel",
+      "worldPlacement": "on_tree",
+      "strategy": "composite_with_tree_or_separate_sprite",
+      "views": ["inventory", "on_tree"],
+      "expectedPath": null
+    },
+    {
+      "id": "tool.hide_pitch_vessel_filled_sap.on_tree",
+      "category": "item_world",
+      "spriteSheet": "placeables",
+      "itemId": "tool:hide_pitch_vessel_filled_sap",
+      "worldPlacement": "on_tree",
+      "strategy": "composite_with_tree_or_separate_sprite",
+      "views": ["inventory", "on_tree"],
+      "expectedPath": null
+    },
+    {
+      "id": "feature.leaching_basket",
+      "category": "tile_feature",
+      "spriteSheet": "placeables",
+      "worldPlacement": "ground_rescale",
+      "expectedPath": null,
+      "notes": "tile.leachingBasket.active — distinct from inventory icon for tool:leaching_basket (see report bucket placeable_tools_inventory_plus_tile_feature)."
+    }
+  ]
+}

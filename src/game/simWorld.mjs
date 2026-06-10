@@ -4,6 +4,9 @@ import { generateWater } from './waterGen.js';
 const DRAINAGE_BY_INDEX = ['poor', 'moderate', 'well', 'excellent'];
 const FORCE_COARSE_NOISE_ONLY = false;
 
+/** Must match `ISO_ELEVATION_LEVELS` in `src/rendering/pixi/isoConstants.js` (stacked half-tile steps). */
+const ELEVATION_BLOCK_STEPS = 6;
+
 export function drainageToIndex(drainage) {
   const classIndex = DRAINAGE_BY_INDEX.indexOf(drainage);
   if (classIndex === -1) {
@@ -141,6 +144,7 @@ export function inBounds(x, y, width, height) {
 
 export function computeSoilMatch(plant, tile, options = {}) {
   const includeShade = options.includeShade !== false;
+  const includeSalinity = options.includeSalinity !== false;
   const includeDrainage = options.includeDrainage !== false;
   const includeFertility = options.includeFertility !== false;
   const includeMoisture = options.includeMoisture !== false;
@@ -183,7 +187,14 @@ export function computeSoilMatch(plant, tile, options = {}) {
     }
   }
 
-  return phScore * drainageScore * fertilityScore * moistureScore * shadeScore;
+  const tileSalinity = Number.isFinite(Number(tile.salinity)) ? Number(tile.salinity) : 0;
+  let salinityScore = 1;
+  if (includeSalinity) {
+    const [salinityMin, salinityMax] = plant.soil.salinity?.tolerance_range || [0, 1];
+    salinityScore = tileSalinity >= salinityMin && tileSalinity <= salinityMax ? 1 : 0;
+  }
+
+  return phScore * drainageScore * fertilityScore * moistureScore * shadeScore * salinityScore;
 }
 
 export function isPlantWithinEnvironmentalTolerance(species, tile) {
@@ -213,6 +224,12 @@ export function isPlantWithinEnvironmentalTolerance(species, tile) {
     ? tile.effectiveShadeForOccupant
     : tile.shade;
   if (effectiveShade < shadeMin || effectiveShade > shadeMax) {
+    return false;
+  }
+
+  const tileSalinity = Number.isFinite(Number(tile.salinity)) ? Number(tile.salinity) : 0;
+  const [salinityMin, salinityMax] = species.soil.salinity?.tolerance_range || [0, 1];
+  if (tileSalinity < salinityMin || tileSalinity > salinityMax) {
     return false;
   }
 
@@ -254,6 +271,12 @@ function pickTopCandidatesByScore(candidates, targetCount) {
 
   const sorted = [...candidates].sort((a, b) => b.score - a.score);
   return sorted.slice(0, Math.min(targetCount, sorted.length));
+}
+
+function snapElevationToBlockSteps(elevation) {
+  const t = Math.max(0, Math.min(1, Number(elevation) || 0));
+  const n = Math.round(t * ELEVATION_BLOCK_STEPS);
+  return Math.max(0, Math.min(ELEVATION_BLOCK_STEPS, n)) / ELEVATION_BLOCK_STEPS;
 }
 
 function placeRockTiles(tiles, seed) {
@@ -443,6 +466,11 @@ export function generateMap(seed, width, height) {
   }
 
   placeRockTiles(tiles, seed);
+
+  for (let i = 0; i < tiles.length; i += 1) {
+    const tile = tiles[i];
+    tile.elevation = snapElevationToBlockSteps(tile.elevation);
+  }
 
   return tiles;
 }

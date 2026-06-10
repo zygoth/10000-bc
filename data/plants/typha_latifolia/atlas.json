@@ -1,0 +1,378 @@
+{
+  "textures": [
+    {
+      "image": "sheet_merged_from_vm_no_bg",
+      "format": "SVG",
+      "size": {
+        "w": 2048.0,
+        "h": 2048.0
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_seedling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_vegetative"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_flowering"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_seed_set"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_senescent"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_rhizome_mature"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_cattail_flour_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_shoot_young"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_leaf_green"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_leaf_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_flower_spike_green"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_seed_spike_brown"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "typha_latifolia_fluff_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_13"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_14"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_15"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "SvgMergedSheetRemoveBgAndAtlas",
+    "version": "1.0",
+    "viewBox": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 2048.0,
+      "h": 2048.0
+    },
+    "grid_size": 4
+  }
+}

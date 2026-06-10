@@ -38,6 +38,12 @@
         0.0,
         0.45
       ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.42
+      ]
     }
   },
   "ph_effect_on_soil": 0.0,
@@ -72,6 +78,7 @@
     },
     {
       "stage": "first_year_vegetative",
+      "center_anchored_sprite": true,
       "min_age_days": 3,
       "seasonal_window": {
         "start_day": 1,
@@ -260,8 +267,8 @@
           "harvest_tool_modifiers": {},
           "harvest_yield": {
             "units_per_action": [
-              5,
-              12
+              2,
+              6
             ],
             "actions_until_depleted": [
               2,
@@ -454,8 +461,8 @@
           "harvest_tool_modifiers": {},
           "harvest_yield": {
             "units_per_action": [
-              10,
-              30
+              5,
+              15
             ],
             "actions_until_depleted": [
               1,

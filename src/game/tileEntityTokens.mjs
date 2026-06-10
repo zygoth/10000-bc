@@ -1,5 +1,6 @@
 import { ITEM_BY_ID } from './itemCatalog.mjs';
 import { PLANT_BY_ID } from './plantCatalog.mjs';
+import { resolveInventoryItemSpriteFrame } from './inventoryItemSpriteResolve.mjs';
 
 export function formatTokenLabel(value) {
   if (typeof value !== 'string' || !value) {
@@ -71,18 +72,20 @@ export function buildTileEntityTokens(tile, context = {}) {
     stationAtTile = null,
     worldItems = [],
     camp = null,
+    /** When a camp/station world sprite is drawn, skip camp/station text labels. */
+    omitCampEntityLabels = false,
   } = context;
 
   if (isPlayerTile) {
     tokens.push('[player]');
   }
-  if (isCampTile) {
+  if (isCampTile && !omitCampEntityLabels) {
     tokens.push('[camp]');
     if (camp?.dryingRackUnlocked) {
       tokens.push('[drying rack]');
     }
   }
-  if (typeof stationAtTile === 'string' && stationAtTile) {
+  if (typeof stationAtTile === 'string' && stationAtTile && !omitCampEntityLabels) {
     tokens.push(`[${formatTokenLabel(stationAtTile)}]`);
   }
 
@@ -106,7 +109,16 @@ export function buildTileEntityTokens(tile, context = {}) {
   }
   const worldItemToken = buildWorldItemToken(worldItems);
   if (worldItemToken) {
-    tokens.push(worldItemToken);
+    const uniqueItemIds = Array.from(new Set(
+      worldItems
+        .map((entry) => (typeof entry?.itemId === 'string' ? entry.itemId : ''))
+        .filter(Boolean),
+    ));
+    if (uniqueItemIds.length === 1 && resolveInventoryItemSpriteFrame(uniqueItemIds[0])) {
+      // Iso view draws a sprite at the foot of the tile; no duplicate text label.
+    } else {
+      tokens.push(worldItemToken);
+    }
   }
 
   return tokens;

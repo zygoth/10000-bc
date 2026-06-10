@@ -1,0 +1,83 @@
+{
+  "species_id": "passerina_cyanea",
+  "display_name": "Indigo bunting",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.51,
+  "population_response": {
+    "version": 1,
+    "base": 0.041,
+    "season_multiplier_by_key": {
+      "spring": 1.1,
+      "summer": 1.1,
+      "fall": 0.45,
+      "winter": 0.05
+    },
+    "terms": [
+      {
+        "id": "sunny_edge_moisture",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.47,
+        "half_width": 0.3,
+        "floor": 0.1,
+        "ceiling": 1
+      },
+      {
+        "id": "bushy_open_scattered_trees",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.35,
+        "half_width": 0.3,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "fencerow_land",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.35, "river": 0.5, "land": 1 }
+      },
+      {
+        "id": "near_roadside_weeds",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["asclepias_syriaca", "daucus_carota", "juglans_nigra"],
+        "max_distance": 5,
+        "at_distance_0": 1.3,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 100, "relative": 1 },
+      { "from_tick": 100, "to_tick": 275, "relative": 0.52 },
+      { "from_tick": 275, "to_tick": 385, "relative": 0.85 },
+      { "from_tick": 385, "to_tick": 400, "relative": 0.1 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "paired_sweet_notes",
+      "url": "/sounds/ambient/passerina_cyanea_song.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Indigo bunting paired sweet warble song, brushy weedy edge and tall perches Indiana, 1.5–3s, no voices, high and slurred"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.3,
+    "min_seconds_between_calls_same_species": 12,
+    "min_seconds_between_calls_same_emitter": 19,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

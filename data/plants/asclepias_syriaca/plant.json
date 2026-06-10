@@ -38,6 +38,12 @@
         0.0,
         0.3
       ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.2
+      ]
     }
   },
   "ph_effect_on_soil": 0.0,
@@ -219,11 +225,11 @@
           "harvest_yield": {
             "units_per_action": [
               1,
-              2
+              1
             ],
             "actions_until_depleted": [
               1,
-              3
+              1
             ]
           },
           "harvest_damage": 0.5,
@@ -281,8 +287,8 @@
           "harvest_tool_modifiers": {},
           "harvest_yield": {
             "units_per_action": [
-              5,
-              15
+              2,
+              8
             ],
             "actions_until_depleted": [
               3,
@@ -418,8 +424,8 @@
           },
           "harvest_yield": {
             "units_per_action": [
-              2,
-              5
+              1,
+              2
             ],
             "actions_until_depleted": [
               2,

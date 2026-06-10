@@ -1,0 +1,755 @@
+{
+  "id": "corylus_americana",
+  "name": "American Hazelnut",
+  "plant_family": "betulaceae",
+  "physical_description": "A multi-stemmed deciduous shrub reaching 1.5 to 3 meters in height. It has broadly oval, toothed leaves and produces distinctive edible nuts enclosed in leafy, hairy bracts called involucres.",
+  "game_description": "Valued for its highly nutritious and calorie-dense nuts, which ripen in the fall and store exceptionally well. The flexible young shoots are useful for weaving, and the mature stems provide sturdy sticks.",
+  "age_of_maturity": 120,
+  "scent": {
+    "strength": 0.1,
+    "primary_compound": "hexanal"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.3,
+        0.8
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.3,
+        0.9
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.3,
+        0.8
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.6
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.15
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "late_summer",
+    "end": "early_fall"
+  },
+  "dispersal": {
+    "method": "animal_cached",
+    "base_radius_tiles": 15,
+    "wind_radius_bonus": 0,
+    "water_dispersed": false,
+    "animal_dispersed": true,
+    "seeds_per_mature_plant": [
+      20,
+      60
+    ],
+    "germination_rate": 0.3,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": true,
+    "viable_lifespan_days": 360
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": null,
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small sapling with a few oval, fuzzy leaves."
+    },
+    {
+      "stage": "sapling",
+      "min_age_days": 120,
+      "seasonal_window": null,
+      "size": 4,
+      "field_description": "A multi-stemmed young shrub with oval leaves, but no catkins or nuts."
+    },
+    {
+      "stage": "mature_flowering",
+      "min_age_days": 201,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 6,
+      "field_description": "A mature shrub with bare stems displaying long, yellowish-brown drooping male catkins."
+    },
+    {
+      "stage": "mature_fruiting",
+      "min_age_days": 202,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 25
+      },
+      "size": 6,
+      "field_description": "A dense shrub with broad oval leaves. Clusters of green, leafy involucres surround the nuts."
+    },
+    {
+      "stage": "mature_seed_set",
+      "min_age_days": 203,
+      "seasonal_window": {
+        "start_day": 26,
+        "end_day": 30
+      },
+      "size": 6,
+      "field_description": "A dense shrub. The leafy husks enclosing the nuts have turned brown and are beginning to open and drop their seeds."
+    },
+    {
+      "stage": "mature_dormant",
+      "min_age_days": 204,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 40
+      },
+      "size": 6,
+      "field_description": "A bare, multi-stemmed shrub resting for the winter. Small, tight buds are visible on the twigs."
+    }
+  ],
+  "parts": [
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "sapling",
+        "mature_flowering",
+        "mature_fruiting",
+        "mature_seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "mid_spring",
+            "end": "late_summer"
+          },
+          "field_description": "A broadly oval leaf with a pointed tip and doubly toothed edges, slightly fuzzy.",
+          "game_description": "Tough and unpalatable. Has almost no nutritional value.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.3,
+          "unit_weight_g": 2.0,
+          "nutrition": {
+            "calories": 0.02,
+            "protein": 0.0,
+            "carbs": 0.01,
+            "fat": 0.0
+          },
+          "texture": "fuzzy and tough",
+          "taste_notes": [
+            "bitter",
+            "leafy"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              10
+            ],
+            "actions_until_depleted": [
+              4,
+              8
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.1,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 2,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "nut",
+      "available_life_stages": [
+        "mature_fruiting",
+        "mature_seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green_in_husk",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "late_summer"
+          },
+          "field_description": "A small hard nut completely hidden inside a fuzzy, green leafy bract.",
+          "game_description": "Unripe and firmly enclosed in its husk. Not ready for harvest or consumption.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.6,
+          "unit_weight_g": 8.0,
+          "nutrition": {
+            "calories": 5.0,
+            "protein": 0.1,
+            "carbs": 1.0,
+            "fat": 0.2
+          },
+          "texture": "hard",
+          "taste_notes": [
+            "astringent",
+            "bitter"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              8,
+              12
+            ],
+            "actions_until_depleted": [
+              8,
+              12
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "does_blickey_help_harvest": true,
+          "can_squirrel_cache": false,
+          "decay_days": 15.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.0,
+          "raw_extraction_efficiency": 0.0
+        },
+        {
+          "id": "ripe_in_husk",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "late_fall"
+          },
+          "field_description": "A hard brown nut resting inside a dried, papery brown husk.",
+          "game_description": "Ripe hazelnuts. The husk can be easily removed by hand to get to the nut inside.",
+          "edibility_score": 0.1,
+          "unit_weight_g": 6.0,
+          "nutrition": {
+            "calories": 9.4,
+            "protein": 0.22,
+            "carbs": 0.25,
+            "fat": 0.9
+          },
+          "processing_options": [
+            {
+              "id": "hull",
+              "ticks": 10,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "hazelnut_in_shell",
+                  "yield_fraction": 0.58,
+                  "output_unit_weight_g": 3.5
+                }
+              ]
+            }
+          ],
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              8,
+              12
+            ],
+            "actions_until_depleted": [
+              8,
+              12
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.0,
+          "decay_days": 30.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "hazelnut_in_shell",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "whole",
+          "field_description": "A smooth, hard, light-brown nutshell.",
+          "game_description": "A whole hazelnut. The shell is too hard to bite through; use a rock or tool to crack it open.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 3.5,
+          "nutrition": {
+            "calories": 9.4,
+            "protein": 0.22,
+            "carbs": 0.25,
+            "fat": 0.9
+          },
+          "processing_options": [
+            {
+              "id": "crack_shell",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "hazelnut_kernel",
+                  "yield_fraction": 0.42,
+                  "output_unit_weight_g": 1.5
+                },
+                {
+                  "part": "hazelnut_shell",
+                  "yield_fraction": 0.57,
+                  "output_unit_weight_g": 2.0
+                }
+              ]
+            }
+          ],
+          "texture": "hard",
+          "taste_notes": [
+            "woody"
+          ],
+          "scent_notes": [
+            "dry"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_squirrel_cache": true,
+          "decay_days": 180.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0,
+          "raw_extraction_efficiency": 0.0
+        }
+      ]
+    },
+    {
+      "name": "hazelnut_kernel",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "raw",
+          "field_description": "A plump, pale kernel with a thin, flaky brown skin.",
+          "game_description": "A delicious, high-fat nut kernel. Extremely nutritious and stores well through winter.",
+          "edibility_score": 0.95,
+          "edibility_harshness": 0.0,
+          "unit_weight_g": 1.5,
+          "nutrition": {
+            "calories": 9.4,
+            "protein": 0.22,
+            "carbs": 0.25,
+            "fat": 0.9
+          },
+          "texture": "crunchy",
+          "taste_notes": [
+            "sweet",
+            "nutty",
+            "rich"
+          ],
+          "scent_notes": [
+            "nutty"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_squirrel_cache": true,
+          "decay_days": 180.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.0,
+          "raw_extraction_efficiency": 1.0
+        }
+      ]
+    },
+    {
+      "name": "hazelnut_shell",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "cracked",
+          "field_description": "Fragments of hard, brown hazelnut shell.",
+          "game_description": "Inedible shell fragments. Has no practical use.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 2.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "hard",
+          "taste_notes": [
+            "woody"
+          ],
+          "scent_notes": [
+            "dry"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "branch",
+      "available_life_stages": [
+        "sapling",
+        "mature_flowering",
+        "mature_fruiting",
+        "mature_seed_set",
+        "mature_dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "green_shoot",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_summer"
+          },
+          "field_description": "A long, straight, young woody shoot, very pliant.",
+          "game_description": "Flexible young hazel shoots are excellent for weaving baskets or making wattle structures.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 150.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "woody and flexible",
+          "taste_notes": [
+            "woody"
+          ],
+          "scent_notes": [
+            "green wood"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [
+            "flexible_shoot"
+          ],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 10,
+          "harvest_tool_modifiers": {
+            "knife": 1.5,
+            "axe": 2.0
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              2,
+              5
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.2,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        },
+        {
+          "id": "stiff_branch",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "winter"
+          },
+          "field_description": "A mature, rigid branch with brown bark.",
+          "game_description": "Sturdy hazelwood branches. Useful as rigid sticks for tools or structural frames.",
+          "texture": "hard wood",
+          "craft_tags": [
+            "stiff_stick"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "outer_bark",
+      "available_life_stages": [
+        "sapling",
+        "mature_flowering",
+        "mature_fruiting",
+        "mature_seed_set",
+        "mature_dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "Thin, smooth brown bark, occasionally peeling slightly.",
+          "game_description": "Outer bark of the hazel. Has minimal use in crafting or survival.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 50.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "papery to woody",
+          "taste_notes": [
+            "bitter"
+          ],
+          "scent_notes": [
+            "wood"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 6,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_requires_any_tools": [
+            "knife",
+            "axe"
+          ],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              2,
+              5
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.2,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "inner_bark",
+      "available_life_stages": [
+        "sapling",
+        "mature_flowering",
+        "mature_fruiting",
+        "mature_seed_set",
+        "mature_dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "spring_cambium",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "Pale, slightly moist cambium scraped from beneath the outer bark.",
+          "game_description": "Contains minor calories during the spring sap run. Can be processed into rough cordage.",
+          "edibility_score": 0.15,
+          "edibility_harshness": 0.8,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 8.0,
+            "protein": 0.1,
+            "carbs": 1.5,
+            "fat": 0.1
+          },
+          "texture": "moist fibrous",
+          "taste_notes": [
+            "mild",
+            "woody"
+          ],
+          "scent_notes": [
+            "fresh sap"
+          ],
+          "average_fiber_length_cm": 12.0,
+          "fiber_strength_modifier": 0.8,
+          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 8,
+          "harvest_tool_modifiers": {
+            "knife": 1.4
+          },
+          "harvest_requires_any_tools": [
+            "knife",
+            "axe"
+          ],
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              4
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ],
+            "ground_action_fraction": 0.65
+          },
+          "reach_tier": "elevated",
+          "harvest_damage": 0.4,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 4.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.05,
+          "raw_extraction_efficiency": 0.6
+        },
+        {
+          "id": "late_season_inner_bark",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "winter"
+          },
+          "field_description": "Dry, pale inner bark strips.",
+          "game_description": "Tough and fibrous, better suited for cordage than as an emergency food.",
+          "edibility_score": 0.05,
+          "edibility_harshness": 0.95,
+          "nutrition": {
+            "calories": 4.0,
+            "protein": 0.05,
+            "carbs": 0.8,
+            "fat": 0.05
+          },
+          "texture": "dry fibrous",
+          "average_fiber_length_cm": 14.0,
+          "fiber_strength_modifier": 1.0,
+          "decay_days": 10.0,
+          "stew_nutrition_factor": 0.4,
+          "raw_extraction_efficiency": 0.2
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "seedling",
+        "sapling",
+        "mature_flowering",
+        "mature_fruiting",
+        "mature_seed_set",
+        "mature_dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "woody",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "Tough, branching woody roots.",
+          "game_description": "Inedible and highly difficult to dig up. Very little practical use.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 500.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "hard and fibrous",
+          "taste_notes": [
+            "earthy",
+            "bitter"
+          ],
+          "scent_notes": [
+            "dirt",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 15,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 40,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "species_id": "zenaida_macroura",
+  "display_name": "Mourning dove",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 18,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.46,
+  "population_response": {
+    "version": 1,
+    "base": 0.05,
+    "season_multiplier_by_key": {
+      "spring": 1.1,
+      "summer": 0.9,
+      "fall": 0.85,
+      "winter": 0.55
+    },
+    "terms": [
+      {
+        "id": "mesic_open_mosaic",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.44,
+        "half_width": 0.34,
+        "floor": 0.15,
+        "ceiling": 1
+      },
+      {
+        "id": "telephone_pole_sun",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.2,
+        "half_width": 0.3,
+        "floor": 0.18,
+        "ceiling": 1
+      },
+      {
+        "id": "any_edge",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 0.55, "river": 0.65, "land": 1 }
+      },
+      {
+        "id": "near_open_ground",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["echinacea_purpurea", "daucus_carota"],
+        "max_distance": 5,
+        "at_distance_0": 1.2,
+        "beyond_max": 0.9,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 105, "relative": 1 },
+      { "from_tick": 105, "to_tick": 300, "relative": 0.4 },
+      { "from_tick": 300, "to_tick": 360, "relative": 0.6 },
+      { "from_tick": 360, "to_tick": 400, "relative": 0.2 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "coo_series",
+      "url": "/sounds/ambient/zenaida_macroura_call.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Mourning dove low mournful hooting coo, rooftop or wire Indiana, 3–8s, no voices, soft and hollow"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.22,
+    "min_seconds_between_calls_same_species": 16,
+    "min_seconds_between_calls_same_emitter": 28,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

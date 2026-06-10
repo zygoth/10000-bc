@@ -882,6 +882,11 @@ function normalizeTileForLoad(tile) {
     normalized.waterFrozen = normalized.waterFrozen === true;
   }
 
+  const salinityLoad = Number(normalized.salinity);
+  if (!Number.isFinite(salinityLoad) || salinityLoad === 0) {
+    delete normalized.salinity;
+  }
+
   return normalized;
 }
 
@@ -969,6 +974,11 @@ function serializeTile(tile) {
 
   if (!(serialized.rockType === 'flint_cobble_scatter' && Number.isInteger(serialized.flintCobbleRemaining))) {
     delete serialized.flintCobbleRemaining;
+  }
+
+  const salinitySave = Number(serialized.salinity);
+  if (!Number.isFinite(salinitySave) || salinitySave === 0) {
+    delete serialized.salinity;
   }
 
   return serialized;

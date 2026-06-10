@@ -115,6 +115,34 @@ export function patchSpriteScaleForCapacity(capacity, stageSize, baseScale = 1) 
   return baseScale;
 }
 
+const GROUND_FUNGUS_GRAMS_PER_CLUSTER_VISUAL = 16;
+const GROUND_FUNGUS_MAX_ZONE_SPRITE_COPIES = 9;
+
+/**
+ * How many small zone-tile sprite copies to draw for a `yieldCurrentGrams` value (roughly scale with harvestable mass).
+ * @param {number} grams
+ * @returns {number}
+ */
+export function groundFungusClusterCountForYieldGrams(grams) {
+  const g = Math.max(0, Math.floor(Number(grams) || 0));
+  if (g <= 0) {
+    return 0;
+  }
+  return Math.min(
+    GROUND_FUNGUS_MAX_ZONE_SPRITE_COPIES,
+    Math.max(1, Math.round(g / GROUND_FUNGUS_GRAMS_PER_CLUSTER_VISUAL)),
+  );
+}
+
+/**
+ * Stable per-mushroom scale factor for iso ground-fungus sprites (no yield-based shrink).
+ * @param {string} seedKey
+ * @returns {number} multiplier ~0.82–1.10
+ */
+export function deterministicMushroomScaleJitter(seedKey) {
+  return 0.82 + mulberry32(stringHashSeed(seedKey))() * 0.28;
+}
+
 function ringSlotsForCapacity(capacity) {
   const count = Math.max(1, Math.floor(Number(capacity) || 1));
   if (count === 1) {
@@ -181,6 +209,48 @@ function randomPointInDisk(rng, radius) {
   const t = rng() * Math.PI * 2;
   const r = Math.sqrt(rng()) * radius;
   return { x: r * Math.cos(t), y: r * Math.sin(t) };
+}
+
+/** Uniform random point in annulus [rInner, rOuter] (area-weighted). */
+function randomPointInAnnulus(rng, rInner, rOuter) {
+  const o = Math.max(0, Number(rOuter) || 0);
+  const i0 = Math.max(0, Number(rInner) || 0);
+  if (o <= 1e-6) {
+    return { x: 0, y: 0 };
+  }
+  if (o <= i0 + 1e-6) {
+    return randomPointInDisk(rng, o);
+  }
+  const t = rng() * Math.PI * 2;
+  const u = rng();
+  const isq = i0 * i0;
+  const osq = o * o;
+  const r = Math.sqrt(isq + u * (osq - isq));
+  return { x: r * Math.cos(t), y: r * Math.sin(t) };
+}
+
+/**
+ * @param {Array<{ x: number, y: number }>} placed
+ * @param {number} rMin
+ * @param {() => number} rng
+ */
+function ensureMinRadiusFromOrigin(placed, rMin, rng) {
+  const m = Math.max(0, Number(rMin) || 0);
+  if (m <= 0) {
+    return;
+  }
+  for (let i = 0; i < placed.length; i += 1) {
+    const d = Math.hypot(placed[i].x, placed[i].y);
+    if (d < 1e-4) {
+      const ang = rng() * Math.PI * 2;
+      placed[i].x = Math.cos(ang) * m;
+      placed[i].y = Math.sin(ang) * m;
+    } else if (d < m) {
+      const s = m / d;
+      placed[i].x *= s;
+      placed[i].y *= s;
+    }
+  }
 }
 
 function passesMinSpacing(placed, x, y, minSpacing) {
@@ -259,13 +329,11 @@ function relaxPatchLayout(placed, minSpacing, halfSpan, rng, iterations) {
  * @param {number} [options.borderPx] — inset from `radiusPx`; random points stay within radius − border
  * @param {number} [options.maxSampleAttempts] — rejection attempts per sprite
  * @param {number} [options.relaxIterations] — separation passes after placement
+ * @param {number} [options.avoidOriginRadiusPx] — keep placements at least this far from (0,0) (e.g. clear a plant at center)
  */
 export function resolvePatchLayout(capacity, seedKey, options = {}) {
   const count = Math.max(1, Math.floor(Number(capacity) || 1));
-  if (count === 1) {
-    return [{ x: 0, y: 0, depthY: 0 }];
-  }
-
+  const avoidR = Math.max(0, Number(options.avoidOriginRadiusPx) || 0);
   const radius = Math.max(2, Number(options.radiusPx) || 8);
   const minSpacing = Math.max(1, Number(options.minSpacingPx) || 4);
   const borderOpt = Number(options.borderPx);
@@ -273,10 +341,20 @@ export function resolvePatchLayout(capacity, seedKey, options = {}) {
     ? Math.max(0, borderOpt)
     : Math.max(4, Math.min(radius * 0.22, radius * 0.48));
   const innerR = Math.max(0, radius - border);
-  const halfSpan = Math.max(innerR, minSpacing * 0.52);
+  const minHalfForAvoid = avoidR > 0 ? avoidR + minSpacing * 0.55 : 0;
+  const halfSpan = Math.max(innerR, minSpacing * 0.52, minHalfForAvoid);
   const maxAttempts = Math.max(25, Math.floor(Number(options.maxSampleAttempts) || 70));
   const relaxIterations = Math.max(0, Math.floor(Number(options.relaxIterations) || 7));
   const rng = mulberry32(stringHashSeed(seedKey));
+
+  if (count === 1) {
+    if (avoidR > 0) {
+      const t = rng() * Math.PI * 2;
+      const rPlace = avoidR + Math.max(1, minSpacing * 0.25);
+      return [{ x: Math.cos(t) * rPlace, y: Math.sin(t) * rPlace, depthY: 0 }];
+    }
+    return [{ x: 0, y: 0, depthY: 0 }];
+  }
 
   const fallbackSlots = ringSlotsForCapacity(count);
   const maxAbs = Math.max(
@@ -291,7 +369,9 @@ export function resolvePatchLayout(capacity, seedKey, options = {}) {
     let y = 0;
     let found = false;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const p = randomPointInDisk(rng, halfSpan);
+      const p = (avoidR > 0 && halfSpan > avoidR)
+        ? randomPointInAnnulus(rng, avoidR, halfSpan)
+        : randomPointInDisk(rng, halfSpan);
       x = p.x;
       y = p.y;
       if (passesMinSpacing(placed, x, y, minSpacing)) {
@@ -317,8 +397,14 @@ export function resolvePatchLayout(capacity, seedKey, options = {}) {
   }
 
   recenterPatch(placed);
+  if (avoidR > 0) {
+    ensureMinRadiusFromOrigin(placed, avoidR, rng);
+  }
   relaxPatchLayout(placed, minSpacing, halfSpan, rng, relaxIterations);
   recenterPatch(placed);
+  if (avoidR > 0) {
+    ensureMinRadiusFromOrigin(placed, avoidR, rng);
+  }
 
   for (let i = 0; i < placed.length; i += 1) {
     placed[i].depthY = placed[i].y;

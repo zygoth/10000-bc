@@ -78,6 +78,65 @@ export function resolveSquirrelCacheItemPool(plantCatalog) {
   return items;
 }
 
+function maxLifeStageSize(species) {
+  if (!Array.isArray(species?.lifeStages)) {
+    return 1;
+  }
+  let maxSize = 1;
+  for (const stage of species.lifeStages) {
+    const s = Number(stage?.size);
+    if (Number.isFinite(s)) {
+      maxSize = Math.max(maxSize, s);
+    }
+  }
+  return maxSize;
+}
+
+/**
+ * Species IDs that have at least one living plant meeting "nut-bearing maturity":
+ * same nominal threshold as squirrel nut-tree modeling (see simCore SQUIRREL_NUT_TREE_MATURITY_SIZE),
+ * but capped by the species' maximum life-stage size so shrubs (e.g. hazel at size 6) still qualify.
+ */
+export function collectPresentNutCacheSourceSpeciesIds(state, options = {}) {
+  const lifeStageSize =
+    typeof options.lifeStageSize === 'function' ? options.lifeStageSize : () => 1;
+  const maturityThreshold = Number(options.maturityThreshold) || 8;
+  const plantById = options.plantById && typeof options.plantById === 'object' ? options.plantById : {};
+
+  const present = new Set();
+  for (const plant of Object.values(state?.plants || {})) {
+    if (!plant?.alive) {
+      continue;
+    }
+    const species = plantById[plant.speciesId];
+    if (!species) {
+      continue;
+    }
+    const size = lifeStageSize(species, plant.stageName);
+    const threshold = Math.min(maturityThreshold, maxLifeStageSize(species));
+    if (size < threshold) {
+      continue;
+    }
+    present.add(plant.speciesId);
+  }
+  return present;
+}
+
+/**
+ * When the world has mature nut-producing plants, restrict cache payloads to those species so new trees
+ * (e.g. white oak) actually show up in caches instead of being drowned out by the global random pool.
+ */
+export function filterSquirrelCacheItemPoolByWorldNutSources(pool, presentSpeciesIds) {
+  if (!Array.isArray(pool) || pool.length === 0) {
+    return pool;
+  }
+  if (!(presentSpeciesIds instanceof Set) || presentSpeciesIds.size === 0) {
+    return pool;
+  }
+  const filtered = pool.filter((item) => presentSpeciesIds.has(item.speciesId));
+  return filtered.length > 0 ? filtered : pool;
+}
+
 export function clearSquirrelCaches(state) {
   for (const tile of state?.tiles || []) {
     if (tile?.squirrelCache) {

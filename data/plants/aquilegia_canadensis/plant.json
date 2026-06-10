@@ -1,0 +1,700 @@
+{
+  "id": "aquilegia_canadensis",
+  "name": "Red Columbine",
+  "plant_family": "ranunculaceae",
+  "physical_description": "A delicate woodland perennial with fern-like, compound foliage. It produces striking nodding flowers with vivid red sepals and yellow petals that feature elongated, upward-pointing nectar spurs.",
+  "game_description": "While visually striking, most parts of this plant contain bitter, toxic compounds that cause severe nausea if consumed in quantity. The tiny seeds and roots possess mild medicinal properties, serving as a pain reliever if carefully dosed, but it remains a hazard to unwary foragers.",
+  "age_of_maturity": 41,
+  "scent": {
+    "strength": 0.1,
+    "primary_compound": "caryophyllene"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.0,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.3,
+        1.0
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.2,
+        0.8
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.1,
+        0.6
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.2,
+        0.9
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.15
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "late_summer",
+    "end": "early_fall"
+  },
+  "dispersal": {
+    "method": "gravity",
+    "base_radius_tiles": 1,
+    "wind_radius_bonus": 2,
+    "water_dispersed": false,
+    "animal_dispersed": false,
+    "seeds_per_mature_plant": [
+      40,
+      150
+    ],
+    "germination_rate": 0.35,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": false,
+    "viable_lifespan_days": 120
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "poultice",
+        "tea",
+        "chew"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 30,
+      "peak_ticks": 90,
+      "duration_ticks": 180,
+      "processing_ticks": 360
+    },
+    "dose_response": [
+      {
+        "min_grams": 2,
+        "max_grams": 8,
+        "treatment_tag": "analgesic",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "pain",
+            "modifier": 0.8
+          }
+        ]
+      },
+      {
+        "min_grams": 9,
+        "max_grams": 20,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 10
+          }
+        ]
+      },
+      {
+        "min_grams": 21,
+        "max_grams": null,
+        "effects": [
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.2
+          },
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 15
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small cluster of delicate, lobed green leaflets emerging from the soil."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 41,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 3,
+      "field_description": "A low, bushy array of compound, fern-like green leaves on slender, reddish stems."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 42,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 20
+      },
+      "size": 4,
+      "field_description": "Tall, wiry stalks rise above the lobed foliage, bearing striking, nodding red and yellow flowers with long nectar spurs."
+    },
+    {
+      "stage": "seed_set",
+      "min_age_days": 43,
+      "seasonal_window": {
+        "start_day": 21,
+        "end_day": 30
+      },
+      "size": 4,
+      "field_description": "Upright, paper-thin follicle pods stand at the tips of the branching stems."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 44,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "Only a small, dried remnant of a base is visible at the soil level."
+    }
+  ],
+  "parts": [
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "young",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "Delicate, light green compound leaves with rounded lobes, soft to the touch.",
+          "game_description": "These greens contain harsh, toxic compounds that cause nausea when eaten raw. Cooking heavily reduces the toxicity, but they remain extremely poor food.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.8,
+          "unit_weight_g": 0.5,
+          "nutrition": {
+            "calories": 0.1,
+            "protein": 0.01,
+            "carbs": 0.02,
+            "fat": 0.0
+          },
+          "texture": "tender",
+          "taste_notes": [
+            "bitter",
+            "astringent"
+          ],
+          "scent_notes": [
+            "green",
+            "pungent"
+          ],
+          "average_fiber_length_cm": 1.5,
+          "fiber_strength_modifier": 0.2,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.8,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": 10,
+          "regrowth_max_harvests": 2,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 3.0,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.8,
+          "stew_nutrition_factor": 1.2,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.4,
+          "cooked_harshness": 0.3
+        },
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "late_fall"
+          },
+          "field_description": "Darker green leaves, slightly tougher and more deeply lobed, supported by thin reddish stems.",
+          "game_description": "Older leaves are more fibrous and have stronger toxic compounds. Best avoided even when cooked.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "texture": "fibrous",
+          "taste_notes": [
+            "very bitter",
+            "acrid"
+          ],
+          "potency_multiplier": 1.2,
+          "cooked_edibility_score": 0.2,
+          "cooked_harshness": 0.6
+        }
+      ]
+    },
+    {
+      "name": "stem",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "mid_summer"
+          },
+          "field_description": "A slender, wiry stem with a reddish-purple hue.",
+          "game_description": "Inedible, fibrous stalk with weak strands. Contains mild toxic compounds.",
+          "edibility_score": 0.05,
+          "edibility_harshness": 0.95,
+          "unit_weight_g": 3.0,
+          "nutrition": {
+            "calories": 0.5,
+            "protein": 0.02,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "texture": "fibrous",
+          "taste_notes": [
+            "bitter",
+            "woody"
+          ],
+          "scent_notes": [
+            "faintly green"
+          ],
+          "average_fiber_length_cm": 5.0,
+          "fiber_strength_modifier": 0.3,
+          "fibrous": true,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.5,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.3,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 1,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 4.0,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.2,
+          "stew_nutrition_factor": 0.4,
+          "cooking_detoxifies": true
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "late_fall"
+          },
+          "field_description": "A brown, dry, and brittle stalk, hollow and easily snapped.",
+          "game_description": "Inedible dry stalk. Can be crushed and used as a small amount of tinder.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 2.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "brittle",
+          "taste_notes": [],
+          "scent_notes": [
+            "dusty"
+          ],
+          "craft_tags": [
+            "tinder"
+          ],
+          "potency_multiplier": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "fibrous",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A pale, branching taproot system with many fine hairs. Smells sharp and earthy when broken.",
+          "game_description": "Highly concentrated with bitter toxins, rendering it entirely inedible. However, very small, carefully measured portions can be brewed into an analgesic tea.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 6.0,
+            "protein": 0.1,
+            "carbs": 1.4,
+            "fat": 0.0
+          },
+          "texture": "woody",
+          "taste_notes": [
+            "extremely bitter",
+            "burning"
+          ],
+          "scent_notes": [
+            "sharp",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.2,
+          "fibrous": true,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 2.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 25,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 14.0,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.1,
+          "stew_nutrition_factor": 0.4,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.15,
+          "cooked_harshness": 0.8
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "blooming",
+          "seasonal_window": {
+            "start": "mid_spring",
+            "end": "mid_summer"
+          },
+          "field_description": "A complex, nodding flower with vibrant red sepals and yellow petals that extend upward into distinctive spurs containing nectar.",
+          "game_description": "The nectar spurs are sweet, but the flower still contains mild toxic compounds. Best enjoyed sparingly.",
+          "edibility_score": 0.6,
+          "edibility_harshness": 0.4,
+          "unit_weight_g": 0.2,
+          "nutrition": {
+            "calories": 0.1,
+            "protein": 0.0,
+            "carbs": 0.02,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [
+            "sweet",
+            "slightly bitter"
+          ],
+          "scent_notes": [
+            "floral",
+            "sweet"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.3,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              2,
+              5
+            ]
+          },
+          "harvest_damage": 0.05,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 2.0,
+          "can_dry": false,
+          "raw_extraction_efficiency": 1.0,
+          "stew_nutrition_factor": 1.0,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.7,
+          "cooked_harshness": 0.1
+        }
+      ]
+    },
+    {
+      "name": "pod",
+      "available_life_stages": [
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "mid_summer",
+            "end": "late_summer"
+          },
+          "field_description": "A cluster of five upright, light green follicles, fused at the base and swelling with developing seeds.",
+          "game_description": "Inedible green seed capsules containing toxic precursors. Let them dry to harvest the seeds for medicinal use.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.8,
+          "nutrition": {
+            "calories": 0.4,
+            "protein": 0.02,
+            "carbs": 0.08,
+            "fat": 0.02
+          },
+          "texture": "leathery",
+          "taste_notes": [
+            "extremely bitter"
+          ],
+          "scent_notes": [
+            "acrid",
+            "green"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              4
+            ],
+            "actions_until_depleted": [
+              1,
+              3
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 4.0,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "late_fall"
+          },
+          "field_description": "Brown, papery, upright follicles that have split open slightly at the top, exposing tiny black seeds inside.",
+          "game_description": "Dry capsules holding potent, medicinally useful seeds. Must be processed by hand to extract the tiny seeds.",
+          "unit_weight_g": 0.5,
+          "nutrition": {
+            "calories": 0.4,
+            "protein": 0.02,
+            "carbs": 0.04,
+            "fat": 0.02
+          },
+          "texture": "papery",
+          "scent_notes": [
+            "dry",
+            "dusty"
+          ],
+          "processing_options": [
+            {
+              "id": "extract_seeds",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "seed",
+                  "yield_fraction": 0.2,
+                  "output_unit_weight_g": 0.1
+                },
+                {
+                  "part": "pod_husk",
+                  "yield_fraction": 0.8,
+                  "output_unit_weight_g": 0.4
+                }
+              ]
+            }
+          ],
+          "decay_days": 120.0
+        }
+      ]
+    },
+    {
+      "name": "seed",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "extracted",
+          "field_description": "Tiny, glossy black seeds.",
+          "game_description": "Potent seeds that can relieve pain if brewed into a tea in very small doses. Larger quantities will induce severe vomiting.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.1,
+          "nutrition": {
+            "calories": 0.4,
+            "protein": 0.02,
+            "carbs": 0.04,
+            "fat": 0.02
+          },
+          "texture": "hard",
+          "taste_notes": [
+            "sharp",
+            "bitter"
+          ],
+          "scent_notes": [
+            "faintly peppery"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 4.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 180.0,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.2,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "pod_husk",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "empty",
+          "field_description": "The dried, empty brown shell of a columbine follicle.",
+          "game_description": "Inedible papery waste. It has no practical use.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.4,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "papery",
+          "taste_notes": [],
+          "scent_notes": [
+            "dusty"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    }
+  ]
+}

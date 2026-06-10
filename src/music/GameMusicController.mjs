@@ -46,7 +46,11 @@ export class GameMusicController {
   constructor(options = {}) {
     this.crossfadeMs = Number(options.crossfadeMs) || 1500;
     const g = Number(options.gain);
-    this._gain = Number.isFinite(g) && g >= 0 ? Math.min(1, g) : 0.2;
+    this._baseGain = Number.isFinite(g) && g >= 0 ? Math.min(1, g) : 0.2;
+    /** User 0..1, multiplied with `_baseGain` in `_fullV` */
+    this._userLinear = 1;
+    /** @type {number|undefined} */
+    this._lastMusicVolumeSeen = undefined;
     /** @type {{ order: string[], i: number }|null} */
     this._debriefState = null;
     /** @type {Record<string, { order: string[], i: number }|null>} */
@@ -92,9 +96,42 @@ export class GameMusicController {
     return `${publicBase()}${path}`;
   }
 
-  /** Target volume when a layer is fully audible (BGM master gain). */
+  /** Target volume when a layer is fully audible (base curve × user setting). */
   _fullV() {
-    return this._gain;
+    return this._baseGain * (Number.isFinite(this._userLinear) ? this._userLinear : 1);
+  }
+
+  _reconcileUserLinearOutput() {
+    if (this._rampRaf) {
+      return;
+    }
+    if (this._lastSurface === 'title' || this._lastSurface == null) {
+      return;
+    }
+    const f = this._fullV();
+    const g = this.gameplayEl;
+    const d = this.debriefEl;
+    if (!g || !d) {
+      return;
+    }
+    if (f <= 0) {
+      g.volume = 0;
+      d.volume = 0;
+      g.pause();
+      d.pause();
+      return;
+    }
+    if (this._lastSurface === 'gameplay') {
+      d.volume = 0;
+      d.pause();
+      g.volume = f;
+      g.play().catch(() => {});
+    } else if (this._lastSurface === 'debrief') {
+      g.volume = 0;
+      g.pause();
+      d.volume = f;
+      d.play().catch(() => {});
+    }
   }
 
   attachResumeFromUserGesture() {
@@ -191,63 +228,75 @@ export class GameMusicController {
    * @param {string} p.appMode
    * @param {boolean} p.isDebriefActive
    * @param {number} p.dayOfYear
+   * @param {number} [p.musicVolume=1] 0..1; gameplay + debrief BGM (separate from ambient SFX).
    */
   async apply(p) {
     if (typeof window === 'undefined' || !this.gameplayEl || !this.debriefEl) {
       return;
     }
-    await this._ensureManifest();
-    this.attachResumeFromUserGesture();
-    const doy = Number(p.dayOfYear) || 1;
-    const season = getSeason(doy);
-    const surface = p.appMode === 'title' ? 'title' : (p.isDebriefActive ? 'debrief' : 'gameplay');
-
-    if (surface === 'title') {
+    const rawMu = p.musicVolume;
+    const musicVol = Number.isFinite(Number(rawMu)) ? Math.max(0, Math.min(1, Number(rawMu))) : 1;
+    if (this._lastMusicVolumeSeen !== musicVol) {
       this._cancelRamp();
-      this._fadeToSilentTitle();
-      this._lastSurface = 'title';
-      this._snapshot = null;
-      return;
     }
+    this._lastMusicVolumeSeen = musicVol;
+    this._userLinear = musicVol;
+    try {
+      await this._ensureManifest();
+      this.attachResumeFromUserGesture();
+      const doy = Number(p.dayOfYear) || 1;
+      const season = getSeason(doy);
+      const surface = p.appMode === 'title' ? 'title' : (p.isDebriefActive ? 'debrief' : 'gameplay');
 
-    if (surface === 'debrief') {
-      if (this._lastSurface === 'gameplay') {
-        this._snapshot = {
-          season: this._playingSeason || season,
-          url: normalizeAudioPath(this.gameplayEl.currentSrc || this.gameplayEl.src),
-          timeSec: Number(this.gameplayEl.currentTime) || 0,
-        };
-        await this._crossfadeToDebrief();
-      } else if (this._lastSurface !== 'debrief') {
-        await this._crossfadeToDebrief();
-      }
-      this._lastSurface = 'debrief';
-      return;
-    }
-
-    if (this._lastSurface === 'debrief') {
-      this._cancelRamp();
-      const sn = this._snapshot;
-      if (sn && sn.season === season) {
-        await this._crossfadeToGameplayResume(sn, season);
-      } else {
+      if (surface === 'title') {
+        this._cancelRamp();
+        this._fadeToSilentTitle();
+        this._lastSurface = 'title';
         this._snapshot = null;
-        await this._crossfadeToGameplayNew(season);
+        return;
+      }
+
+      if (surface === 'debrief') {
+        if (this._lastSurface === 'gameplay') {
+          this._snapshot = {
+            season: this._playingSeason || season,
+            url: normalizeAudioPath(this.gameplayEl.currentSrc || this.gameplayEl.src),
+            timeSec: Number(this.gameplayEl.currentTime) || 0,
+          };
+          await this._crossfadeToDebrief();
+        } else if (this._lastSurface !== 'debrief') {
+          await this._crossfadeToDebrief();
+        }
+        this._lastSurface = 'debrief';
+        return;
+      }
+
+      if (this._lastSurface === 'debrief') {
+        this._cancelRamp();
+        const sn = this._snapshot;
+        if (sn && sn.season === season) {
+          await this._crossfadeToGameplayResume(sn, season);
+        } else {
+          this._snapshot = null;
+          await this._crossfadeToGameplayNew(season);
+        }
+        this._lastSurface = 'gameplay';
+        return;
+      }
+
+      if (this._lastSurface === 'title' || this._lastSurface === null) {
+        this._startGameplayFromTitle(season);
+        this._lastSurface = 'gameplay';
+        return;
+      }
+
+      if (this._playingSeason !== season) {
+        this._startGameplayNewSeason(season);
       }
       this._lastSurface = 'gameplay';
-      return;
+    } finally {
+      this._reconcileUserLinearOutput();
     }
-
-    if (this._lastSurface === 'title' || this._lastSurface === null) {
-      this._startGameplayFromTitle(season);
-      this._lastSurface = 'gameplay';
-      return;
-    }
-
-    if (this._playingSeason !== season) {
-      this._startGameplayNewSeason(season);
-    }
-    this._lastSurface = 'gameplay';
   }
 
   _fadeToSilentTitle() {

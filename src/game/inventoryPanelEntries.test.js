@@ -77,6 +77,13 @@ describe('inventoryPanelEntries — same pipeline as App → GameModeChrome', ()
     const style = gridSlotSpriteFillStyle(sprite);
     expect(style.backgroundPosition).toBe('-192px -64px');
     expect(style.backgroundSize).toBe('256px 256px');
+    expect(style.imageRendering).toBe('pixelated');
+  });
+
+  it('SVG/linear atlasses use smooth image-rendering in inventory (pixelated can hide large backgrounds)', () => {
+    const sprite = resolvePlantPartSpriteFrame('juglans_nigra:walnut_meat:raw');
+    const style = gridSlotSpriteFillStyle(sprite);
+    expect(style.imageRendering).toBe('auto');
   });
 
   it('gridSlotSpriteFillStyleForWidth scales with slot width', () => {

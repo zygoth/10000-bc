@@ -1,0 +1,576 @@
+{
+  "textures": [
+    {
+      "image": "sheet_merged_from_vm_no_bg",
+      "format": "SVG",
+      "size": {
+        "w": 2560.0,
+        "h": 2560.0
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_seedling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_sapling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_vegetative"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_flowering"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_fruiting"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_senescent"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_winter_bare"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_leaf_spring_green"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_leaf_fall_dry"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_flower_catkins"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_acorn_ripe"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_seed_raw_meat"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_leached_acorn_ready_to_eat"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_acorn_shell_fragments"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_outer_bark_mature_bark"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_inner_bark_spring_cambium"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_inner_bark_late_season_inner_bark"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_branch_wood"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "quercus_alba_root_tree_root"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_19"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_20"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_21"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_22"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_23"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_24"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "SvgMergedSheetRemoveBgAndAtlas",
+    "version": "1.0",
+    "viewBox": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 2560.0,
+      "h": 2560.0
+    },
+    "grid_size": 5
+  }
+}

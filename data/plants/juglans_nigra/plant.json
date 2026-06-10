@@ -38,6 +38,12 @@
         0,
         0.2
       ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0,
+        0.22
+      ]
     }
   },
   "ph_effect_on_soil": -0.1,

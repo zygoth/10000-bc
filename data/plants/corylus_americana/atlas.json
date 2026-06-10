@@ -1,0 +1,576 @@
+{
+  "textures": [
+    {
+      "image": "sheet_merged_from_vm_no_bg",
+      "format": "SVG",
+      "size": {
+        "w": 2560.0,
+        "h": 2560.0
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_seedling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_sapling"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_mature_flowering"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_mature_fruiting"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_mature_seed_set"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_mature_dormant"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_leaf_green"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_nut_green_in_husk"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_nut_ripe_in_husk"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_hazelnut_in_shell_whole"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_hazelnut_kernel_raw"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_hazelnut_shell_cracked"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_branch_green_shoot"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_branch_stiff_branch"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_outer_bark_mature"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_inner_bark_spring_cambium"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_inner_bark_late_season_inner_bark"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "corylus_americana_root_woody"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_18"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_19"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_20"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_21"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_22"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_23"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 2048.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "slot_24"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "SvgMergedSheetRemoveBgAndAtlas",
+    "version": "1.0",
+    "viewBox": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 2560.0,
+      "h": 2560.0
+    },
+    "grid_size": 5
+  }
+}

@@ -2,9 +2,8 @@ import { useMemo } from 'react';
 import { getPlantSpriteFrame } from '../../../game/plantSpriteCatalog.mjs';
 import { representativeFieldPlantLifeStageId } from '../../../game/plantFieldVisualReference.mjs';
 import { resolvePlantPartSpriteFrame } from '../../../game/plantPartSpriteResolve.mjs';
+import { HUD_INVENTORY_SLOT_PX } from '../../inventorySlotSpriteFill/hudInventorySlotWidthPx.mjs';
 import InventorySlotSpriteStack from '../../inventorySlotSpriteFill/InventorySlotSpriteStack.jsx';
-
-const SLOT_PX = 56;
 
 /**
  * Whole-plant (field) + harvested-part reference for partner medicine/vision requests.
@@ -28,13 +27,13 @@ export default function PartnerRequestedPlantPreview({ itemId, speciesId }) {
       {plantSprite ? (
         <div className="debrief-partner-plant-preview-cell">
           <span className="debrief-partner-plant-preview-caption">Plant in the world</span>
-          <InventorySlotSpriteStack sprite={plantSprite} fixedSlotWidthPx={SLOT_PX} fallbackLabel="" />
+          <InventorySlotSpriteStack sprite={plantSprite} fixedSlotWidthPx={HUD_INVENTORY_SLOT_PX} fallbackLabel="" />
         </div>
       ) : null}
       {partSprite ? (
         <div className="debrief-partner-plant-preview-cell">
           <span className="debrief-partner-plant-preview-caption">Part to gather</span>
-          <InventorySlotSpriteStack sprite={partSprite} fixedSlotWidthPx={SLOT_PX} fallbackLabel="" />
+          <InventorySlotSpriteStack sprite={partSprite} fixedSlotWidthPx={HUD_INVENTORY_SLOT_PX} fallbackLabel="" />
         </div>
       ) : null}
     </div>

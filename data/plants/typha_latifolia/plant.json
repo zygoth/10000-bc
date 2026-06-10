@@ -1,0 +1,618 @@
+{
+  "id": "typha_latifolia",
+  "name": "Broadleaf Cattail",
+  "plant_family": "typhaceae",
+  "physical_description": "A tall, reedy aquatic plant with long, flat, strap-like leaves and a distinctive brown cylindrical seed head. Spreads densely via underwater rhizomes.",
+  "game_description": "A highly versatile wetland survival plant. Young shoots are crisp and edible raw, and the starchy roots provide dense calories when pounded or cooked. The leaves are excellent for weaving mats and baskets, and the mature seed fluff is excellent insulation for clothing.",
+  "age_of_maturity": 10,
+  "scent": {
+    "strength": 0.1,
+    "primary_compound": "geosmin"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      8.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.0,
+        0.4
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.2,
+        1.0
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.8,
+        1.0
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.3
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.2
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "early_fall",
+    "end": "late_fall"
+  },
+  "dispersal": {
+    "method": "wind",
+    "base_radius_tiles": 10,
+    "wind_radius_bonus": 10,
+    "water_dispersed": true,
+    "animal_dispersed": false,
+    "seeds_per_mature_plant": [
+      500,
+      1000
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": true,
+    "viable_lifespan_days": 300
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": null,
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small cluster of flat green shoots emerging from the mud or shallow water."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 10,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 4,
+      "field_description": "Tall, flat, strap-like leaves growing in a dense, vibrant green stand."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 11,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 20
+      },
+      "size": 4,
+      "field_description": "Tall green leaves with a central stalk bearing a firm, green, cylindrical flower spike."
+    },
+    {
+      "stage": "seed_set",
+      "min_age_days": 12,
+      "seasonal_window": {
+        "start_day": 21,
+        "end_day": 30
+      },
+      "size": 5,
+      "field_description": "Tall leaves surrounding stiff stalks topped with dense, brown, cylindrical seed heads."
+    },
+    {
+      "stage": "senescent",
+      "min_age_days": 13,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 35
+      },
+      "size": 4,
+      "field_description": "Browning leaves with the brown seed heads beginning to burst into fluffy white masses."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 14,
+      "seasonal_window": {
+        "start_day": 36,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "Dead, broken brown stalks standing above the water or mud. The starchy rhizomes remain alive beneath the surface."
+    }
+  ],
+  "parts": [
+    {
+      "name": "rhizome",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "senescent",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "mature",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A thick, spongy, mud-covered root. It is extremely fibrous but heavy with dense starch.",
+          "game_description": "Highly caloric but too fibrous to eat raw effectively. Can be roasted to chew out the starch, but best pounded into flour.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.1,
+          "cooked_edibility_score": 0.7,
+          "cooked_harshness": 0.0,
+          "unit_weight_g": 100.0,
+          "nutrition": {
+            "calories": 70.0,
+            "protein": 1.5,
+            "carbs": 16.0,
+            "fat": 0.2
+          },
+          "raw_extraction_efficiency": 0.1,
+          "stew_nutrition_factor": 0.8,
+          "processing_options": [
+            {
+              "id": "extract_starch",
+              "ticks": 45,
+              "location": "mortar_pestle",
+              "outputs": [
+                {
+                  "part": "cattail_flour",
+                  "yield_fraction": 0.3,
+                  "output_unit_weight_g": 1.0
+                }
+              ]
+            }
+          ],
+          "texture": "spongy and extremely fibrous",
+          "taste_notes": [
+            "starchy",
+            "muddy",
+            "mildly sweet"
+          ],
+          "scent_notes": [
+            "earthy",
+            "muddy"
+          ],
+          "average_fiber_length_cm": 10.0,
+          "fiber_strength_modifier": 0.5,
+          "fibrous": true,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 1,
+          "dig_ticks_to_discover": 30,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 14.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "cattail_flour",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "A fine, starchy, pale tan flour pounded from rhizomes.",
+          "game_description": "Calorie-dense starch extracted from cattail rhizomes. Excellent for thickening stews or baking.",
+          "edibility_score": 0.5,
+          "edibility_harshness": 0.0,
+          "cooked_edibility_score": 0.95,
+          "cooked_harshness": 0.0,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 3.5,
+            "protein": 0.05,
+            "carbs": 0.8,
+            "fat": 0.01
+          },
+          "raw_extraction_efficiency": 0.8,
+          "stew_nutrition_factor": 1.4,
+          "texture": "powdery",
+          "taste_notes": [
+            "bland",
+            "starchy"
+          ],
+          "scent_notes": [
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 180.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "shoot",
+      "available_life_stages": [
+        "vegetative"
+      ],
+      "sub_stages": [
+        {
+          "id": "young",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "The tender, pale green inner core of a young cattail stalk.",
+          "game_description": "Tender and field-edible raw. Crisp, refreshing, and cucumber-like.",
+          "edibility_score": 0.95,
+          "edibility_harshness": 0.0,
+          "unit_weight_g": 40.0,
+          "nutrition": {
+            "calories": 10.0,
+            "protein": 0.5,
+            "carbs": 2.0,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 1.0,
+          "stew_nutrition_factor": 1.0,
+          "texture": "crisp",
+          "taste_notes": [
+            "mild",
+            "sweet",
+            "cucumber-like"
+          ],
+          "scent_notes": [
+            "fresh",
+            "green"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.2,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 5,
+          "harvest_tool_modifiers": {
+            "knife": 1.5,
+            "blickey": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.8,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 4.0,
+          "can_dry": false
+        }
+      ]
+    },
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "seed_set",
+        "senescent"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_summer"
+          },
+          "field_description": "A long, flat, strap-like green leaf. Spongy at the base and highly pliable.",
+          "game_description": "Excellent pliable material for weaving mats and baskets. Too fibrous to eat.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 0.8,
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 1.0,
+            "protein": 0.1,
+            "carbs": 0.2,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0,
+          "texture": "smooth and pliable",
+          "taste_notes": [
+            "grassy"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 60.0,
+          "fiber_strength_modifier": 1.2,
+          "fibrous": true,
+          "craft_tags": [
+            "weaving_material"
+          ],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5,
+            "blickey": 1.2
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              3,
+              6
+            ]
+          },
+          "harvest_damage": 0.2,
+          "regrowth_days": 10,
+          "regrowth_max_harvests": 2,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 5.0,
+          "can_dry": true
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "winter"
+          },
+          "field_description": "A dry, tan, papery strap-like leaf.",
+          "game_description": "Dry material suitable for weaving mats and other reedy crafts.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 5.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "papery and stiff",
+          "craft_tags": [
+            "reedy_material"
+          ],
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 40.0
+        }
+      ]
+    },
+    {
+      "name": "flower_spike",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "mid_summer"
+          },
+          "field_description": "A firm, bright green cylindrical spike atop a tall stalk.",
+          "game_description": "Can be boiled and eaten like corn on the cob. Starchy and nutritious.",
+          "edibility_score": 0.3,
+          "edibility_harshness": 0.1,
+          "cooked_edibility_score": 0.9,
+          "cooked_harshness": 0.0,
+          "unit_weight_g": 45.0,
+          "nutrition": {
+            "calories": 20.0,
+            "protein": 1.5,
+            "carbs": 4.0,
+            "fat": 0.1
+          },
+          "raw_extraction_efficiency": 0.5,
+          "stew_nutrition_factor": 1.2,
+          "texture": "firm and granular",
+          "taste_notes": [
+            "corn-like",
+            "sweet"
+          ],
+          "scent_notes": [
+            "fresh",
+            "grassy"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.2,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 3.0,
+          "can_dry": false
+        }
+      ]
+    },
+    {
+      "name": "seed_spike",
+      "available_life_stages": [
+        "seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "brown",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "early_fall"
+          },
+          "field_description": "The iconic dark brown 'corn dog' of the cattail, densely packed with thousands of seeds and tightly compressed fluff.",
+          "game_description": "Inedible. Can be harvested whole and processed by hand to extract large amounts of insulating fluff.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 30.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0,
+          "processing_options": [
+            {
+              "id": "extract_fluff",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "fluff",
+                  "yield_fraction": 0.8,
+                  "output_unit_weight_g": 1.0
+                }
+              ]
+            }
+          ],
+          "texture": "dense and velvety",
+          "taste_notes": [],
+          "scent_notes": [
+            "dry",
+            "dusty"
+          ],
+          "average_fiber_length_cm": 1.0,
+          "fiber_strength_modifier": 0.1,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 60.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "fluff",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "A massive, expanding handful of downy white seed fluff.",
+          "game_description": "Premium soft insulation for stuffing clothing.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.0,
+          "texture": "soft and downy",
+          "taste_notes": [],
+          "scent_notes": [
+            "dusty"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [
+            "insulation_material"
+          ],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 180.0,
+          "can_dry": true
+        }
+      ]
+    }
+  ]
+}

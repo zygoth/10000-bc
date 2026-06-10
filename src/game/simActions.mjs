@@ -5396,16 +5396,39 @@ function validateHarvestAction(state, action, actor) {
   }
 
   const beehive = tile?.beehive;
-  if (beehive && typeof beehive === 'object') {
-    if (beehive.active !== true) {
-      return { ok: false, code: 'beehive_inactive', message: 'The colony is dormant; nothing can be harvested now' };
-    }
+  if (beehive && typeof beehive === 'object' && beehive.active === true) {
     const honeyG = Math.max(0, Math.floor(Number(beehive.yieldCurrentHoneyGrams) || 0));
     const larvaeG = Math.max(0, Math.floor(Number(beehive.yieldCurrentLarvaeGrams) || 0));
     const waxG = Math.max(0, Math.floor(Number(beehive.yieldCurrentBeeswaxGrams) || 0));
-    if (honeyG + larvaeG + waxG <= 0) {
-      return { ok: false, code: 'beehive_empty', message: 'The hive has no stored honey, brood, or wax to take' };
+    if (honeyG + larvaeG + waxG > 0) {
+      return {
+        ok: true,
+        code: null,
+        message: 'ok',
+        normalizedAction: {
+          ...action,
+          payload: {
+            ...action.payload,
+            targetType: 'beehive',
+            x: target.x,
+            y: target.y,
+            honeyGrams: honeyG,
+            larvaeGrams: larvaeG,
+            beeswaxGrams: waxG,
+            honeyItemId: FORAGE_BUMBLE_HONEY_ITEM_ID,
+            larvaeItemId: FORAGE_BUMBLE_LARVAE_ITEM_ID,
+            beeswaxItemId: FORAGE_BEESWAX_ITEM_ID,
+          },
+          tickCost: BEEHIVE_HARVEST_TICK_COST,
+        },
+      };
     }
+  }
+
+  const groundZone = tile?.groundFungusZone;
+  const groundYieldG = groundZone ? Math.max(0, Math.floor(Number(groundZone.yieldCurrentGrams) || 0)) : 0;
+  if (groundZone && groundYieldG > 0 && typeof groundZone.speciesId === 'string' && groundZone.speciesId) {
+    const speciesId = groundZone.speciesId;
     return {
       ok: true,
       code: null,
@@ -5414,17 +5437,15 @@ function validateHarvestAction(state, action, actor) {
         ...action,
         payload: {
           ...action.payload,
-          targetType: 'beehive',
+          targetType: 'ground_fungus',
           x: target.x,
           y: target.y,
-          honeyGrams: honeyG,
-          larvaeGrams: larvaeG,
-          beeswaxGrams: waxG,
-          honeyItemId: FORAGE_BUMBLE_HONEY_ITEM_ID,
-          larvaeItemId: FORAGE_BUMBLE_LARVAE_ITEM_ID,
-          beeswaxItemId: FORAGE_BEESWAX_ITEM_ID,
+          speciesId,
+          harvestGrams: groundYieldG,
+          outputItemId: `ground_fungus:${speciesId}:fruiting_body`,
+          outputUnitWeightKg: 0.001,
         },
-        tickCost: BEEHIVE_HARVEST_TICK_COST,
+        tickCost: 2,
       },
     };
   }

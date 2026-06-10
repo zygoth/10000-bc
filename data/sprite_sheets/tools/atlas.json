@@ -1,0 +1,644 @@
+{
+  "textures": [
+    {
+      "image": "sheet_merged_from_vm_no_bg",
+      "format": "SVG",
+      "size": {
+        "w": 2048.0,
+        "h": 3584.0
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_stool"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_bone_hook"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_auto_rod"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 0.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_axe"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_basket"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_blickey"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_cordage_organizer"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 512.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_dead_fall_trap"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_digging_stick"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_fishing_rod"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_flint_knife"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1024.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_hoe"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_ladder"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_marker_stick"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_shovel"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 1536.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_simple_snare"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_carved_wooden_spout"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_hide_pitch_vessel"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_hide_pitch_vessel_filled_sap"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 2048.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_sled"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 2560.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_wooden_platform"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 2560.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_gloves"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 2560.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_coat"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 2560.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_sun_hat"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 0.0,
+            "y": 3072.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_waterskin_empty"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 512.0,
+            "y": 3072.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_waterskin_full"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1024.0,
+            "y": 3072.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_leaching_basket"
+        },
+        {
+          "rotated": false,
+          "trimmed": false,
+          "sourceSize": {
+            "w": 512.0,
+            "h": 512.0
+          },
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "frame": {
+            "x": 1536.0,
+            "y": 3072.0,
+            "w": 512.0,
+            "h": 512.0
+          },
+          "filename": "sheet_merged_from_vm_no_bg.svg",
+          "spriteId": "tool_fish_trap_weir"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "svg_merge_expanded_sheet",
+    "version": "1.0",
+    "viewBox": {
+      "x": 0,
+      "y": 0,
+      "w": 2048.0,
+      "h": 3584.0
+    },
+    "grid_columns": 4,
+    "cell_size": 512.0,
+    "frame_count": 28
+  }
+}

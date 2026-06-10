@@ -1,0 +1,453 @@
+{
+  "id": "saxifraga_virginiensis",
+  "name": "Early Saxifrage",
+  "plant_family": "saxifragaceae",
+  "physical_description": "A small perennial herb featuring a basal rosette of toothed, slightly fleshy, and hairy leaves. In early spring, it produces a leafless, hairy stalk topped with a branched cluster of small, five-petaled white flowers.",
+  "game_description": "A small early-spring plant often found on rocky slopes. Its young basal leaves and flowers can be eaten in a pinch, but they are very small and quickly become fibrous. It serves as a reliable indicator of early spring.",
+  "age_of_maturity": 40,
+  "scent": {
+    "strength": 0.1,
+    "primary_compound": "hexanal"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.5,
+        1.0
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.2,
+        0.7
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.2,
+        0.6
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.2,
+        0.8
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.15
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "early_summer",
+    "end": "mid_summer"
+  },
+  "dispersal": {
+    "method": "gravity",
+    "base_radius_tiles": 1,
+    "wind_radius_bonus": 1,
+    "water_dispersed": false,
+    "animal_dispersed": false,
+    "seeds_per_mature_plant": [
+      50,
+      200
+    ],
+    "germination_rate": 0.3,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": true,
+    "viable_lifespan_days": 120
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": null,
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A tiny rosette of fuzzy green leaves hugging the ground."
+    },
+    {
+      "stage": "mature_flowering",
+      "min_age_days": 40,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 2,
+      "field_description": "A basal rosette of green, hairy leaves with a central hairy stalk topped by a cluster of small white, five-petaled flowers."
+    },
+    {
+      "stage": "mature_seed_set",
+      "min_age_days": 41,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 20
+      },
+      "size": 2,
+      "field_description": "Tiny dry seed capsules sit on a browning stalk. The basal leaves remain."
+    },
+    {
+      "stage": "mature_vegetative",
+      "min_age_days": 42,
+      "seasonal_window": {
+        "start_day": 21,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "A flat-lying rosette of dark green, somewhat tough basal leaves."
+    }
+  ],
+  "parts": [
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "mature_flowering",
+        "mature_seed_set",
+        "mature_vegetative"
+      ],
+      "sub_stages": [
+        {
+          "id": "spring_rosette",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "mid_summer"
+          },
+          "field_description": "A small, fuzzy green leaf with toothed edges from a basal rosette.",
+          "game_description": "Tender but fuzzy. Can be eaten raw in small amounts, but cooking makes them much more palatable.",
+          "edibility_score": 0.6,
+          "edibility_harshness": 0.2,
+          "cooked_edibility_score": 0.8,
+          "cooked_harshness": 0.1,
+          "unit_weight_g": 1.5,
+          "nutrition": {
+            "calories": 0.3,
+            "protein": 0.03,
+            "carbs": 0.04,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 0.7,
+          "stew_nutrition_factor": 1.1,
+          "texture": "fuzzy",
+          "taste_notes": [
+            "mild",
+            "slightly bitter"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.1,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.2,
+          "regrowth_days": 12,
+          "regrowth_max_harvests": 2,
+          "decay_days": 3.0,
+          "can_dry": true
+        },
+        {
+          "id": "late_season_rosette",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "winter"
+          },
+          "field_description": "A dark green, somewhat leathery and fibrous basal leaf.",
+          "game_description": "Older leaves are tough and fibrous, offering very little nutritional value.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.4,
+          "cooked_edibility_score": 0.4,
+          "cooked_harshness": 0.2,
+          "texture": "leathery",
+          "taste_notes": [
+            "bitter",
+            "earthy"
+          ],
+          "regrowth_days": null,
+          "regrowth_max_harvests": null
+        }
+      ]
+    },
+    {
+      "name": "stalk",
+      "available_life_stages": [
+        "mature_flowering",
+        "mature_seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "green_stalk",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "A short, green, very hairy stem.",
+          "game_description": "Too hairy and fibrous to be good food, but technically edible.",
+          "edibility_score": 0.3,
+          "edibility_harshness": 0.3,
+          "unit_weight_g": 3.0,
+          "nutrition": {
+            "calories": 0.5,
+            "protein": 0.02,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "stew_nutrition_factor": 0.5,
+          "texture": "hairy and fibrous",
+          "taste_notes": [
+            "bland"
+          ],
+          "scent_notes": [
+            "grassy"
+          ],
+          "average_fiber_length_cm": 5.0,
+          "fiber_strength_modifier": 0.2,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 4.0,
+          "can_dry": false
+        },
+        {
+          "id": "dry_stalk",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "mid_summer"
+          },
+          "field_description": "A thin, brittle, brown stalk.",
+          "game_description": "A dead stalk. Offers no nutritional or crafting value.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "brittle",
+          "decay_days": 20.0
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "mature_flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "fresh_bloom",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "A small white flower with five petals, growing in a branched cluster.",
+          "game_description": "Delicate and mild. Can be eaten raw or tossed into a stew.",
+          "edibility_score": 0.9,
+          "edibility_harshness": 0.05,
+          "unit_weight_g": 0.2,
+          "nutrition": {
+            "calories": 0.05,
+            "protein": 0.0,
+            "carbs": 0.01,
+            "fat": 0.0
+          },
+          "stew_nutrition_factor": 1.0,
+          "texture": "delicate",
+          "taste_notes": [
+            "mild",
+            "faintly sweet"
+          ],
+          "scent_notes": [
+            "faint floral"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              3,
+              8
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 0.05,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 2.0,
+          "can_dry": false
+        }
+      ]
+    },
+    {
+      "name": "seed_capsule",
+      "available_life_stages": [
+        "mature_seed_set"
+      ],
+      "sub_stages": [
+        {
+          "id": "dry_capsule",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "mid_summer"
+          },
+          "field_description": "A tiny, dry brownish capsule containing dust-like seeds.",
+          "game_description": "Too small to provide any meaningful nutrition.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 0.3,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "stew_nutrition_factor": 0.0,
+          "texture": "dry",
+          "taste_notes": [
+            "dusty"
+          ],
+          "scent_notes": [
+            "none"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 60.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "mature_flowering",
+        "mature_seed_set",
+        "mature_vegetative"
+      ],
+      "sub_stages": [
+        {
+          "id": "rhizome",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A small, stringy root mass with fine rootlets.",
+          "game_description": "Fibrous and tiny. Not worth the effort to dig and eat.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.6,
+          "unit_weight_g": 5.0,
+          "nutrition": {
+            "calories": 0.5,
+            "protein": 0.01,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "stew_nutrition_factor": 0.3,
+          "texture": "tough and stringy",
+          "taste_notes": [
+            "earthy",
+            "bland"
+          ],
+          "scent_notes": [
+            "dirt"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.3,
+          "fiberous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": null,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 20,
+          "decay_days": 8.0,
+          "can_dry": false
+        }
+      ]
+    }
+  ]
+}

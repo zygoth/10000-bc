@@ -145,7 +145,11 @@ function collectProcessingInputItems(stockpileByItemId) {
         addItemQuantity(stockpileByItemId, `${species.id}:${part.id}`, 3);
       }
     }
-    addItemQuantity(stockpileByItemId, `${species.id}:carcass`, 2);
+    if (species.animalClass === 'fish') {
+      addItemQuantity(stockpileByItemId, `${species.id}:fish_carcass`, 2);
+    } else {
+      addItemQuantity(stockpileByItemId, `${species.id}:carcass`, 2);
+    }
   }
 
   // Stew-friendly “filler” ingredients for debugging meal caps and variety.

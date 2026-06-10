@@ -70,5 +70,8 @@ describe('manualTestBootstrap', () => {
     expect(Number.isFinite(Number(walnut.unitWeightKg)) && Number(walnut.unitWeightKg) > 0).toBe(true);
 
     expect(byItem.get(DEBUG_VISION_HALLUCINOGEN_ITEM_ID)).toBeGreaterThanOrEqual(4);
+
+    expect(byItem.get('ictalurus_punctatus:fish_carcass')).toBeGreaterThanOrEqual(1);
+    expect(byItem.get('ictalurus_punctatus:carcass')).toBeFalsy();
   });
 });

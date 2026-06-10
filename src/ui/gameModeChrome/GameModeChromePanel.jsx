@@ -48,9 +48,11 @@ function GameModeChromePanel({
   selectedTileEntity,
   selectedTileWorldItems,
   tilePanelMode,
+  onRequestCloseInspect = () => {},
   selectedInspectData,
   onRunQuickAction,
   isInventoryPanelOpen,
+  onRequestCloseInventory = () => {},
   isPauseMenuOpen,
   onClosePauseMenu,
   actionComposerStatus,
@@ -129,6 +131,10 @@ function GameModeChromePanel({
   onPartnerQueueReorder,
   gameOverSummary = null,
   onReturnToTitleAfterGameOver,
+  musicVolume = 1,
+  sfxVolume = 1,
+  onChangeMusicVolume,
+  onChangeSfxVolume,
 }) {
   const [itemContextMenu, setItemContextMenu] = useState(null);
   const selectedStockpileEntry = getSelectedStackEntry(campStockpileStacks, selectedStockpileItemId);
@@ -188,6 +194,10 @@ function GameModeChromePanel({
         onLoadGame={onLoadGame}
         showAnchorDebug={showAnchorDebug}
         onToggleAnchorDebug={onToggleAnchorDebug}
+        musicVolume={musicVolume}
+        sfxVolume={sfxVolume}
+        onChangeMusicVolume={onChangeMusicVolume}
+        onChangeSfxVolume={onChangeSfxVolume}
       />
 
       <HudTopBar
@@ -225,7 +235,7 @@ function GameModeChromePanel({
         isDebriefActive={isDebriefActive}
         tilePanelMode={tilePanelMode}
         selectedInspectData={selectedInspectData}
-        isInventoryPanelOpen={isInventoryPanelOpen}
+        onRequestClose={onRequestCloseInspect}
       />
 
       <InventoryPanel
@@ -283,6 +293,7 @@ function GameModeChromePanel({
         stockpileWithdrawDisabled={stockpileWithdrawDisabled}
         stockpileWithdrawDisabledReason={stockpileWithdrawDisabledReason}
         onRunQuickAction={onRunQuickAction}
+        onRequestClose={onRequestCloseInventory}
       />
       <ItemContextMenu
         isDebriefActive={isDebriefActive}

@@ -15,9 +15,15 @@ function frameCacheKey(sprite) {
 }
 
 export function configureTextureNearest(texture) {
+  configureTextureSampling(texture, 'nearest');
+}
+
+/** @param {'nearest'|'linear'} mode */
+export function configureTextureSampling(texture, mode) {
   if (texture?.source) {
-    texture.source.style.magFilter = 'nearest';
-    texture.source.style.minFilter = 'nearest';
+    const f = mode === 'linear' ? 'linear' : 'nearest';
+    texture.source.style.magFilter = f;
+    texture.source.style.minFilter = f;
   }
 }
 
@@ -40,13 +46,14 @@ export async function getSubTextureForSprite(sprite) {
     fullTexturePromises.set(url, basePromise);
   }
   const base = await basePromise;
-  configureTextureNearest(base);
+  const filterMode = sprite.textureFilter === 'linear' ? 'linear' : 'nearest';
+  configureTextureSampling(base, filterMode);
   const { x, y, w, h } = sprite.frame;
   const sub = new Texture({
     source: base.source,
     frame: new Rectangle(x, y, w, h),
   });
-  configureTextureNearest(sub);
+  configureTextureSampling(sub, filterMode);
   subTextureCache.set(key, sub);
   return sub;
 }

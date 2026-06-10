@@ -6,7 +6,6 @@ import { cameraDebugOnPixiSyncAnchors } from './cameraDebug.js';
 import { IsoWorldScene } from './pixi/IsoWorldScene.js';
 import { pickTopTileAtScreen } from './pixi/isoMath.js';
 import { gameCameraFloatRef, stepGameCameraFollow } from './standaloneGameCamera.js';
-import { runAmbientDebugThrottled } from '../ambientAudio/ambientDebug.mjs';
 import { AmbientAudioBridge } from '../ambientAudio/ambientAudioBridge.mjs';
 
 /**
@@ -24,6 +23,8 @@ export default function PixiWorldView({
   windowWidth,
   windowHeight,
   cameraAnchorElevationPx,
+  /** 0..1, scales ambient + world SFX (Web Audio). */
+  sfxVolume = 1,
   selectedTileX,
   selectedTileY,
   showAnchorDebug,
@@ -135,8 +136,9 @@ export default function PixiWorldView({
     syncChainRef.current = syncChainRef.current
       .catch(() => {})
       .then(async () => {
+        const latestGs = getGameState() || gs;
         await scene.sync({
-          gameState: gs,
+          gameState: latestGs,
           cameraX: anchorX,
           cameraY: anchorY,
           windowWidth,
@@ -194,6 +196,7 @@ export default function PixiWorldView({
       app.stage.hitArea = app.screen;
       appRef.current = app;
       sceneRef.current = scene;
+      scene.attachApplication(app);
       setReady(true);
     })();
 
@@ -227,6 +230,12 @@ export default function PixiWorldView({
       }
     };
   }, [ready]);
+
+  useEffect(() => {
+    const t = Number(sfxVolume);
+    const linear = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 1;
+    ambientBridgeRef.current?.setSfxVolume(linear);
+  }, [ready, sfxVolume]);
 
   /** World / layout / selection changes — not tied to React camera integers (float ref is authoritative). */
   useEffect(() => {
@@ -273,15 +282,6 @@ export default function PixiWorldView({
       const usePlayer = Number.isFinite(px) && Number.isFinite(py);
       const earX = usePlayer ? px + 0.5 : cf.x;
       const earY = usePlayer ? py + 0.5 : cf.y;
-      runAmbientDebugThrottled('ear', 500, () => {
-        // eslint-disable-next-line no-console
-        console.log('[ambient] ear (Pixi rAF)', {
-          usePlayer: usePlayer ? 1 : 0,
-          player: usePlayer ? { x: p?.x, y: p?.y } : null,
-          camFloat: { x: cf.x, y: cf.y },
-          ear: { x: earX, y: earY },
-        });
-      });
       ambientBridgeRef.current?.tick(gs, earX, earY);
       const ax = Math.floor(Number(cf.x) + 1e-9);
       const ay = Math.floor(Number(cf.y) + 1e-9);

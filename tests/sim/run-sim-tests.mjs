@@ -43,10 +43,11 @@ import {
   isTechResearchDisplayComplete,
 } from '../../src/game/techForestGen.mjs';
 import { TOOL_RECIPES } from '../../src/game/simActions.mjs';
-import { HUNGER_DAILY_CALORIES } from '../../src/game/simCore.constants.mjs';
+import { HUNGER_DAILY_CALORIES, MAX_PLANTS_PER_TILE } from '../../src/game/simCore.constants.mjs';
 import waterGenModule from '../../src/game/waterGen.js';
 import { normalizeStackFootprintValueImpl } from '../../src/game/advanceTick/inventory.mjs';
 import { bootstrapDynamicShade } from '../../src/game/advanceDay/ecology.mjs';
+import { generateMap, isPlantWithinEnvironmentalTolerance, isRockTile } from '../../src/game/simWorld.mjs';
 
 const { __testables: waterGenTestables = {} } = waterGenModule;
 
@@ -9119,6 +9120,53 @@ function runSquirrelCacheGenerationUsesSquirrelDensityModelingTest() {
   );
 }
 
+function runSquirrelCacheGenerationBiasesToOnMapNutSourcesTest() {
+  const dims = { width: 24, height: 24 };
+  const state = createInitialGameState(44001, dims);
+  state.totalDaysSimulated = 400;
+  state.squirrelCachesGenerated = false;
+
+  const landTile = state.tiles.find((t) => !t.waterType && !t.rockType && !t.deadLog);
+  assert.ok(landTile, 'test requires a bare land tile');
+
+  for (const tile of state.tiles) {
+    tile.plantIds = [];
+  }
+
+  state.plants = {
+    only_oak: {
+      id: 'only_oak',
+      speciesId: 'quercus_alba',
+      age: 400,
+      x: landTile.x,
+      y: landTile.y,
+      stageName: 'fruiting',
+      alive: true,
+      vitality: 1,
+      activeSubStages: [],
+      source: 'test',
+    },
+  };
+  landTile.plantIds = ['only_oak'];
+
+  const withCaches = generateSquirrelCaches(state);
+  const cacheTiles = withCaches.tiles.filter((tile) => tile.squirrelCache);
+  assert.ok(cacheTiles.length > 0, 'should place caches when unlock conditions are met');
+
+  for (const tile of cacheTiles) {
+    assert.equal(
+      tile.squirrelCache.cachedSpeciesId,
+      'quercus_alba',
+      'when only mature white oak is on the map, cache payloads should be white-oak nuts only',
+    );
+  }
+  assert.deepEqual(
+    [...new Set(withCaches.runSquirrelCacheNutPool)].sort(),
+    ['quercus_alba'],
+    'run nut pool should only include on-map mature nut sources',
+  );
+}
+
 function runBeehiveAndSquirrelCacheSnapshotRoundTripTest() {
   const stabilized = getStabilizedState(28711, { width: 50, height: 50 }, 400);
   const withBeehives = generateBeehives(stabilized);
@@ -9645,37 +9693,9 @@ function runPhantomOccupancyCleanupTest() {
   return;
 }
 
+/** Matches `placeFounders` / vitality checks: full environmental tolerance including salinity (see `simWorld.mjs`). */
 function tileInSpeciesTolerance(tile, species) {
-  const [phMin, phMax] = species.soil.ph_range;
-  if (tile.ph < phMin || tile.ph > phMax) {
-    return false;
-  }
-
-  const [drainMin, drainMax] = species.soil.drainage.tolerance_range;
-  const drainIdx = drainageToIndex(tile.drainage);
-  if (drainIdx < drainMin || drainIdx > drainMax) {
-    return false;
-  }
-
-  const [fertMin, fertMax] = species.soil.fertility.tolerance_range;
-  if (tile.fertility < fertMin || tile.fertility > fertMax) {
-    return false;
-  }
-
-  const [moistureMin, moistureMax] = species.soil.moisture.tolerance_range;
-  if (tile.moisture < moistureMin || tile.moisture > moistureMax) {
-    return false;
-  }
-
-  const [shadeMin, shadeMax] = species.soil.shade.tolerance_range;
-  const effectiveShade = Number.isFinite(tile.effectiveShadeForOccupant)
-    ? tile.effectiveShadeForOccupant
-    : tile.shade;
-  if (effectiveShade < shadeMin || effectiveShade > shadeMax) {
-    return false;
-  }
-
-  return true;
+  return isPlantWithinEnvironmentalTolerance(species, tile);
 }
 
 function tilePassesStrictGerminationGates(tile, species) {
@@ -10169,6 +10189,101 @@ function runDeadLogCreationOnTreeDeathTest() {
     null,
     'perennials below tree-size threshold should not create dead logs',
   );
+}
+
+function runHarvestDeathImmediateCleanupAndDeadLogTest() {
+  const speciesId = 'juglans_nigra';
+  const species = PLANT_BY_ID[speciesId];
+  assert.ok(
+    maxStageSizeForSpecies(species) > 7,
+    'test precondition: juglans_nigra must exceed dead-log size threshold',
+  );
+
+  const state = createInitialGameState(99345, { width: 20, height: 20 });
+  state.dayOfYear = 5;
+  state.plants = {};
+  state.nextPlantNumericId = 2;
+
+  for (const tile of state.tiles) {
+    tile.plantIds = [];
+    tile.dormantSeeds = {};
+    tile.waterType = null;
+    tile.waterDepth = null;
+    tile.deadLog = null;
+    tile.rockType = null;
+    tile.disturbed = false;
+    tile.ph = (species.soil.ph_range[0] + species.soil.ph_range[1]) / 2;
+    tile.fertility = (species.soil.fertility.tolerance_range[0] + species.soil.fertility.tolerance_range[1]) / 2;
+    tile.moisture = (species.soil.moisture.tolerance_range[0] + species.soil.moisture.tolerance_range[1]) / 2;
+    tile.drainage = 'well';
+    tile.baseShade = 0.35;
+    tile.shade = 0.35;
+  }
+
+  const hostTile = state.tiles[8 * state.width + 8];
+  const plantId = 'harvest_kill_tree';
+
+  state.plants[plantId] = {
+    id: plantId,
+    speciesId,
+    age: 400,
+    x: hostTile.x,
+    y: hostTile.y,
+    stageName: 'mature_vegetative',
+    alive: true,
+    vitality: 0.01,
+    activeSubStages: [
+      {
+        partName: 'inner_bark',
+        subStageId: 'spring_cambium',
+        initialActionsRoll: 8,
+        seasonalHarvestBudgetActions: 8,
+        remainingActions: 8,
+        harvestsThisSeason: 0,
+        regrowthCountdown: null,
+        vitalityDamageAppliedThisSeason: 0,
+      },
+    ],
+    source: 'test',
+  };
+  hostTile.plantIds = [plantId];
+
+  const player = state.actors.player;
+  player.x = hostTile.x;
+  player.y = hostTile.y + 1;
+  player.inventory.stacks = [{ itemId: 'tool:flint_knife', quantity: 1 }];
+
+  const validation = validateAction(state, {
+    actorId: 'player',
+    kind: 'harvest',
+    payload: {
+      plantId,
+      partName: 'inner_bark',
+      subStageId: 'spring_cambium',
+      actions: 1,
+    },
+  });
+  assert.equal(validation.ok, true, validation.message || 'harvest should validate');
+
+  advanceTick(state, {
+    actions: [
+      {
+        actionId: 'harvest-kill-tree',
+        actorId: 'player',
+        kind: 'harvest',
+        payload: validation.normalizedAction.payload,
+        tickCost: validation.normalizedAction.tickCost,
+      },
+    ],
+  });
+
+  assert.equal(state.plants[plantId], undefined, 'harvest-killed tree plant record should be removed immediately');
+  assert.ok(!hostTile.plantIds.includes(plantId), 'tile plantIds should drop harvested-death plant immediately');
+
+  const tileAfter = state.tiles[hostTile.y * state.width + hostTile.x];
+  assert.ok(tileAfter.deadLog, 'large perennial killed by harvest should leave deadLog on tile');
+  assert.equal(tileAfter.deadLog.sourceSpeciesId, speciesId);
+  assert.ok(Number(tileAfter.deadLog.sizeAtDeath) > 7);
 }
 
 function runActiveSubStageLifecycleTest() {
@@ -11093,19 +11208,28 @@ function runWaterFreezingRulesTest() {
 }
 
 function runFounderCoverageTest() {
-  const state = createInitialGameState(2026, { width: 80, height: 80 });
+  const width = 80;
+  const height = 80;
+  const seed = 2026;
+  const state = createInitialGameState(seed, { width, height });
   const metrics = getMetrics(state);
+
+  // Match `placeFounders` first-pass eligibility: same map + rock-neighbor shade as `createInitialGameState`, no plants yet.
+  // (Understory-only viability created later by existing canopy is not modeled here.)
+  const baselineTiles = generateMap(seed, width, height);
+  const baselineState = { seed, width, height, tiles: baselineTiles, plants: {} };
+  bootstrapDynamicShade(baselineState);
 
   for (const speciesId of Object.keys(metrics.speciesCounts)) {
     const species = PLANT_BY_ID[speciesId];
-    const hasStrictViableTile = state.tiles.some((tile) => {
-      if (tile.waterType) {
+    const hasPlacementViableTile = baselineTiles.some((tile) => {
+      if (tile.waterType || isRockTile(tile) || tile.plantIds.length >= MAX_PLANTS_PER_TILE) {
         return false;
       }
-      return tileInSpeciesTolerance(tile, species);
+      return isPlantWithinEnvironmentalTolerance(species, tile);
     });
 
-    if (hasStrictViableTile) {
+    if (hasPlacementViableTile) {
       assert.ok(
         metrics.speciesCounts[speciesId] > 0,
         `founder placement should include species ${speciesId} when viable strict niche exists`,
@@ -12006,6 +12130,7 @@ function main() {
     ['vitality stress and recovery', runVitalityStressAndRecoveryTest],
     ['perennial winter mortality amortized', runPerennialWinterMortalityAmortizedTest],
     ['dead log creation on tree death', runDeadLogCreationOnTreeDeathTest],
+    ['harvest death immediate cleanup and dead log', runHarvestDeathImmediateCleanupAndDeadLogTest],
     ['active sub-stage lifecycle', runActiveSubStageLifecycleTest],
     ['biennial stage exhaustion death', runBiennialStageExhaustionDeathTest],
     ['incremental harvest vitality damage', runIncrementalHarvestVitalityDamageTest],
@@ -12026,6 +12151,7 @@ function main() {
     ['beehive generation gate, placement, and seasonal behavior', runBeehiveGenerationGatePlacementAndSeasonalBehaviorTest],
     ['squirrel cache generation, placement, and yearly refill', runSquirrelCacheGenerationPlacementAndYearlyRefillTest],
     ['squirrel cache generation uses squirrel density modeling', runSquirrelCacheGenerationUsesSquirrelDensityModelingTest],
+    ['squirrel cache generation biases to on-map nut sources', runSquirrelCacheGenerationBiasesToOnMapNutSourcesTest],
     ['beehive and squirrel cache snapshot round-trip', runBeehiveAndSquirrelCacheSnapshotRoundTripTest],
     ['log fungus yearly colonization', runLogFungusYearlyColonizationTest],
     ['log fungus fruiting window reset', runLogFungusFruitingWindowResetTest],

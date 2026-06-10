@@ -2,8 +2,11 @@ import { chebyshev } from './ambientMath.mjs';
 import { isCampfireEligible, listenerInCampFootprint } from './ambientEligibility.mjs';
 
 /**
- * In DevTools: localStorage.setItem('debug-ambient', '1')  →  reload
- * localStorage.removeItem('debug-ambient')  →  off
+ * Optional helpers for ad-hoc DevTools / breakpoint debugging. Nothing in the app imports this
+ * module; use `isAmbientDebugEnabled` + throttled `console` from a scratch snippet if needed.
+ *
+ * In DevTools: `localStorage.setItem('debug-ambient', '1')` (reload) — for code you wire up locally.
+ * `localStorage.removeItem('debug-ambient')` to clear.
  */
 export function isAmbientDebugEnabled() {
   if (typeof window === 'undefined' || !window.localStorage) {

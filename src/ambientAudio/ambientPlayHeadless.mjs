@@ -234,7 +234,7 @@ export function computeAmbientLoopCommands({
     const call = beehiveEntry.calls?.[0];
     if (call?.url) {
       // Quiet vs campfire: distance curve already ~0.55; keep peak loop gain modest.
-      cmds.push({ op: 'ensure', loopId: 'beehive_closest', url: call.url, gain: g * 0.18, pan });
+      cmds.push({ op: 'ensure', loopId: 'beehive_closest', url: call.url, gain: g * 0.09, pan });
     }
   } else {
     cmds.push({ op: 'stop', loopId: 'beehive_closest' });

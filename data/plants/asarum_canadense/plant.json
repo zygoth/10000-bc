@@ -1,0 +1,494 @@
+{
+  "id": "asarum_canadense",
+  "name": "Wild Ginger",
+  "plant_family": "aristolochiaceae",
+  "physical_description": "A low-growing herbaceous perennial with a pair of large, velvety, heart-shaped leaves. A single reddish-brown, bell-shaped flower hides close to the ground near the stem base. The creeping rhizomes smell strongly of ginger.",
+  "game_description": "The root can be used as a strong, spicy flavoring or brewed into a medicinal tea to break fevers. However, consuming large quantities over time causes kidney damage. Its large fuzzy leaves provide minimal nutrition but can serve as light wrapping material.",
+  "age_of_maturity": 41,
+  "scent": {
+    "strength": 0.8,
+    "primary_compound": "asarone"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.0,
+      7.0
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.4,
+        0.8
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.5,
+        0.9
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.5,
+        0.9
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.6,
+        1.0
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.1
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "early_fall",
+    "end": "mid_fall"
+  },
+  "dispersal": {
+    "method": "animal_cached",
+    "base_radius_tiles": 2,
+    "wind_radius_bonus": 0,
+    "water_dispersed": false,
+    "animal_dispersed": true,
+    "seeds_per_mature_plant": [
+      10,
+      30
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": false,
+    "viable_lifespan_days": 90
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "tea",
+        "chew"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 30,
+      "peak_ticks": 90,
+      "duration_ticks": 240,
+      "processing_ticks": 480
+    },
+    "dose_response": [
+      {
+        "min_grams": 5,
+        "max_grams": 15,
+        "treatment_tag": "fever_tea",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "fever",
+            "modifier": 1.5
+          }
+        ]
+      },
+      {
+        "min_grams": 16,
+        "max_grams": 40,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 30
+          },
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.05
+          }
+        ]
+      },
+      {
+        "min_grams": 41,
+        "max_grams": null,
+        "effects": [
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.2
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A tiny plant with a single pair of fuzzy green leaves near the soil."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 41,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 1,
+      "field_description": "A low plant with two large, velvety, heart-shaped leaves on hairy stalks."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 42,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 20
+      },
+      "size": 1,
+      "field_description": "Two large fuzzy leaves shade a single maroon, bell-shaped flower resting near the ground."
+    },
+    {
+      "stage": "fruiting",
+      "min_age_days": 43,
+      "seasonal_window": {
+        "start_day": 21,
+        "end_day": 30
+      },
+      "size": 1,
+      "field_description": "The maroon flower has been replaced by a fleshy capsule containing seeds, still hidden under the large leaves."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 44,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "Above-ground parts have died back entirely, leaving only the creeping rhizomes hidden beneath the soil."
+    }
+  ],
+  "parts": [
+    {
+      "name": "root",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "rhizome",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A knobby, branching rhizome with a pale interior. Emits a strong spicy scent when snapped.",
+          "game_description": "The highly aromatic root can be used as a spice or brewed into a medicinal tea to break fevers, but contains compounds that are toxic to the kidneys if consumed in quantity.",
+          "edibility_score": 0.3,
+          "edibility_harshness": 0.8,
+          "cooked_edibility_score": 0.6,
+          "cooked_harshness": 0.5,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 3.0,
+            "protein": 0.1,
+            "carbs": 0.6,
+            "fat": 0.05
+          },
+          "raw_extraction_efficiency": 0.2,
+          "stew_nutrition_factor": 1.2,
+          "texture": "crisp and fibrous",
+          "taste_notes": [
+            "spicy",
+            "pungent",
+            "bitter"
+          ],
+          "scent_notes": [
+            "ginger",
+            "aromatic",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.2,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.8,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 20,
+          "decay_days": 14.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_fall"
+          },
+          "field_description": "A large, soft, heart-shaped leaf covered in fine hairs.",
+          "game_description": "The large leaves are fuzzy and somewhat unpleasant to eat, but they can be used to wrap small items.",
+          "edibility_score": 0.5,
+          "edibility_harshness": 0.4,
+          "cooked_edibility_score": 0.7,
+          "cooked_harshness": 0.2,
+          "unit_weight_g": 4.0,
+          "nutrition": {
+            "calories": 0.8,
+            "protein": 0.1,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "stew_nutrition_factor": 1.05,
+          "texture": "fuzzy",
+          "taste_notes": [
+            "mild",
+            "bitter"
+          ],
+          "scent_notes": [
+            "green",
+            "faintly spicy"
+          ],
+          "average_fiber_length_cm": 1.0,
+          "fiber_strength_modifier": 0.1,
+          "fibrous": false,
+          "craft_tags": [
+            "large_leaf"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {
+            "knife": 1.2,
+            "blickey": 1.1
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.3,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 2,
+          "decay_days": 3.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "stem",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "petiole",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_fall"
+          },
+          "field_description": "A short, hairy green stalk supporting the leaf.",
+          "game_description": "Fibrous and minimally nutritious. Can be chewed or added to stew, but lacks strong utility.",
+          "edibility_score": 0.4,
+          "edibility_harshness": 0.3,
+          "cooked_edibility_score": 0.6,
+          "cooked_harshness": 0.1,
+          "unit_weight_g": 2.0,
+          "nutrition": {
+            "calories": 0.4,
+            "protein": 0.0,
+            "carbs": 0.1,
+            "fat": 0.0
+          },
+          "texture": "fibrous and fuzzy",
+          "taste_notes": [
+            "bland",
+            "green"
+          ],
+          "scent_notes": [
+            "faintly spicy"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.3,
+          "fibrous": true,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              2
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 0.2,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 2,
+          "decay_days": 4.0,
+          "can_dry": false
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "bloom",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "late_summer"
+          },
+          "field_description": "A small, three-pointed, bell-shaped flower, maroon or brown in color, resting near the soil surface.",
+          "game_description": "An unusual ground-level flower. Edible in a pinch, but barely provides a bite.",
+          "edibility_score": 0.6,
+          "edibility_harshness": 0.2,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 0.2,
+            "protein": 0.0,
+            "carbs": 0.05,
+            "fat": 0.0
+          },
+          "texture": "velvety",
+          "taste_notes": [
+            "earthy",
+            "bland"
+          ],
+          "scent_notes": [
+            "musty"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 2.0,
+          "can_dry": false
+        }
+      ]
+    },
+    {
+      "name": "fruit",
+      "available_life_stages": [
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "capsule",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "late_fall"
+          },
+          "field_description": "A fleshy, round capsule containing several seeds.",
+          "game_description": "A small seed capsule. It is edible but has very low caloric value.",
+          "edibility_score": 0.6,
+          "edibility_harshness": 0.3,
+          "unit_weight_g": 3.0,
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 0.1,
+            "carbs": 0.2,
+            "fat": 0.1
+          },
+          "texture": "fleshy",
+          "taste_notes": [
+            "bland",
+            "slightly bitter"
+          ],
+          "scent_notes": [
+            "green"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "fibrous": false,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              1
+            ]
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 3.0,
+          "can_dry": false
+        }
+      ]
+    }
+  ]
+}

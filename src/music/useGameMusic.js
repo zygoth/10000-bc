@@ -8,9 +8,16 @@ import { GameMusicController } from './GameMusicController.mjs';
  * @param {boolean} p.isDebriefActive
  * @param {number|undefined} p.dayOfYear
  * @param {string|number} [p.gameStateVersion]
+ * @param {number} [p.musicVolume=1] 0..1
  */
 export function useGameMusic(p) {
-  const { appMode, isDebriefActive, dayOfYear, gameStateVersion = 0 } = p;
+  const {
+    appMode,
+    isDebriefActive,
+    dayOfYear,
+    gameStateVersion = 0,
+    musicVolume = 1,
+  } = p;
   const ctrl = useRef(null);
   useEffect(() => {
     if (!ctrl.current) {
@@ -21,8 +28,9 @@ export function useGameMusic(p) {
       appMode,
       isDebriefActive: Boolean(isDebriefActive),
       dayOfYear: Number(dayOfYear) || 1,
+      musicVolume,
     }).catch(() => {});
-  }, [appMode, isDebriefActive, dayOfYear, gameStateVersion]);
+  }, [appMode, isDebriefActive, dayOfYear, gameStateVersion, musicVolume]);
   useEffect(() => {
     return () => {
       if (ctrl.current) {

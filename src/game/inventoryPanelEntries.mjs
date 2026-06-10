@@ -6,7 +6,7 @@ import {
 } from './stockpileDefaultStackOptions.mjs';
 import { computeSpoilageProgress } from './inventorySlotDecayDryness.mjs';
 import { parsePlantPartItemId, resolveHarvestedPlantItemDisplayName } from './plantPartDescriptors.mjs';
-import { resolvePlantPartSpriteFrame } from './plantPartSpriteResolve.mjs';
+import { resolveInventoryItemSpriteFrame } from './inventoryItemSpriteResolve.mjs';
 
 /**
  * Pixel math shared with `gridSlotSpriteFillStyle` (atlas rect → CSS vars).
@@ -18,12 +18,21 @@ export function gridSlotSpriteGeometry(sprite) {
   if (!sprite?.frame) {
     return null;
   }
-  const ox = sprite.frame.offsetX ?? 0;
-  const oy = sprite.frame.offsetY ?? 0;
-  const fw = Math.max(1, sprite.frame.sourceW ?? sprite.frame.w);
-  const fh = Math.max(1, sprite.frame.sourceH ?? sprite.frame.h);
-  const fx = sprite.frame.x - ox;
-  const fy = sprite.frame.y - oy;
+  const { x, y, w, h, offsetX, offsetY, sourceW, sourceH } = sprite.frame;
+  const ox = offsetX ?? 0;
+  const oy = offsetY ?? 0;
+  const sw = Math.max(1, sourceW ?? w);
+  const sh = Math.max(1, sourceH ?? h);
+  // Frame x/y are texture (raster) coordinates; offsetX/offsetY are 0..sourceW (same units as
+  // TexturePacker “source” in catalog). For SVG, sourceW=64 and w=256+ so a trim is expressed
+  // in 0-64 and must be scaled to raster: multiply by w/sw (same for h). Mixing 64-space offsets
+  // with raster x/y (without this) shifts the background into empty padding or a neighbor cell.
+  const scaleOffsetX = (w ?? 0) / sw;
+  const scaleOffsetY = (h ?? 0) / sh;
+  const fw = Math.max(1, sourceW ?? w);
+  const fh = Math.max(1, sourceH ?? h);
+  const fx = x - ox * scaleOffsetX;
+  const fy = y - oy * scaleOffsetY;
   return {
     ox,
     oy,
@@ -59,6 +68,10 @@ function logInventoryPlantPartSlot(payload) {
  * Atlas background for a square slot of known pixel width (`slotWidthPx`). Uses explicit pixel
  * `background-size` / `background-position` so we never depend on `cqw`/`calc` resolution (which often
  * collapses to 0 for inventory cells and shows atlas 0,0 = seedling).
+ *
+ * The **raster** frame `w`/`h` (PNG pixels in this sub-rect) control scaling. High-res atlasses
+ * (e.g. 256px cells with sourceW=64) must use `scale = slotW / w`, not `slotW / sourceW`, or the
+ * background is shifted wrong and you only see a speck in one corner of the cell.
  */
 export function gridSlotSpriteFillStyleForWidth(sprite, slotWidthPx) {
   const g = gridSlotSpriteGeometry(sprite);
@@ -66,16 +79,24 @@ export function gridSlotSpriteFillStyleForWidth(sprite, slotWidthPx) {
     return null;
   }
   const slotW = Math.max(1, Number(slotWidthPx) || 1);
-  const scale = slotW / g.fw;
-  const bw = g.atlasWidth * scale;
-  const bh = g.atlasHeight * scale;
-  const px = -g.fx * scale;
-  const py = -g.fy * scale;
+  const slotH = slotW;
+  const wTex = Math.max(1, Number(sprite.frame.w) || 1);
+  const hTex = Math.max(1, Number(sprite.frame.h) || 1);
+  const scaleX = slotW / wTex;
+  const scaleY = slotH / hTex;
+  const bw = g.atlasWidth * scaleX;
+  const bh = g.atlasHeight * scaleY;
+  const px = -g.fx * scaleX;
+  const py = -g.fy * scaleY;
   const publicBase = process.env.PUBLIC_URL || '';
+  // High-res/linear atlasses are not pixel art: `image-rendering: pixelated` with large
+  // `background-size` (full merged sheet) can make the background fail to draw in some browsers
+  // for inventory CSS slots; `auto` is OK for these smooth downscales. Legacy 64px sheets stay sharp.
+  const imageRendering = sprite?.textureFilter === 'linear' ? 'auto' : 'pixelated';
   return {
     backgroundImage: `url(${publicBase}${g.imagePath})`,
     backgroundRepeat: 'no-repeat',
-    imageRendering: 'pixelated',
+    imageRendering,
     backgroundSize: `${bw}px ${bh}px`,
     backgroundPosition: `${px}px ${py}px`,
   };
@@ -182,7 +203,7 @@ export function buildPlayerInventoryGridEntry(stack, idx, gameState = undefined)
   const quantity = Math.max(0, Number(stack.quantity) || 0);
   const unitWeightKg = resolveDisplayUnitWeightKg(stack, item, plantPartDescriptor);
   const totalWeightKg = unitWeightKg * quantity;
-  const sprite = resolvePlantPartSpriteFrame(stack.itemId);
+  const sprite = resolveInventoryItemSpriteFrame(stack.itemId);
   const spriteStyle = gridSlotSpriteFillStyle(sprite);
   maybeLogPlantPartGridSlot('playerInventory', idx, stack.itemId, plantPartDescriptor, sprite, spriteStyle);
   const canDry = resolveCatalogCanDry(item, plantPartDescriptor);
@@ -219,7 +240,7 @@ export function buildPlayerInventoryGridEntry(stack, idx, gameState = undefined)
 export function buildStockpileGridEntry(stack, idx, gameState = undefined) {
   const item = ITEM_BY_ID[stack.itemId] || null;
   const plantPartDescriptor = parsePlantPartItemId(stack.itemId);
-  const sprite = resolvePlantPartSpriteFrame(stack.itemId);
+  const sprite = resolveInventoryItemSpriteFrame(stack.itemId);
   const quantity = Math.max(0, Number(stack.quantity) || 0);
   const unitWeightKg = resolveDisplayUnitWeightKg(stack, item, plantPartDescriptor);
   const totalWeightKg = unitWeightKg * quantity;
@@ -262,7 +283,7 @@ export function buildStockpileGridEntry(stack, idx, gameState = undefined) {
 export function buildWorldGroundItemsGridEntry(entry, idx, gameState = undefined) {
   const item = ITEM_BY_ID[entry.itemId] || null;
   const plantPartDescriptor = parsePlantPartItemId(entry.itemId);
-  const sprite = resolvePlantPartSpriteFrame(entry.itemId);
+  const sprite = resolveInventoryItemSpriteFrame(entry.itemId);
   const quantity = Math.max(0, Number(entry.quantity) || 0);
   const unitWeightKg = resolveDisplayUnitWeightKg(entry, item, plantPartDescriptor);
   const totalWeightKg = unitWeightKg * quantity;

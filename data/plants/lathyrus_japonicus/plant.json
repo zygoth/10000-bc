@@ -1,0 +1,636 @@
+{
+  "id": "lathyrus_japonicus",
+  "name": "Beach Pea",
+  "plant_family": "fabaceae",
+  "physical_description": "A low-growing, trailing perennial vine often found in sandy or gravelly coastal soils. It has fleshy, blue-green pinnate leaves that end in curling tendrils. It bears clusters of prominent purple to pinkish-blue pea-like flowers that mature into flattened pods.",
+  "game_description": "A hardy coastal legume. The young shoots and green pods are edible, but the mature peas contain toxins that cause severe illness and weakness if eaten raw. Cooking the mature peas in a stew completely neutralizes the toxins.",
+  "age_of_maturity": 31,
+  "scent": {
+    "strength": 0.2,
+    "primary_compound": "linalool"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.6,
+        1.0
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.1,
+        0.6
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.1,
+        0.6
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.3
+      ]
+    }
+  },
+  "ph_effect_on_soil": 0.0,
+  "seeding_window": {
+    "start": "early_fall",
+    "end": "late_fall"
+  },
+  "dispersal": {
+    "method": "explosive",
+    "base_radius_tiles": 2,
+    "wind_radius_bonus": 0,
+    "water_dispersed": true,
+    "animal_dispersed": false,
+    "seeds_per_mature_plant": [
+      10,
+      30
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": true,
+    "viable_lifespan_days": 1800
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": {
+    "preparation": {
+      "raw_usable": true,
+      "processed_methods": [
+        "chew"
+      ],
+      "partner_prep_required_for": []
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 120,
+      "peak_ticks": 300,
+      "duration_ticks": 600,
+      "processing_ticks": 1200
+    },
+    "dose_response": [
+      {
+        "min_grams": 15,
+        "max_grams": 40,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 30
+          },
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.15
+          }
+        ]
+      },
+      {
+        "min_grams": 41,
+        "max_grams": null,
+        "effects": [
+          {
+            "type": "health_drain",
+            "rate_per_day": 0.4
+          },
+          {
+            "type": "incapacitated",
+            "duration_ticks": 180
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 1,
+      "field_description": "A small fleshy green sprout with a couple of blue-green leaflets and a delicate tendril."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 31,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 2,
+      "field_description": "A sprawling blue-green vine extending over the ground, featuring multiple compound leaves ending in grasping tendrils."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 32,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 20
+      },
+      "size": 2,
+      "field_description": "A sprawling blue-green vine dotted with bright purple and pinkish-blue pea flowers."
+    },
+    {
+      "stage": "fruiting",
+      "min_age_days": 33,
+      "seasonal_window": {
+        "start_day": 21,
+        "end_day": 30
+      },
+      "size": 2,
+      "field_description": "A sprawling blue-green vine heavily laden with flat pea pods that turn from green to brown as they mature."
+    },
+    {
+      "stage": "dormant",
+      "min_age_days": 34,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 40
+      },
+      "size": 1,
+      "field_description": "A few withered, brown, straggling stems lying flat against the soil. Most of the plant has died back to its root system."
+    }
+  ],
+  "parts": [
+    {
+      "name": "root",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "dormant"
+      ],
+      "sub_stages": [
+        {
+          "id": "rhizome",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A deep, tough rhizome anchor adapted to shifting sands.",
+          "game_description": "Fibrous and dense. It has minor caloric value but is extremely tough to chew.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.3,
+          "unit_weight_g": 30.0,
+          "nutrition": {
+            "calories": 15.0,
+            "protein": 0.4,
+            "carbs": 3.0,
+            "fat": 0.1
+          },
+          "texture": "fibrous",
+          "taste_notes": [
+            "earthy",
+            "starchy"
+          ],
+          "scent_notes": [
+            "earthy"
+          ],
+          "average_fiber_length_cm": 4.0,
+          "fiber_strength_modifier": 0.3,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 1,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              1
+            ],
+            "actions_until_depleted": [
+              1,
+              2
+            ]
+          },
+          "harvest_damage": 1.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 25,
+          "on_harvest_injury": null,
+          "decay_days": 14.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.4
+        }
+      ]
+    },
+    {
+      "name": "stem",
+      "available_life_stages": [
+        "vegetative",
+        "flowering",
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "young_shoot",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "Tender, bright green growing tips of the sprawling vine.",
+          "game_description": "Young shoots are tender enough to eat raw or add to a stew without toxicity concerns.",
+          "edibility_score": 0.85,
+          "edibility_harshness": 0.2,
+          "unit_weight_g": 15.0,
+          "nutrition": {
+            "calories": 3.0,
+            "protein": 0.4,
+            "carbs": 0.5,
+            "fat": 0.0
+          },
+          "texture": "crisp",
+          "taste_notes": [
+            "green",
+            "slightly sweet"
+          ],
+          "scent_notes": [
+            "fresh",
+            "grassy"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.2,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {
+            "knife": 1.5
+          },
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              2,
+              4
+            ]
+          },
+          "harvest_damage": 0.3,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 2,
+          "on_harvest_injury": null,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1
+        },
+        {
+          "id": "mature_vine",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "late_fall"
+          },
+          "field_description": "Thickened, blue-green stems trailing aggressively across the ground.",
+          "game_description": "The mature vine is stringy, fibrous, and unpalatable.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.5,
+          "unit_weight_g": 20.0,
+          "nutrition": {
+            "calories": 2.0,
+            "protein": 0.2,
+            "carbs": 0.4,
+            "fat": 0.0
+          },
+          "texture": "stringy",
+          "taste_notes": [
+            "bitter",
+            "green"
+          ],
+          "scent_notes": [
+            "grassy"
+          ],
+          "average_fiber_length_cm": 8.0,
+          "fiber_strength_modifier": 0.6,
+          "craft_tags": [],
+          "potency_multiplier": 0.1,
+          "harvest_damage": 0.4,
+          "decay_days": 4.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 0.2
+        }
+      ]
+    },
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "vegetative",
+        "flowering",
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_fall"
+          },
+          "field_description": "Fleshy, pinnate leaves with a distinct blue-green waxy coating.",
+          "game_description": "Edible as a green, though slightly fibrous as the season progresses.",
+          "edibility_score": 0.75,
+          "edibility_harshness": 0.2,
+          "unit_weight_g": 1.0,
+          "nutrition": {
+            "calories": 0.2,
+            "protein": 0.02,
+            "carbs": 0.03,
+            "fat": 0.0
+          },
+          "texture": "fleshy",
+          "taste_notes": [
+            "green",
+            "mild"
+          ],
+          "scent_notes": [
+            "fresh"
+          ],
+          "average_fiber_length_cm": 1.5,
+          "fiber_strength_modifier": 0.1,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              12
+            ],
+            "actions_until_depleted": [
+              3,
+              6
+            ]
+          },
+          "harvest_damage": 0.15,
+          "regrowth_days": 12,
+          "regrowth_max_harvests": 3,
+          "on_harvest_injury": null,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "fresh",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "mid_summer"
+          },
+          "field_description": "Bright clusters of papilionaceous flowers varying from purple to pinkish-blue.",
+          "game_description": "Delicate edible flowers that can be eaten directly or added to food.",
+          "edibility_score": 0.95,
+          "edibility_harshness": 0.0,
+          "unit_weight_g": 0.5,
+          "nutrition": {
+            "calories": 0.1,
+            "protein": 0.01,
+            "carbs": 0.02,
+            "fat": 0.0
+          },
+          "texture": "tender",
+          "taste_notes": [
+            "sweet",
+            "floral"
+          ],
+          "scent_notes": [
+            "floral"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              3,
+              8
+            ],
+            "actions_until_depleted": [
+              2,
+              5
+            ]
+          },
+          "harvest_damage": 0.05,
+          "regrowth_days": 8,
+          "regrowth_max_harvests": 1,
+          "on_harvest_injury": null,
+          "decay_days": 2.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "pod",
+      "available_life_stages": [
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "green",
+          "seasonal_window": {
+            "start": "mid_summer",
+            "end": "early_fall"
+          },
+          "field_description": "A flat, fleshy green pea pod.",
+          "game_description": "Tender young pods are edible whole, much like snow peas. They have not yet developed toxins.",
+          "edibility_score": 0.9,
+          "edibility_harshness": 0.1,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 4.0,
+            "protein": 0.3,
+            "carbs": 0.7,
+            "fat": 0.05
+          },
+          "texture": "crisp",
+          "taste_notes": [
+            "sweet",
+            "green"
+          ],
+          "scent_notes": [
+            "fresh",
+            "grassy"
+          ],
+          "average_fiber_length_cm": 2.0,
+          "fiber_strength_modifier": 0.1,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 4,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              6
+            ],
+            "actions_until_depleted": [
+              3,
+              8
+            ]
+          },
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "decay_days": 4.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.1
+        },
+        {
+          "id": "dry",
+          "seasonal_window": {
+            "start": "mid_fall",
+            "end": "winter"
+          },
+          "field_description": "A brittle, brownish pod that coils and rattles when shaken.",
+          "game_description": "The pod is inedible, but contains mature seeds. Requires processing by hand to extract the peas.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 7.0,
+          "nutrition": {
+            "calories": 16.0,
+            "protein": 1.1,
+            "carbs": 2.7,
+            "fat": 0.1
+          },
+          "processing_options": [
+            {
+              "id": "extract_peas",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "pea",
+                  "yield_fraction": 0.65,
+                  "output_unit_weight_g": 1.5
+                },
+                {
+                  "part": "pod_husk",
+                  "yield_fraction": 0.35,
+                  "output_unit_weight_g": 2.45
+                }
+              ]
+            }
+          ],
+          "texture": "papery",
+          "taste_notes": [],
+          "scent_notes": [
+            "dry",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 3.0,
+          "fiber_strength_modifier": 0.2,
+          "craft_tags": [],
+          "potency_multiplier": 1.0,
+          "decay_days": 60.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "pea",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "extracted",
+          "field_description": "Small, dense, round seeds ranging from pale olive to mottled brown.",
+          "game_description": "High in protein but contains harsh toxins. Cannot be eaten raw. Cooking the peas thoroughly in a stew completely neutralizes the toxins.",
+          "edibility_score": 0.1,
+          "edibility_harshness": 0.9,
+          "unit_weight_g": 1.5,
+          "nutrition": {
+            "calories": 5.1,
+            "protein": 0.35,
+            "carbs": 0.9,
+            "fat": 0.02
+          },
+          "raw_extraction_efficiency": 0.0,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.85,
+          "cooked_harshness": 0.1,
+          "texture": "hard",
+          "taste_notes": [
+            "starchy",
+            "bitter"
+          ],
+          "scent_notes": [
+            "dry",
+            "earthy"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "can_squirrel_cache": true,
+          "decay_days": 180.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 1.3
+        }
+      ]
+    },
+    {
+      "name": "pod_husk",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "dry",
+          "field_description": "A twisted, empty brown husk from a beach pea pod.",
+          "game_description": "A dry, empty husk. Completely inedible.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 2.45,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "papery",
+          "taste_notes": [],
+          "scent_notes": [
+            "dry",
+            "dusty"
+          ],
+          "average_fiber_length_cm": 1.5,
+          "fiber_strength_modifier": 0.1,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "decay_days": 60.0,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    }
+  ]
+}

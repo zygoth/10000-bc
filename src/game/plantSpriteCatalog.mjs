@@ -106,10 +106,44 @@ export function getPlantSpriteFrame(speciesId, stageName) {
   }
 
   return {
-    imagePath: species.imagePath,
-    atlasWidth: species.atlasWidth,
-    atlasHeight: species.atlasHeight,
+    imagePath: frame.imagePath || species.imagePath,
+    atlasWidth: frame.atlasWidth ?? species.atlasWidth,
+    atlasHeight: frame.atlasHeight ?? species.atlasHeight,
     frame,
+    textureFilter: species.textureFilter || 'nearest',
+  };
+}
+
+/**
+ * Merged SVG inspect: clip to one life-stage cell (browser renders vector art).
+ * @returns {{ imagePath: string, viewBoxFull: { w: number, h: number }, viewBoxFrame: { x: number, y: number, w: number, h: number } } | null}
+ */
+export function getPlantInspectSvg(speciesId, stageName) {
+  const inspectSvg = PLANT_SPRITE_CATALOG[speciesId]?.inspectSvg;
+  const frame = inspectSvg?.lifeStageFrames?.[stageName];
+  if (!inspectSvg?.imagePath || !frame) {
+    return null;
+  }
+  return {
+    imagePath: inspectSvg.imagePath,
+    viewBoxFull: { w: inspectSvg.viewBoxW, h: inspectSvg.viewBoxH },
+    viewBoxFrame: { x: frame.x, y: frame.y, w: frame.w, h: frame.h },
+  };
+}
+
+/**
+ * Same as getPlantInspectSvg for part inventory / future part-zoom UI.
+ */
+export function getPlantInspectPartSvg(speciesId, partName, subStageId) {
+  const inspectSvg = PLANT_SPRITE_CATALOG[speciesId]?.inspectSvg;
+  const frame = inspectSvg?.partSubStageFrames?.[partName]?.[subStageId];
+  if (!inspectSvg?.imagePath || !frame) {
+    return null;
+  }
+  return {
+    imagePath: inspectSvg.imagePath,
+    viewBoxFull: { w: inspectSvg.viewBoxW, h: inspectSvg.viewBoxH },
+    viewBoxFrame: { x: frame.x, y: frame.y, w: frame.w, h: frame.h },
   };
 }
 
@@ -137,11 +171,15 @@ export function getPlantPartSpriteFrame(speciesId, partName, subStageId) {
     return null;
   }
 
+  // Match `getPlantSpriteFrame`: per-frame `imagePath` + atlas (from merged SVG/PNG) can differ
+  // from `species.*` when life stages are packed to a global sheet; part UVs still live on the
+  // main per-species texture until/unless parts are moved to a separate page.
   return {
-    imagePath: species.imagePath,
-    atlasWidth: species.atlasWidth,
-    atlasHeight: species.atlasHeight,
+    imagePath: frame.imagePath || species.imagePath,
+    atlasWidth: frame.atlasWidth ?? species.atlasWidth,
+    atlasHeight: frame.atlasHeight ?? species.atlasHeight,
     frame,
+    textureFilter: species.textureFilter || 'nearest',
   };
 }
 

@@ -40,6 +40,7 @@ import { MAX_DAILY_TICK_OVERDRAFT } from './game/simActions.mjs';
 import { TECH_RESEARCH_TASK_KIND } from './game/techResearchCatalog.mjs';
 import {
   getDeadLogSpriteFrame,
+  getPlantInspectSvg,
   getPlantSpriteFrame,
   getRockSpriteFrame,
 } from './game/plantSpriteCatalog.mjs';
@@ -56,6 +57,8 @@ import { ANIMAL_BY_ID, ANIMAL_CATALOG } from './game/animalCatalog.mjs';
 import { ITEM_BY_ID } from './game/itemCatalog.mjs';
 import { TICKS_PER_DAY as SIM_TICKS_PER_DAY } from './game/simCore.constants.mjs';
 import { isActorWithinCampFootprint } from './game/campFootprint.mjs';
+import { getPartnerTomorrowQueueCapacityPreview } from './game/partnerCampSchedule.mjs';
+import { getCampStationWorldSpriteFrame, getCampWigwamSpriteFrame } from './game/campSpriteCatalog.mjs';
 import { advanceStateToNextMorning } from './game/debriefDayTransition.mjs';
 import { formatPlantPartLabelForPlayer, parsePlantPartItemId } from './game/plantPartDescriptors.mjs';
 import { isPlantSpeciesIdentifiedInState } from './game/plantSpeciesIdentification.mjs';
@@ -91,6 +94,7 @@ import CarrotPartSpriteProbe from './ui/CarrotPartSpriteProbe.jsx';
 import TitleScreen from './ui/title/TitleScreen.jsx';
 import { generateWorldStartState } from './game/worldStart.mjs';
 import { getGameState as getStoredGameState, setGameState as setStoredGameState } from './game/gameStore.mjs';
+import { loadAudioSettings, saveAudioSettings } from './settings/audioSettings.mjs';
 import { useGameDispatch, useGameStore } from './ui/useGameStore.js';
 import PixiWorldView from './rendering/PixiWorldView.js';
 import { useGameMusic } from './music/useGameMusic.js';
@@ -995,6 +999,10 @@ function App() {
   const [showAnchorDebug, setShowAnchorDebug] = useState(false);
   const [isInventoryPanelOpen, setIsInventoryPanelOpen] = useState(false);
   const [isPauseMenuOpen, setIsPauseMenuOpen] = useState(false);
+  const [audioSettings, setAudioSettings] = useState(() => loadAudioSettings());
+  useEffect(() => {
+    saveAudioSettings(audioSettings);
+  }, [audioSettings]);
   const [debriefTab, setDebriefTab] = useState('summary');
   const [hasVisitedMealTab, setHasVisitedMealTab] = useState(false);
   const [dismissedWarningIds, setDismissedWarningIds] = useState([]);
@@ -1162,6 +1170,7 @@ function App() {
     isDebriefActive,
     dayOfYear: gameState?.dayOfYear,
     gameStateVersion,
+    musicVolume: audioSettings.music,
   });
   const playerActor = gameState?.actors?.player || null;
   const partnerActor = gameState?.actors?.partner || null;
@@ -1214,8 +1223,30 @@ function App() {
     [campStockpileStacks, gameState],
   );
 
+  const mealPlanReservedByItemId = useMemo(() => {
+    const m = new Map();
+    const ings = Array.isArray(gameState?.camp?.mealPlan?.ingredients) ? gameState.camp.mealPlan.ingredients : [];
+    for (const e of ings) {
+      const id = typeof e?.itemId === 'string' ? e.itemId : '';
+      const q = Math.max(0, Math.floor(Number(e?.quantity) || 0));
+      if (!id) continue;
+      m.set(id, (m.get(id) || 0) + q);
+    }
+    return m;
+  }, [gameStateVersion, gameState?.camp?.mealPlan?.ingredients]);
+
+  const mealCandidatesStockpileEntries = useMemo(
+    () => campStockpileEntries
+      .map((entry) => {
+        const s = Math.max(0, Math.floor(Number(entry.quantity) || 0));
+        const r = mealPlanReservedByItemId.get(entry.itemId) || 0;
+        const net = Math.max(0, s - r);
+        return { ...entry, quantity: net, _mealStockGross: s };
+      })
+      .filter((e) => e.quantity > 0),
+    [campStockpileEntries, mealPlanReservedByItemId],
+  );
   const mealCandidatesInventoryEntries = playerInventoryEntries;
-  const mealCandidatesStockpileEntries = campStockpileEntries;
 
   const setMealPlanIngredients = useCallback((nextIngredients) => {
     const ingredients = Array.isArray(nextIngredients) ? nextIngredients : [];
@@ -1320,6 +1351,19 @@ function App() {
     : { ingredients: [], preview: null };
   const mealPlanIngredients = Array.isArray(mealPlan.ingredients) ? mealPlan.ingredients : [];
   const mealPlanPreview = mealPlan.preview && typeof mealPlan.preview === 'object' ? mealPlan.preview : null;
+  const partnerTomorrowQueuePreview = useMemo(
+    () => getPartnerTomorrowQueueCapacityPreview(gameState, partnerActor, mealPlanPreview),
+    [gameState, gameStateVersion, partnerActor, mealPlanPreview],
+  );
+  const partnerQueueEstimatedTicks = useMemo(() => {
+    const list = Array.isArray(queuePendingTasks) ? queuePendingTasks : [];
+    let sum = 0;
+    for (const t of list) {
+      const tr = Number(t?.ticksRequired);
+      sum += Number.isInteger(tr) ? tr : Math.max(1, Math.floor(Number(t?.ticksRequired) || 0));
+    }
+    return sum;
+  }, [queuePendingTasks]);
   const lastMealResult = gameState?.camp?.lastMealResult && typeof gameState.camp.lastMealResult === 'object'
     ? gameState.camp.lastMealResult
     : null;
@@ -1917,16 +1961,16 @@ function App() {
       if (aboveGroundParts.length > 0) {
         const identified = isPlantSpeciesIdentifiedInState(gameState, firstPlant.speciesId);
         const inspectPlantSprite = getPlantSpriteFrame(firstPlant.speciesId, firstPlant.stageName);
-        const stageSize = Number(lifeStage?.size || 0);
-        const inspectPreviewPx = stageSize >= 8 ? 96 : 72;
+        const inspectPlantSvg = getPlantInspectSvg(firstPlant.speciesId, firstPlant.stageName);
         let inspectPlantSpriteStyle = null;
         if (inspectPlantSprite) {
+          /* PNG fallback: native atlas pixels (1:1). Prefer inspectPlantSvg when present. */
           const fw = Math.max(1, inspectPlantSprite.frame.w);
-          const fh = inspectPlantSprite.frame.h;
+          const fh = Math.max(1, inspectPlantSprite.frame.h);
           inspectPlantSpriteStyle = {
-            ...spriteStyle(inspectPlantSprite, inspectPreviewPx, 'fit'),
-            width: `${inspectPreviewPx}px`,
-            height: `${Math.max(1, Math.round(inspectPreviewPx * (fh / fw)))}px`,
+            ...spriteStyle(inspectPlantSprite, 1, 'native'),
+            width: `${Math.round(fw)}px`,
+            height: `${Math.round(fh)}px`,
             imageRendering: 'pixelated',
             backgroundRepeat: 'no-repeat',
           };
@@ -1942,6 +1986,7 @@ function App() {
           gameDescription: typeof species?.game_description === 'string' ? species.game_description : '',
           physicalDescription: typeof species?.physical_description === 'string' ? species.physical_description : '',
           activeParts: aboveGroundParts,
+          inspectPlantSvg,
           inspectPlantSpriteStyle,
         };
       }
@@ -2979,7 +3024,13 @@ function App() {
           break;
         case 'Escape':
           event.preventDefault();
-          setIsPauseMenuOpen((prev) => !prev);
+          if (isInventoryPanelOpen) {
+            setIsInventoryPanelOpen(false);
+          } else if (tilePanelMode === 'inspect') {
+            setTilePanelMode('context');
+          } else {
+            setIsPauseMenuOpen((prev) => !prev);
+          }
           break;
         case 'i':
         case 'I':
@@ -3029,7 +3080,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [panCamera, rendererMode, selectedInspectData, isDebriefActive, tribeGameOverSummary.isGameOver]);
+  }, [panCamera, rendererMode, selectedInspectData, isDebriefActive, tribeGameOverSummary.isGameOver, isInventoryPanelOpen, tilePanelMode]);
 
   const handleObserverPointerDown = (event) => {
     if (event.button !== 0) {
@@ -3213,7 +3264,7 @@ function App() {
         const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
           ? zone.speciesId[0].toUpperCase()
           : '';
-        const featureOverlaySymbol = tile.beehive
+        const featureOverlaySymbol = (showAnchorDebug && tile.beehive?.active)
           ? 'B'
           : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
         const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
@@ -3222,12 +3273,16 @@ function App() {
         const isPlayerTile = Number(playerActor?.x) === worldX && Number(playerActor?.y) === worldY;
         const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
         const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
+        const campWorldSprite = stationAtTile
+          ? getCampStationWorldSpriteFrame(stationAtTile)
+          : (isCampTile ? getCampWigwamSpriteFrame() : null);
         const tileEntityTokens = buildTileEntityTokens(tile, {
           isPlayerTile,
           isCampTile,
           stationAtTile,
           worldItems,
           camp: gameState?.camp,
+          omitCampEntityLabels: Boolean(campWorldSprite),
         });
         const symbol = plant ? plant.speciesId[0].toUpperCase() : zoneSymbol;
         const recentTileEvent = gameState.recentDispersal?.byTile?.[`${worldX},${worldY}`] || null;
@@ -3358,6 +3413,7 @@ function App() {
                   windowWidth={windowSize.width}
                   windowHeight={windowSize.height}
                   cameraAnchorElevationPx={cameraAnchorElevationPx}
+                  sfxVolume={audioSettings.sfx}
                   selectedTileX={selectedTileX}
                   selectedTileY={selectedTileY}
                   showAnchorDebug={showAnchorDebug}
@@ -3440,11 +3496,17 @@ function App() {
           selectedTileEntity={selectedTileEntity}
           selectedTileWorldItems={selectedTileWorldItemEntries}
           tilePanelMode={tilePanelMode}
+          onRequestCloseInspect={() => setTilePanelMode('context')}
           selectedInspectData={selectedInspectData}
           onRunQuickAction={runQuickAction}
           isInventoryPanelOpen={isInventoryPanelOpen}
+          onRequestCloseInventory={() => setIsInventoryPanelOpen(false)}
           isPauseMenuOpen={isPauseMenuOpen}
           onClosePauseMenu={() => setIsPauseMenuOpen(false)}
+          musicVolume={audioSettings.music}
+          sfxVolume={audioSettings.sfx}
+          onChangeMusicVolume={(v) => setAudioSettings((s) => ({ ...s, music: v }))}
+          onChangeSfxVolume={(v) => setAudioSettings((s) => ({ ...s, sfx: v }))}
           actionComposerStatus={actionComposerStatus}
           playActionFeed={playActionFeed}
           playerCarryWeightKg={playerCarryWeightKg}
@@ -3530,6 +3592,22 @@ function App() {
           onMealAddFromInventory={addMealIngredientFromInventory}
           onMealRemoveIngredient={removeMealIngredient}
           onBeginDay={() => {
+            const cap = Math.max(0, Math.floor(Number(partnerTomorrowQueuePreview?.queueCapacity) || 0));
+            const used = Math.max(0, Math.floor(partnerQueueEstimatedTicks) || 0);
+            const partnerPresent = partnerActor && typeof partnerActor === 'object'
+              && (Number(partnerActor?.health) || 0) > 0;
+            if (partnerPresent && cap > 0) {
+              const slack = Math.max(5, Math.floor(cap * 0.05));
+              if (used < cap - slack) {
+                const ok = window.confirm(
+                  "Partner task queue is not using tomorrow's full estimated tick budget. "
+                  + `Planned: ~${used} ticks, estimated capacity: ~${cap} ticks. Begin the new day anyway?`,
+                );
+                if (!ok) {
+                  return;
+                }
+              }
+            }
             // Commit stew now, then let the remaining ticks drain hunger into morning.
             const committed = advanceTickInStore({
               actions: [

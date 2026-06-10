@@ -8,6 +8,11 @@ import campWorkMaintenanceShuffle from './catalog/camp_work_maintenance_shuffle.
 import turdusMigratorius from './catalog/turdus_migratorius.json';
 import cardinalisCardinalis from './catalog/cardinalis_cardinalis.json';
 import melospizaMelodia from './catalog/melospiza_melodia.json';
+import agelaiusPhoeniceus from './catalog/agelaius_phoeniceus.json';
+import passerinaCyanea from './catalog/passerina_cyanea.json';
+import pipiloErythrophthalmus from './catalog/pipilo_erythrophthalmus.json';
+import troglodytesAedon from './catalog/troglodytes_aedon.json';
+import zenaidaMacroura from './catalog/zenaida_macroura.json';
 import spinusTristis from './catalog/spinus_tristis.json';
 
 /**
@@ -29,6 +34,11 @@ export const AMBIENT_CATALOG = [
   turdusMigratorius,
   cardinalisCardinalis,
   melospizaMelodia,
+  agelaiusPhoeniceus,
+  passerinaCyanea,
+  pipiloErythrophthalmus,
+  troglodytesAedon,
+  zenaidaMacroura,
   spinusTristis,
 ];
 

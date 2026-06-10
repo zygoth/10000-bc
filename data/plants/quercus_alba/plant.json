@@ -1,0 +1,912 @@
+{
+  "id": "quercus_alba",
+  "name": "White Oak",
+  "plant_family": "fagaceae",
+  "physical_description": "A massive, broad-canopied deciduous tree with light, ashy-gray bark that peels in loose plates. Leaves have 7 to 9 rounded lobes. Produces distinctively elongated acorns with shallow caps.",
+  "game_description": "A slow-growing hardwood providing vital resources. Acorns are highly nutritious but require shelling and leaching or extended boiling in stew to remove mild tannins. Bark is useful for medicine and cordage, while branches provide sturdy wood.",
+  "age_of_maturity": 240,
+  "scent": {
+    "strength": 0.1,
+    "primary_compound": "hexanal"
+  },
+  "longevity": "perennial",
+  "soil": {
+    "ph_range": [
+      5.5,
+      7.5
+    ],
+    "drainage": {
+      "tolerance_range": [
+        0.3,
+        0.9
+      ]
+    },
+    "fertility": {
+      "tolerance_range": [
+        0.3,
+        0.9
+      ]
+    },
+    "moisture": {
+      "tolerance_range": [
+        0.3,
+        0.8
+      ]
+    },
+    "shade": {
+      "tolerance_range": [
+        0.0,
+        0.6
+      ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.15
+      ]
+    }
+  },
+  "ph_effect_on_soil": -0.1,
+  "seeding_window": {
+    "start": "early_fall",
+    "end": "mid_fall"
+  },
+  "dispersal": {
+    "method": "animal_cached",
+    "base_radius_tiles": 10,
+    "wind_radius_bonus": 0,
+    "water_dispersed": false,
+    "animal_dispersed": true,
+    "seeds_per_mature_plant": [
+      100,
+      500
+    ],
+    "germination_rate": 0.4,
+    "germination_season": "spring",
+    "requires_disturbance": false,
+    "pioneer": false,
+    "viable_lifespan_days": 60
+  },
+  "on_tile_entry_injury": null,
+  "ingestion": {
+    "preparation": {
+      "raw_usable": false,
+      "processed_methods": [
+        "tea",
+        "poultice"
+      ],
+      "partner_prep_required_for": [
+        "tea"
+      ]
+    },
+    "pharmacokinetics": {
+      "onset_ticks": 30,
+      "peak_ticks": 90,
+      "duration_ticks": 240,
+      "processing_ticks": 360
+    },
+    "dose_response": [
+      {
+        "min_grams": 10,
+        "max_grams": 40,
+        "treatment_tag": "tannin_tea",
+        "effects": [
+          {
+            "type": "medicinal",
+            "target": "gut_illness",
+            "modifier": 1.5
+          }
+        ]
+      },
+      {
+        "min_grams": 41,
+        "max_grams": null,
+        "effects": [
+          {
+            "type": "nausea_immediate",
+            "vomit_threshold_grams": 60
+          }
+        ]
+      }
+    ]
+  },
+  "life_stages": [
+    {
+      "stage": "seedling",
+      "min_age_days": 0,
+      "seasonal_window": null,
+      "size": 2,
+      "field_description": "A small woody shoot with a few deeply lobed, pale green leaves."
+    },
+    {
+      "stage": "sapling",
+      "min_age_days": 240,
+      "seasonal_window": null,
+      "size": 6,
+      "field_description": "A young tree with light gray, slightly scaly bark and a spreading crown of lobed leaves."
+    },
+    {
+      "stage": "vegetative",
+      "min_age_days": 360,
+      "seasonal_window": {
+        "start_day": 1,
+        "end_day": 10
+      },
+      "size": 10,
+      "field_description": "A massive hardwood tree. Its wide canopy is densely packed with bright green, deeply lobed leaves."
+    },
+    {
+      "stage": "flowering",
+      "min_age_days": 361,
+      "seasonal_window": {
+        "start_day": 11,
+        "end_day": 15
+      },
+      "size": 10,
+      "field_description": "A massive hardwood tree. Small, yellowish-green catkins hang from the branches among the spring foliage."
+    },
+    {
+      "stage": "fruiting",
+      "min_age_days": 362,
+      "seasonal_window": {
+        "start_day": 16,
+        "end_day": 25
+      },
+      "size": 10,
+      "field_description": "A massive hardwood tree with a full canopy. Elongated green and brown acorns are visible among the lobed leaves."
+    },
+    {
+      "stage": "senescent",
+      "min_age_days": 363,
+      "seasonal_window": {
+        "start_day": 26,
+        "end_day": 30
+      },
+      "size": 10,
+      "field_description": "A massive hardwood tree turning deep red and brown as autumn progresses. Many leaves still cling to the branches."
+    },
+    {
+      "stage": "winter_bare",
+      "min_age_days": 364,
+      "seasonal_window": {
+        "start_day": 31,
+        "end_day": 40
+      },
+      "size": 10,
+      "field_description": "A massive, leafless hardwood tree. Its pale, ashy-gray bark and thick, rugged branching structure are completely exposed."
+    }
+  ],
+  "parts": [
+    {
+      "name": "leaf",
+      "available_life_stages": [
+        "seedling",
+        "sapling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "senescent"
+      ],
+      "sub_stages": [
+        {
+          "id": "spring_green",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_summer"
+          },
+          "field_description": "A bright green leaf with 7 to 9 smooth, rounded lobes. Matte on top and slightly paler underneath.",
+          "game_description": "Oak leaves are intensely astringent and inedible, but can be boiled into a medicinal tea to treat gut illness.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 0.9,
+          "unit_weight_g": 1.2,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "leathery",
+          "taste_notes": [
+            "intensely bitter",
+            "astringent"
+          ],
+          "scent_notes": [
+            "green",
+            "tannic"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.8,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              20,
+              50
+            ],
+            "actions_until_depleted": [
+              15,
+              30
+            ],
+            "ground_action_fraction": 0.1
+          },
+          "reach_tier": "canopy",
+          "reach_tier_by_life_stage": {
+            "seedling": "ground",
+            "sapling": "elevated"
+          },
+          "harvest_damage": 0.05,
+          "regrowth_days": 15,
+          "regrowth_max_harvests": 2,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        },
+        {
+          "id": "fall_dry",
+          "seasonal_window": {
+            "start": "early_fall",
+            "end": "late_fall"
+          },
+          "field_description": "A dry, brown oak leaf with smooth rounded lobes. Crispy and brittle.",
+          "game_description": "Dry oak leaves offer less medicinal value than green ones, but can still be boiled for a weak tannin tea.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "texture": "brittle",
+          "taste_notes": [
+            "dry",
+            "dusty",
+            "bitter"
+          ],
+          "potency_multiplier": 0.3,
+          "harvest_yield": {
+            "units_per_action": [
+              20,
+              50
+            ],
+            "actions_until_depleted": [
+              10,
+              20
+            ],
+            "ground_action_fraction": 0.3
+          },
+          "regrowth_days": null,
+          "regrowth_max_harvests": null
+        }
+      ]
+    },
+    {
+      "name": "flower",
+      "available_life_stages": [
+        "flowering"
+      ],
+      "sub_stages": [
+        {
+          "id": "catkins",
+          "seasonal_window": {
+            "start": "mid_spring",
+            "end": "late_spring"
+          },
+          "field_description": "Clustered strings of tiny, yellowish-green pollen flowers hanging from the twigs.",
+          "game_description": "Oak catkins are harmless but provide almost no nutritional or practical value.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.4,
+          "unit_weight_g": 0.5,
+          "nutrition": {
+            "calories": 0.1,
+            "protein": 0.01,
+            "carbs": 0.02,
+            "fat": 0.0
+          },
+          "texture": "soft",
+          "taste_notes": [
+            "bland",
+            "dusty"
+          ],
+          "scent_notes": [
+            "pollen",
+            "faintly floral"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 3,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              10,
+              25
+            ],
+            "actions_until_depleted": [
+              5,
+              10
+            ],
+            "ground_action_fraction": 0.05
+          },
+          "reach_tier": "canopy",
+          "harvest_damage": 0.01,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 3.0,
+          "can_dry": false,
+          "stew_nutrition_factor": 1.0
+        }
+      ]
+    },
+    {
+      "name": "acorn",
+      "available_life_stages": [
+        "fruiting"
+      ],
+      "sub_stages": [
+        {
+          "id": "ripe",
+          "seasonal_window": {
+            "start": "late_summer",
+            "end": "late_fall"
+          },
+          "field_description": "An elongated, light brown nut seated in a shallow, knobby cap.",
+          "game_description": "White oak acorns have fewer tannins than red oaks but still require cracking and leaching or heavy boiling to become a good food source. Squirrels eagerly cache these.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.7,
+          "unit_weight_g": 6.0,
+          "nutrition": {
+            "calories": 17.1,
+            "protein": 0.3,
+            "carbs": 2.5,
+            "fat": 1.1
+          },
+          "processing_options": [
+            {
+              "id": "crack_shell",
+              "ticks": 15,
+              "location": "hand",
+              "outputs": [
+                {
+                  "part": "seed",
+                  "yield_fraction": 0.75,
+                  "output_unit_weight_g": 4.5
+                },
+                {
+                  "part": "acorn_shell",
+                  "yield_fraction": 0.25,
+                  "output_unit_weight_g": 1.5
+                }
+              ]
+            }
+          ],
+          "raw_extraction_efficiency": 0.0,
+          "stew_nutrition_factor": 0.3,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.6,
+          "cooked_harshness": 0.3,
+          "texture": "hard",
+          "taste_notes": [
+            "astringent",
+            "nutty"
+          ],
+          "scent_notes": [
+            "earthy",
+            "woody"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.1,
+          "harvest_base_ticks": 2,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              15,
+              40
+            ],
+            "actions_until_depleted": [
+              20,
+              50
+            ],
+            "ground_action_fraction": 0.6
+          },
+          "reach_tier": "canopy",
+          "harvest_damage": 0.0,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": true,
+          "decay_days": 60.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "seed",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "raw_meat",
+          "seasonal_window": null,
+          "field_description": "A pale, dense acorn nutmeat, free of its shell.",
+          "game_description": "Can be eaten raw in a pinch due to lower tannins, but much better leached in a basket or boiled heavily in stew.",
+          "edibility_score": 0.4,
+          "edibility_harshness": 0.5,
+          "unit_weight_g": 4.5,
+          "nutrition": {
+            "calories": 17.1,
+            "protein": 0.3,
+            "carbs": 2.5,
+            "fat": 1.1
+          },
+          "raw_extraction_efficiency": 0.6,
+          "stew_nutrition_factor": 1.2,
+          "cooking_detoxifies": true,
+          "cooked_edibility_score": 0.8,
+          "cooked_harshness": 0.1,
+          "texture": "dense",
+          "taste_notes": [
+            "starchy",
+            "mildly astringent",
+            "sweet"
+          ],
+          "scent_notes": [
+            "nutty"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": true,
+          "decay_days": 30.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "leached_acorn",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "ready_to_eat",
+          "seasonal_window": null,
+          "field_description": "Water-logged, darkened acorn meat that has been leached of its bitter tannins.",
+          "game_description": "A highly nutritious, mildly sweet staple food. The tannins are gone, making it perfectly safe and palatable raw or cooked.",
+          "edibility_score": 0.9,
+          "edibility_harshness": 0.0,
+          "unit_weight_g": 4.5,
+          "nutrition": {
+            "calories": 17.1,
+            "protein": 0.3,
+            "carbs": 2.5,
+            "fat": 1.1
+          },
+          "raw_extraction_efficiency": 1.0,
+          "stew_nutrition_factor": 1.3,
+          "texture": "soft",
+          "taste_notes": [
+            "sweet",
+            "starchy",
+            "nutty"
+          ],
+          "scent_notes": [
+            "earthy",
+            "clean"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 5.0,
+          "can_dry": true
+        }
+      ]
+    },
+    {
+      "name": "acorn_shell",
+      "available_life_stages": [],
+      "sub_stages": [
+        {
+          "id": "fragments",
+          "seasonal_window": null,
+          "field_description": "Brittle, fragmented husks of acorn shells.",
+          "game_description": "Inedible debris left over from cracking acorns.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 1.5,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "woody",
+          "taste_notes": [
+            "astringent"
+          ],
+          "scent_notes": [
+            "woody"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": null,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": null,
+          "harvest_damage": null,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "outer_bark",
+      "available_life_stages": [
+        "sapling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "senescent",
+        "winter_bare"
+      ],
+      "sub_stages": [
+        {
+          "id": "mature_bark",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "Thick, light ashy-gray bark that scales and peels in overlapping plates.",
+          "game_description": "Tough protective outer bark. Rich in tannins, it can be steeped into a medicinal tea to treat gut illness, but has little other craft utility.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 50.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "rough",
+          "taste_notes": [
+            "intensely bitter",
+            "woody"
+          ],
+          "scent_notes": [
+            "dry wood",
+            "tannic"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.0,
+          "harvest_base_ticks": 10,
+          "harvest_tool_modifiers": {
+            "axe": 1.5,
+            "knife": 1.2
+          },
+          "harvest_requires_any_tools": [
+            "axe",
+            "knife"
+          ],
+          "harvest_yield": {
+            "units_per_action": [
+              5,
+              15
+            ],
+            "actions_until_depleted": [
+              4,
+              10
+            ]
+          },
+          "reach_tier": "ground",
+          "harvest_damage": 0.3,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "inner_bark",
+      "available_life_stages": [
+        "sapling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "senescent",
+        "winter_bare"
+      ],
+      "sub_stages": [
+        {
+          "id": "spring_cambium",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "late_spring"
+          },
+          "field_description": "A pale, moist layer of cambium scraped from just beneath the bark. Pliable and smelling of fresh sap.",
+          "game_description": "During spring sap flow, the inner bark is slightly sweet but still tannic. It yields usable cordage fiber.",
+          "edibility_score": 0.2,
+          "edibility_harshness": 0.7,
+          "unit_weight_g": 10.0,
+          "nutrition": {
+            "calories": 8.0,
+            "protein": 0.2,
+            "carbs": 1.7,
+            "fat": 0.1
+          },
+          "raw_extraction_efficiency": 0.5,
+          "stew_nutrition_factor": 1.1,
+          "texture": "moist fibrous",
+          "taste_notes": [
+            "mildly sweet",
+            "astringent",
+            "woody"
+          ],
+          "scent_notes": [
+            "fresh sap"
+          ],
+          "average_fiber_length_cm": 15.0,
+          "fiber_strength_modifier": 0.8,
+          "craft_tags": [
+            "cordage_fiber"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.6,
+          "harvest_base_ticks": 10,
+          "harvest_tool_modifiers": {
+            "axe": 1.5,
+            "knife": 1.2
+          },
+          "harvest_requires_any_tools": [
+            "axe",
+            "knife"
+          ],
+          "harvest_yield": {
+            "units_per_action": [
+              10,
+              20
+            ],
+            "actions_until_depleted": [
+              2,
+              5
+            ]
+          },
+          "reach_tier": "ground",
+          "harvest_damage": 0.5,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "decay_days": 3.0,
+          "can_dry": false
+        },
+        {
+          "id": "late_season_inner_bark",
+          "seasonal_window": {
+            "start": "early_summer",
+            "end": "winter"
+          },
+          "field_description": "Tough, dry strips of inner bark, highly fibrous and pale yellow-brown.",
+          "game_description": "Too tough and astringent to eat, but an excellent material for cordage and coarse bark cloth. Retains medicinal tannin properties.",
+          "edibility_score": 0.05,
+          "edibility_harshness": 0.9,
+          "nutrition": {
+            "calories": 4.0,
+            "protein": 0.1,
+            "carbs": 0.8,
+            "fat": 0.0
+          },
+          "raw_extraction_efficiency": 0.2,
+          "stew_nutrition_factor": 0.5,
+          "texture": "dry fibrous",
+          "taste_notes": [
+            "intensely bitter",
+            "woody"
+          ],
+          "scent_notes": [
+            "dry wood"
+          ],
+          "average_fiber_length_cm": 18.0,
+          "fiber_strength_modifier": 1.1,
+          "craft_tags": [
+            "cordage_fiber",
+            "inner_bark_cloth"
+          ],
+          "potency_multiplier": 1.2,
+          "decay_days": 5.0
+        }
+      ]
+    },
+    {
+      "name": "branch",
+      "available_life_stages": [
+        "seedling",
+        "sapling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "senescent",
+        "winter_bare"
+      ],
+      "sub_stages": [
+        {
+          "id": "wood",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A sturdy, solid limb of oak wood with light gray bark.",
+          "game_description": "White oak wood is incredibly dense, heavy, and rot-resistant, making excellent durable tool handles and structural material.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 500.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "hard woody",
+          "taste_notes": [
+            "woody"
+          ],
+          "scent_notes": [
+            "dry wood"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [
+            "stiff_stick"
+          ],
+          "ingestion": null,
+          "potency_multiplier": 0.0,
+          "harvest_base_ticks": 15,
+          "harvest_tool_modifiers": {
+            "axe": 1.5
+          },
+          "harvest_requires_any_tools": [
+            "axe"
+          ],
+          "harvest_yield": {
+            "units_per_action": [
+              2,
+              5
+            ],
+            "actions_until_depleted": [
+              5,
+              10
+            ],
+            "ground_action_fraction": 0.2
+          },
+          "reach_tier": "canopy",
+          "reach_tier_by_life_stage": {
+            "seedling": "ground",
+            "sapling": "elevated"
+          },
+          "harvest_damage": 0.1,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "available_life_stages": [
+        "seedling",
+        "sapling",
+        "vegetative",
+        "flowering",
+        "fruiting",
+        "senescent",
+        "winter_bare"
+      ],
+      "sub_stages": [
+        {
+          "id": "tree_root",
+          "seasonal_window": {
+            "start": "early_spring",
+            "end": "winter"
+          },
+          "field_description": "A thick, gnarly wooden root covered in dirt.",
+          "game_description": "Extremely difficult to extract and practically inedible, though it contains medicinal tannins.",
+          "edibility_score": 0.0,
+          "edibility_harshness": 1.0,
+          "unit_weight_g": 200.0,
+          "nutrition": {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0
+          },
+          "texture": "hard woody",
+          "taste_notes": [
+            "earthy",
+            "bitter"
+          ],
+          "scent_notes": [
+            "dirt",
+            "woody"
+          ],
+          "average_fiber_length_cm": 0.0,
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
+          "ingestion": null,
+          "potency_multiplier": 1.5,
+          "harvest_base_ticks": 15,
+          "harvest_tool_modifiers": {},
+          "harvest_requires_any_tools": [],
+          "harvest_yield": {
+            "units_per_action": [
+              1,
+              3
+            ],
+            "actions_until_depleted": [
+              5,
+              10
+            ]
+          },
+          "harvest_damage": 0.8,
+          "regrowth_days": null,
+          "regrowth_max_harvests": null,
+          "dig_ticks_to_discover": 45,
+          "on_harvest_injury": null,
+          "does_blickey_help_harvest": false,
+          "can_squirrel_cache": false,
+          "can_dry": true,
+          "stew_nutrition_factor": 0.0
+        }
+      ]
+    }
+  ]
+}

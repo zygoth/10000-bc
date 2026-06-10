@@ -66,6 +66,7 @@ export function applyActionEffectImpl(state, action, deps) {
     applyActorInventoryRelocation,
     resolveItemFootprint,
     maybeCreateDeadLog,
+    cleanupDeadPlants,
     applyHarvestAction,
     applyHarvestInjuryFromSubStage,
     normalizePartnerTask,
@@ -2392,6 +2393,35 @@ export function applyActionEffectImpl(state, action, deps) {
       return;
     }
 
+    if (targetType === 'ground_fungus') {
+      const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
+      const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
+      if (!inBounds(targetX, targetY, state.width, state.height)) {
+        return;
+      }
+      const tile = getTile(targetX, targetY);
+      const speciesId = typeof action.payload?.speciesId === 'string' ? action.payload.speciesId : '';
+      const outputItemId = typeof action.payload?.outputItemId === 'string'
+        ? action.payload.outputItemId
+        : (speciesId ? `ground_fungus:${speciesId}:fruiting_body` : '');
+      const zone = tile?.groundFungusZone;
+      if (!zone || !speciesId || !outputItemId || zone.speciesId !== speciesId) {
+        return;
+      }
+      const availableGrams = Math.max(0, Math.floor(Number(zone.yieldCurrentGrams) || 0));
+      const requestedGrams = Math.max(1, Math.floor(Number(action.payload?.harvestGrams) || 0));
+      const harvestedGrams = Math.min(availableGrams, requestedGrams);
+      if (harvestedGrams <= 0) {
+        return;
+      }
+
+      addActorInventoryItemWithOverflowDrop(state, actor, outputItemId, harvestedGrams, {
+        unitWeightKg: Number(action.payload?.outputUnitWeightKg) || 0.001,
+      });
+      zone.yieldCurrentGrams = Math.max(0, availableGrams - harvestedGrams);
+      return;
+    }
+
     if (targetType === 'beehive') {
       const targetX = Number.isInteger(action.payload?.x) ? action.payload.x : Number(actor.x) || 0;
       const targetY = Number.isInteger(action.payload?.y) ? action.payload.y : Number(actor.y) || 0;
@@ -2438,6 +2468,7 @@ export function applyActionEffectImpl(state, action, deps) {
       bh.yieldCurrentHoneyGrams = 0;
       bh.yieldCurrentLarvaeGrams = 0;
       bh.yieldCurrentBeeswaxGrams = 0;
+      bh.active = false;
       bh.lastHarvestYear = Number.isInteger(state.year) ? state.year : null;
       bh.lastHarvestDay = Number.isInteger(state.dayOfYear) ? state.dayOfYear : null;
       const h = ((targetX * 73856093) ^ (targetY * 19349663) ^ ((Number(state.totalDaysSimulated) || 0) * 1315423911)) >>> 0;
@@ -2560,6 +2591,10 @@ export function applyActionEffectImpl(state, action, deps) {
         subStageId,
         outcome.appliedActions,
       );
+    }
+    const harvestedPlant = state.plants?.[plantId];
+    if (harvestedPlant && !harvestedPlant.alive) {
+      cleanupDeadPlants(state);
     }
     return;
   }

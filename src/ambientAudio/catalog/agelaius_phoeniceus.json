@@ -1,0 +1,83 @@
+{
+  "species_id": "agelaius_phoeniceus",
+  "display_name": "Red-winged blackbird",
+  "audio_role": "ambient_mobile",
+  "placement": {
+    "strategy": "year_weights_then_daily_emitters",
+    "max_emitters_on_map": 20,
+    "max_emitters_per_tile": 1
+  },
+  "one_shot_gain": 0.5,
+  "population_response": {
+    "version": 1,
+    "base": 0.046,
+    "season_multiplier_by_key": {
+      "spring": 1.35,
+      "summer": 0.95,
+      "fall": 0.65,
+      "winter": 0.18
+    },
+    "terms": [
+      {
+        "id": "wet_marshy",
+        "feature": "moisture",
+        "kind": "trapezoid",
+        "peak_at": 0.66,
+        "half_width": 0.3,
+        "floor": 0.08,
+        "ceiling": 1
+      },
+      {
+        "id": "cattail_open_sun",
+        "feature": "shade",
+        "kind": "trapezoid",
+        "peak_at": 0.2,
+        "half_width": 0.3,
+        "floor": 0.12,
+        "ceiling": 1
+      },
+      {
+        "id": "shallow_edge_water",
+        "feature": "water_type",
+        "kind": "enum_weight",
+        "weights": { "pond": 1.35, "river": 1.25, "land": 0.35 }
+      },
+      {
+        "id": "near_milkweed_wet_meadow",
+        "kind": "plant_affinity_neighbors",
+        "target_plant_species_ids": ["asclepias_syriaca", "urtica_dioica"],
+        "max_distance": 4,
+        "at_distance_0": 1.4,
+        "beyond_max": 0.8,
+        "interpolation": "linear_by_distance"
+      }
+    ],
+    "weight_clamp": [0, 8]
+  },
+  "day_activity": {
+    "kind": "day_tick_segments",
+    "segments": [
+      { "from_tick": 0, "to_tick": 95, "relative": 1 },
+      { "from_tick": 95, "to_tick": 285, "relative": 0.48 },
+      { "from_tick": 285, "to_tick": 380, "relative": 0.9 },
+      { "from_tick": 380, "to_tick": 400, "relative": 0.2 }
+    ]
+  },
+  "calls": [
+    {
+      "call_id": "konk_teeur",
+      "url": "/sounds/ambient/agelaius_phoeniceus_song.ogg",
+      "pick_weight": 1,
+      "flight_call": false,
+      "tags": [],
+      "generation_prompt": "Red-winged blackbird conk-lee-eeer song, marsh and wet ditch Indiana, 1–2.5s, no voices, bright and resonant"
+    }
+  ],
+  "scheduling": {
+    "mobile_roll_scale": 0.3,
+    "min_seconds_between_calls_same_species": 10,
+    "min_seconds_between_calls_same_emitter": 16,
+    "max_simultaneous_voices_for_species": 2,
+    "mute_when_listener_on_emitter_tile": false
+  }
+}

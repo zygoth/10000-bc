@@ -36,6 +36,8 @@ From the **repository root**:
 npm run sounds:missing
 ```
 
+For **sprite / art migration** status (plants SVG sheets, inventory gaps, world manifest), see [`sprite_missing_report.md`](sprite_missing_report.md) (`npm run sprites:missing` → `temp/missing-sprites-report.json`).
+
 This writes **`missing-sounds-report.json`** at the repo root with every catalog URL, whether the file exists under `public/`, and optional **`generation_prompt`** text from JSON for batch generation. It also writes **`public/sounds/ambient/variant-manifest.json`**: for each catalog base name, any extra files `name_v1.ogg`, `name_v2.ogg`, … on disk are grouped; the Web Audio layer picks **at random** per one-shot (see `ambientWebAudio.mjs` + `ambientSoundVariants.mjs`).
 
 ## Catalog JSON reference

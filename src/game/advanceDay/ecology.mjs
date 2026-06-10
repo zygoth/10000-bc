@@ -39,7 +39,11 @@ function environmentalStressSeverity(species, tile) {
     : tile.shade;
   const shadeStress = Math.min(1, toleranceDistance(effectiveShade, shadeMin, shadeMax));
 
-  return Math.max(phStress, drainageStress, fertilityStress, moistureStress, shadeStress);
+  const tileSalinity = Number.isFinite(Number(tile.salinity)) ? Number(tile.salinity) : 0;
+  const [salinityMin, salinityMax] = species.soil.salinity?.tolerance_range || [0, 1];
+  const salinityStress = Math.min(1, toleranceDistance(tileSalinity, salinityMin, salinityMax));
+
+  return Math.max(phStress, drainageStress, fertilityStress, moistureStress, shadeStress, salinityStress);
 }
 
 export function applyEnvironmentalVitality(state) {
@@ -89,6 +93,18 @@ function shadeRangeForSize(size) {
 function shadeStrengthForSize(size) {
   if (size <= 2) {
     return 0;
+  }
+  if (size === 3) {
+    return 0.01;
+  }
+  if (size === 4) {
+    return 0.02;
+  }
+  if (size === 5) {
+    return 0.03;
+  }
+  if (size === 6) {
+    return 0.2;
   }
   return Math.max(0.08, Math.min(0.85, (size - 2) / 8));
 }

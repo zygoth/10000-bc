@@ -129,6 +129,17 @@ export function assignGroundFungusZoneToTileImpl(tile, fungus, zoneId) {
   };
 }
 
+function tileEligibleForNewGroundFungusZone(state, tile, fungus, deps) {
+  if (!tile || tile.waterType || deps.isRockTile(tile)) {
+    return false;
+  }
+  if (typeof deps.isTileWithinCampFootprint === 'function'
+    && deps.isTileWithinCampFootprint(state, tile.x, tile.y)) {
+    return false;
+  }
+  return deps.computeGroundFungusSoilMatch(fungus, tile) > 0;
+}
+
 export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
   const {
     GROUND_FUNGUS_CATALOG,
@@ -137,6 +148,7 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
     rangeRollIntRandom,
     tileIndex,
     inBounds,
+    isTileWithinCampFootprint,
     assignGroundFungusZoneToTile,
   } = deps;
   if (state.groundFungusZonesGenerated) {
@@ -144,7 +156,11 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
   }
 
   const eligibleSpecies = GROUND_FUNGUS_CATALOG.filter((fungus) => state.tiles.some(
-    (tile) => computeGroundFungusSoilMatch(fungus, tile) > 0,
+    (tile) => tileEligibleForNewGroundFungusZone(state, tile, fungus, {
+      isRockTile,
+      computeGroundFungusSoilMatch,
+      isTileWithinCampFootprint,
+    }),
   ));
   if (eligibleSpecies.length === 0) {
     state.runGroundFungusPool = [];
@@ -161,7 +177,11 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
 
   for (const fungus of runPool) {
     const candidateTiles = state.tiles.filter(
-      (tile) => !tile.waterType && !isRockTile(tile) && computeGroundFungusSoilMatch(fungus, tile) > 0,
+      (tile) => tileEligibleForNewGroundFungusZone(state, tile, fungus, {
+        isRockTile,
+        computeGroundFungusSoilMatch,
+        isTileWithinCampFootprint,
+      }),
     );
     if (candidateTiles.length === 0) {
       continue;
@@ -194,8 +214,11 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
         }
 
         const walkedTile = state.tiles[tileIndex(walkX, walkY, state.width)];
-        if (walkedTile && !walkedTile.waterType && !isRockTile(walkedTile)
-          && computeGroundFungusSoilMatch(fungus, walkedTile) > 0) {
+        if (walkedTile && tileEligibleForNewGroundFungusZone(state, walkedTile, fungus, {
+          isRockTile,
+          computeGroundFungusSoilMatch,
+          isTileWithinCampFootprint,
+        })) {
           centerTile = walkedTile;
         }
       }
@@ -223,13 +246,17 @@ export function generateGroundFungusZonesInternalImpl(state, rng, deps) {
           if (tile.waterType || isRockTile(tile)) {
             continue;
           }
+          if (!tileEligibleForNewGroundFungusZone(state, tile, fungus, {
+            isRockTile,
+            computeGroundFungusSoilMatch,
+            isTileWithinCampFootprint,
+          })) {
+            continue;
+          }
           if (tile.groundFungusZone && tile.groundFungusZone.speciesId !== fungus.id) {
             continue;
           }
           if (tile.groundFungusZone && tile.groundFungusZone.speciesId === fungus.id) {
-            continue;
-          }
-          if (computeGroundFungusSoilMatch(fungus, tile) <= 0) {
             continue;
           }
 

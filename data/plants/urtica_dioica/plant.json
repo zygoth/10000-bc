@@ -38,6 +38,12 @@
         0.15,
         0.85
       ]
+    },
+    "salinity": {
+      "tolerance_range": [
+        0.0,
+        0.28
+      ]
     }
   },
   "ph_effect_on_soil": 0.0,
@@ -202,7 +208,8 @@
             "fresh"
           ],
           "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 1.0,
           "harvest_base_ticks": 3,
@@ -212,8 +219,8 @@
           },
           "harvest_yield": {
             "units_per_action": [
-              10,
-              25
+              3,
+              8
             ],
             "actions_until_depleted": [
               3,
@@ -304,7 +311,8 @@
             "pungent"
           ],
           "average_fiber_length_cm": 40.0,
-          "fiber_strength_modifier": 1.5,          "craft_tags": [
+          "fiber_strength_modifier": 1.5,
+          "craft_tags": [
             "cordage_fiber"
           ],
           "ingestion": null,
@@ -407,15 +415,16 @@
             "musky"
           ],
           "average_fiber_length_cm": 5.0,
-          "fiber_strength_modifier": 0.2,          "craft_tags": [],
+          "fiber_strength_modifier": 0.2,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 1.0,
           "harvest_base_ticks": 1,
           "harvest_tool_modifiers": {},
           "harvest_yield": {
             "units_per_action": [
-              2,
-              5
+              1,
+              2
             ],
             "actions_until_depleted": [
               2,
@@ -464,7 +473,8 @@
             "green"
           ],
           "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 0.5,
           "harvest_base_ticks": 3,
@@ -473,8 +483,8 @@
           },
           "harvest_yield": {
             "units_per_action": [
-              5,
-              10
+              1,
+              3
             ],
             "actions_until_depleted": [
               1,
@@ -521,7 +531,8 @@
             "earthy"
           ],
           "average_fiber_length_cm": 0.0,
-          "fiber_strength_modifier": 0.0,          "craft_tags": [],
+          "fiber_strength_modifier": 0.0,
+          "craft_tags": [],
           "ingestion": null,
           "potency_multiplier": 0.2,
           "harvest_base_ticks": 4,
@@ -530,8 +541,8 @@
           },
           "harvest_yield": {
             "units_per_action": [
-              5,
-              15
+              2,
+              6
             ],
             "actions_until_depleted": [
               2,

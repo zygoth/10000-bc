@@ -6,6 +6,7 @@ import { EARTHWORM_ITEM_ID } from '../../game/simCore.constants.mjs';
 import { SIMPLE_SNARE_TARGET_SPECIES_ID } from '../../game/trapBaitLand.mjs';
 import {
   getActionTickCost,
+  getGroundFungusById,
   getItemPickupInventoryBlockReason,
   listRockHarvestYieldChoices,
   pickupAddOptionsFromWorldStack,
@@ -306,12 +307,17 @@ export function getTileContextMenuEntries({
           tickCost: Number(tileHarvestValidation?.normalizedAction?.tickCost) || getActionTickCost('harvest', tileHarvestPayload),
           payload: tileHarvestValidation.normalizedAction?.payload || tileHarvestPayload,
         });
-      } else if (targetType === 'squirrel_cache' || targetType === 'log_fungus') {
+      } else if (targetType === 'squirrel_cache' || targetType === 'log_fungus' || targetType === 'ground_fungus') {
         const fungusSpeciesId = tileHarvestValidation?.normalizedAction?.payload?.speciesId;
+        const groundName = targetType === 'ground_fungus' && typeof fungusSpeciesId === 'string'
+          ? (getGroundFungusById(fungusSpeciesId)?.commonName || formatTokenLabel(fungusSpeciesId))
+          : null;
         entries.push({
           kind: 'harvest',
           label: targetType === 'squirrel_cache'
             ? 'Harvest squirrel cache'
+            : targetType === 'ground_fungus'
+              ? `Harvest ${groundName || 'mushrooms'}`
             : `Harvest ${formatTokenLabel(fungusSpeciesId || 'log fungus')}`,
           tickCost: Number(tileHarvestValidation?.normalizedAction?.tickCost) || getActionTickCost('harvest', tileHarvestPayload),
           payload: tileHarvestValidation.normalizedAction?.payload || tileHarvestPayload,

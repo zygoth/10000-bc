@@ -8,7 +8,6 @@ import {
   floorListenerTile,
 } from './ambientPlayHeadless.mjs';
 import { mulberry32 } from './ambientMath.mjs';
-import { runAmbientDebugThrottled, snapshotCampfireEligibility } from './ambientDebug.mjs';
 
 /**
  * Bridges sim state + camera to ambient weights, emitters, and Web Audio.
@@ -47,6 +46,13 @@ export class AmbientAudioBridge {
       this.audio.resumeFromUserGesture();
     };
     this.gestureHost.addEventListener('pointerdown', once, { once: true });
+  }
+
+  /**
+   * @param {number} linear 0..1; world/ambient (Web Audio) layer.
+   */
+  setSfxVolume(linear) {
+    this.audio.setSfxVolume(linear);
   }
 
   syncDay(state) {
@@ -97,27 +103,6 @@ export class AmbientAudioBridge {
       camY,
       catalog: this.catalog,
       dayTick,
-    });
-    runAmbientDebugThrottled('bridge', 500, () => {
-      const campfireEntry = this.catalog.find((e) => e.audio_role === 'camp_campfire');
-      if (!campfireEntry) {
-        // eslint-disable-next-line no-console
-        console.log('[ambient]', { t: 'no camp_campfire entry' });
-        return;
-      }
-      const snap = snapshotCampfireEligibility(state, lx, ly, campfireEntry);
-      const campfireCmd = loopCmds.find((c) => c.loopId === 'campfire');
-      // eslint-disable-next-line no-console
-      console.log('[ambient] bridge', {
-        camX,
-        camY,
-        lx,
-        ly,
-        campfireCmd,
-        ...snap,
-        dayTick,
-        width: state?.width,
-      });
     });
     for (const cmd of loopCmds) {
       if (cmd.op === 'ensure') {

@@ -35,6 +35,7 @@ This document contains all information needed to generate valid plant object JSO
 - **CRITICAL: All day values use IN-GAME DAYS throughout this document** — 1 in-game day ≈ 8 real-world days, 40 in-game days per year. This applies to `min_age_days`, `viable_lifespan_days`, `decay_days`, `regrowth_days`, and all other day-based properties.
 - **Calendar system:** The year runs from day 1 (start of spring) to day 40 (end of winter). Days 1-10 = spring, 11-20 = summer, 21-30 = fall, 31-40 = winter. When setting `seasonal_window` ranges, remember that day 1 is the first day of spring.
 - **Decay values are adapted for gameplay:** Use minimum 2 in-game days for perishable foods (berries, meat, greens) so items don't decay the same day you collect them. The system operates on whole days, so values below 1 don't make sense.
+- **World-map readability (sprites):** The sprite pipeline produces **one primary whole-plant sprite per life stage**. If reproductive structures (acorns, cones, fruit clusters) or strong seasonal silhouettes (bare deciduous crown vs full leaf) exist only in **part sub-stages** while life stages stay a generic `mature`, players cannot see those cues on the tile sprite. For woody plants, author **life stages** so the map matches what a forager should notice at a distance unless your project explicitly documents a different rendering rule.
 
 ---
 
@@ -65,6 +66,9 @@ This document contains all information needed to generate valid plant object JSO
       "tolerance_range": [0.0, 0.0]
     },
     "shade": {
+      "tolerance_range": [0.0, 0.0]
+    },
+    "salinity": {
       "tolerance_range": [0.0, 0.0]
     }
   },
@@ -200,6 +204,7 @@ This document contains all information needed to generate valid plant object JSO
 - Plants younger than this age have yields scaled proportionally: `scaling_factor = max(0.1, current_age / age_of_maturity)`
 - Scaling applies to both `units_per_action` and `actions_until_depleted`
 - Minimum scaling factor is 0.1 to ensure even very young plants produce something
+- **Patch / multi-sprite scaling (separate from age):** Catalog `harvest_yield` is always **per single logical plant instance**—one ramet in the patch layout, i.e. what you would harvest from **one** of the repeated small-plant sprites on a tile. At runtime, the sim multiplies the **`actions_until_depleted`** midpoint by **patch capacity** (`resolvePatchCapacity` in `plantPatchLayout.mjs`, driven by max life-stage `size` and optional `max_plants_per_tile`) while **`units_per_action` is not multiplied by patch capacity** (only by age). Do **not** bake “whole clump” or “every sprite on the tile” into `units_per_action`, or totals double-count when patch capacity is greater than 1. Example: midpoints `units_per_action` 2 × `actions_until_depleted` 2 with patch capacity 2 ⇒ ~4 harvest actions × 2 units/action ⇒ 8 inventory units per cycle—often too many for two visible plants unless both ranges are authored as per-instance singles ([1, 1] / [1, 1] targets ~2 units/cycle at patch 2 when mature).
 - **How to determine the value:**
   1. Find the first life stage that is NOT "seedling" (typically "vegetative", "flowering", "mature", "first_year", etc.)
   2. Use that stage's `min_age_days` value as `age_of_maturity`
@@ -248,6 +253,12 @@ This document contains all information needed to generate valid plant object JSO
   - `min` = minimum tolerated tile shade
   - `max` = maximum tolerated tile shade
   - **Strict germination rule:** if tile shade is outside this range, germination chance is 0.
+- `salinity` (object, required)
+  - `tolerance_range` (array of 2 floats `[min, max]` in [0.0, 1.0])
+  - **Tile index:** Each tile may carry a dimensionless `salinity` in [0.0, 1.0]. **0** = non-saline freshwater / typical inland soil (the default for the Indiana map). **1** = high salinity stress (e.g. coastal substrate, extreme road-deicing gradients, salt pans). The runtime omits the tile field when salinity is freshwater (0) so saves stay small; missing tile salinity is treated as **0**. The scale is **not** calibrated to real-world PSU or EC; use it consistently so glycophytes sit lower on the “upper tolerance” axis than facultative halophytes.
+  - `min` / `max` = tolerated interval on that index (same strict rule as moisture/shade: outside range ⇒ germination chance 0 and environmental tolerance checks fail).
+  - **Authoring (botanical):** Use literature on salt sensitivity and habitat: most temperate inland herbs and forest trees are **glycophytes** — keep **`max` relatively low** (often **0.15–0.35**) unless the species is documented as salt-tolerant (roadside weeds, some chenopods, coastal dunes). **Facultative** species that grow on Great Lakes shores or salted roads can use a **higher `max`** (e.g. **0.45–0.85**). True **obligate** halophytes may use a range **that does not include 0** (e.g. `[0.4, 1.0]`); they would not establish on freshwater Indiana tiles until regions support saline tiles — omit such species from inland-only rosters if needed.
+  - **Indiana / inland default tiles:** Map generation uses **`salinity` 0** everywhere for non-coastal Indiana. Species that should appear there **must include 0 in their interval** (almost always **`min`: 0**). Author `max` so relative ordering matches biology: facultative and coastal taxa (e.g. sea/beach peas) need a **higher `max`** than strict inland glycophytes (e.g. many forest trees, milkweeds) and than moderate roadside-tolerant herbs.
 
 **`ph_effect_on_soil`** (float, required)
 - How this plant affects soil pH over time
@@ -361,6 +372,7 @@ For `contact_rash`, `health_hit` is `null` and `debuff` is populated:
   - **Slow-growing trees** (hickory, walnut): Seedling stage 280 days (7 years), reach mature canopy size (typically 8-10) by 360-400 days (9-10 years)
   - **MAXIMUM**: No tree should require more than 400 in-game days (10 years) to reach full mature canopy size
   - Trees should have intermediate stages (sapling at size 3-6) between seedling and mature canopy
+  - **Seasonal canopy after maturity:** Length of youth does not replace seasonal **life stages** for deciduous or cone-bearing evergreens—see [Woody trees (deciduous and evergreen)](#life-stage-granularity-and-sprite-pipeline) under Life Stage Granularity.
   - **Do NOT use min_age_days values like 24 or 46 for trees** - these represent less than 2 years and are only appropriate for herbaceous annuals/perennials
 - Each stage has:
   - `stage` (string): Stage name (see valid stage names below)
@@ -401,6 +413,12 @@ Each life stage maps directly to a distinct sprite in the sprite generation pipe
 
 **Design philosophy:** When in doubt, err toward more stages — a missed visual distinction is a missed forager cue. Stages with identical visual representations should be merged into one stage rather than duplicated.
 
+**Woody trees (deciduous and evergreen):** The seasonal cycling guidance for **herbaceous perennials** applies in spirit to **non-evergreen (deciduous) trees** and, for reproduction, to **evergreens** as well—only the **numeric** `min_age_days` timelines grow longer (seedling → sapling over years). Once a tree reaches reproductive age, split the year into multiple **life stages** with `seasonal_window` whenever canopy silhouette or visible reproductive structures change in ways that matter on the map.
+
+- **Deciduous hardwoods (e.g. oaks, maples):** Do **not** satisfy autumn acorns or winter bare branches solely with `leaf` / `fruit` part **sub-stages** under a single endless `mature` life stage—the whole-plant sprite will stay generic while sub-stage art may never drive the tile. Model **leaf-out, flowering (if showy), nut/fruit visibility, and leaf-off canopy** as separate **life stages** (with botanically honest `field_description` text) so the sheet and world match player expectations.
+- **Evergreens:** Persistent needles do **not** excuse skipping reproductive stages. Cone-bearing conifers need **life-stage visibility** for pollen/cone development and mature cones (and any other species-typical silhouette change), same as herbaceous plants need distinct flowering/fruiting stages—otherwise players cannot read cone crops from the map.
+- **`dormant` vs bare deciduous winter:** In this document, **`dormant`** is defined for forms where above-ground structure is effectively gone and the renderer may suppress the tile sprite. A **leafless deciduous tree** usually still has a large above-ground silhouette (branches). Author a seasonal life stage whose description reads as **bare canopy / branching skeleton** if players must still **see** the tree on the map; only use `dormant` where it matches both biology and your engine’s rendering rules for suppressed sprites.
+
 #### Valid Life Stage Names
 
 Typical stage splits to consider (not all apply to every plant):
@@ -412,7 +430,7 @@ Typical stage splits to consider (not all apply to every plant):
 - **`seed_set`** — fruit has matured into dry seed pods, cones, or similar; distinct color/texture shift from `fruiting`; seeds or pods are harvestable
 - **`senescent`** — post-seed, dying back; bare or browning stems; signals the plant is done for the season but may still have harvestable roots or bark
 - **`dormant`** — above-ground parts gone; only underground parts remain harvestable; no sprite shown on tile (rendering layer suppresses sprite when all active parts are below-ground)
-- **`mature`** — use only when a plant does not go through visually distinct phases (e.g. an evergreen tree that looks the same year-round); do not use `mature` as a catch-all when finer stages apply
+- **`mature`** — use only when there are **no** seasonally distinct above-ground silhouettes **and** no reproductive structures worth signaling on the map tile for that species (unusual for temperate trees). **Never** use a single `mature` + `seasonal_window: null` as shorthand for decades of oak, maple, or pine canopy if cones, acorns, flowers, or bare winter crowns should read from the tile sprite.
 
 **For biennials:** `first_year` and `second_year` replace `mature` and may themselves be split further. For example, a biennial that is vegetative in year 1 and flowering → fruiting in year 2 should have `first_year`, `second_year_flowering`, `second_year_fruiting`.
 
@@ -447,7 +465,7 @@ Note: Dies on day 39 when no valid life stage exists (gap at days 39-40). The se
   {"stage": "dormant", "min_age_days": 7, "seasonal_window": {"start_day": 36, "end_day": 40}, "size": 1, "field_description": "..."}
 ]
 ```
-Note: Cycles through vegetative → flowering → fruiting → dormant annually once age thresholds are reached. This example is for herbaceous perennials (wildflowers, forbs), NOT trees. Trees need much longer min_age_days values.
+Note: Cycles through vegetative → flowering → fruiting → dormant annually once age thresholds are reached. **Deciduous trees** should follow the **same seasonal stage split** after they reach reproductive age—only `min_age_days` scales to multi-year growth (see tree timelines above). Replace herb-only `dormant` with a stage appropriate to **visible** bare canopy if your renderer suppresses sprites for `dormant`.
 
 **Biennial (two-year lifecycle, simple - no seasonal variation in year 1):**
 ```json
@@ -474,15 +492,30 @@ Note: Dies on day 36 of year 2 when no valid life stage exists (gap at days 36-4
 ```
 Note: Year 1 stages cover all 40 days (vegetative days 1-35, dormant days 36-40), preventing premature death. Year 2 stages leave gap at days 36-40, triggering death after seeding.
 
-**Evergreen tree (no seasonal variation):**
+**Deciduous tree (temperate hardwood — seasonal canopy after maturity):**
 ```json
 "life_stages": [
-  {"stage": "seedling", "min_age_days": 0, "seasonal_window": null, "size": 1, "field_description": "..."},
+  {"stage": "seedling", "min_age_days": 0, "seasonal_window": null, "size": 2, "field_description": "..."},
   {"stage": "sapling", "min_age_days": 240, "seasonal_window": null, "size": 5, "field_description": "..."},
-  {"stage": "mature", "min_age_days": 360, "seasonal_window": null, "size": 9, "field_description": "..."}
+  {"stage": "vegetative", "min_age_days": 360, "seasonal_window": {"start_day": 1, "end_day": 20}, "size": 9, "field_description": "Full green canopy; mast not prominent in silhouette."},
+  {"stage": "fruiting", "min_age_days": 361, "seasonal_window": {"start_day": 21, "end_day": 30}, "size": 9, "field_description": "Nut or samara silhouettes visible in crown."},
+  {"stage": "senescent", "min_age_days": 362, "seasonal_window": {"start_day": 31, "end_day": 35}, "size": 9, "field_description": "Fall color; mast still visible or shedding."},
+  {"stage": "dormant", "min_age_days": 363, "seasonal_window": {"start_day": 36, "end_day": 40}, "size": 9, "field_description": "Leafless branching crown; outline reads clearly against sky."}
 ]
 ```
-Note: Single sprite year-round once mature. This example shows a medium-growth tree taking 6 years to reach sapling stage and 9 years to reach full canopy maturity (size 9).
+Note: Ages are illustrative—use your species’ timeline. Give each seasonal band its **own stage name** so `available_life_stages` on parts stays unambiguous. If your build ties **`dormant`** to **no** tile sprite, do not use that token for leafless hardwoods that must remain visible—pick a project-approved stage name that still renders a bare-canopy sprite.
+
+**Evergreen conifer (persistent foliage; seasonal cones/reproduction):**
+```json
+"life_stages": [
+  {"stage": "seedling", "min_age_days": 0, "seasonal_window": null, "size": 2, "field_description": "..."},
+  {"stage": "sapling", "min_age_days": 240, "seasonal_window": null, "size": 5, "field_description": "..."},
+  {"stage": "vegetative", "min_age_days": 360, "seasonal_window": {"start_day": 1, "end_day": 18}, "size": 9, "field_description": "Dense needles; no conspicuous seed cones."},
+  {"stage": "flowering", "min_age_days": 361, "seasonal_window": {"start_day": 19, "end_day": 24}, "size": 9, "field_description": "Pollen cones visible; crown reads lighter."},
+  {"stage": "seed_set", "min_age_days": 362, "seasonal_window": {"start_day": 25, "end_day": 40}, "size": 9, "field_description": "Woody seed cones present from mid-cycle through year end."}
+]
+```
+Note: Evergreens are **not** “one `mature` sprite forever” when cones matter for foraging; needle color staying green does not remove the need for **distinct reproductive life stages**.
 
 **`parts`** (array of objects, required)
 - See [Part Object Structure](#part-object-structure)
@@ -492,6 +525,8 @@ Note: Single sprite year-round once mature. This example shows a medium-growth t
 ### Part Object Structure
 
 Each part represents a harvestable component (leaf, root, fruit, bark, etc.)
+
+**Description scope:** A part sub-stage's `field_description` describes a **single discrete unit** of the part (one leaf, one pod, one flower). The **life stage** `field_description` is where you describe how those units are arranged on the whole plant (rosettes, clusters, mats, distribution, height). Do not duplicate plant-level arrangement on the part description.
 
 **`name`** (string, required)
 - Part type: `"leaf"`, `"root"`, `"berry"`, `"pod"`, `"bark"`, `"flower"`, `"branch"`, `"stalk"`, `"seed"`, etc.
@@ -544,8 +579,9 @@ All other fields are automatically copied from the first sub-stage. This makes i
 **`field_description`** (string, required)
 - Sensory and visual prose describing this sub-stage as observed in the field
 - Always visible on inspect and inventory tooltips regardless of identification status
-- Focus on observable characteristics: color, size, firmness, appearance, scent when crushed
-- Example: `"A flat green pod, soft and slightly glossy, hanging in clusters. Smells faintly grassy when crushed."`
+- **Describe a single discrete unit of the part as it would be picked up or examined by hand** (one leaf, one pod, one flower, one root tip). Do **not** describe how multiple units are arranged on the plant (e.g. "forming a basal rosette", "in dense clusters", "covering the ground", "flattened against the soil"). Plant-wide arrangement belongs in the life-stage `field_description`, not here.
+- Focus on observable characteristics of one unit: color, size, shape, surface texture, firmness, scent when crushed
+- Example: `"A flat green pod, soft and slightly glossy, about 5 cm long. Smells faintly grassy when crushed."`
 
 **`game_description`** (string, required)
 - Practical game information synthesized from this sub-stage's actual data
@@ -715,10 +751,9 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - For `inner_bark`/cambium, use seasonal multipliers when chemistry changes with sap flow and tissue age. Example pattern: spring cambium lower harshness/potency, late-season cambium higher bitterness or stronger toxic profile for species such as black walnut.
 
 **`harvest_base_ticks`** (int, required)
-- Base time to harvest this sub-stage. Usually 1 unless it's more difficult than picking some berries or cutting a stalk
-- **For most roots/tubers/bulbs:** Set to `1` — the digging tool modifiers are applied automatically when `dig_ticks_to_discover` is present
-- **For tree roots or extremely tough underground parts:** Set to `10-20` to represent the difficulty of extraction
-- **For above-ground parts:** Typical range 3-15 ticks depending on difficulty
+- Base tick cost **per harvest action** on this sub-stage (before tool modifiers). **Default to `1`** for almost everything you can treat as “about a minute of straightforward picking or stripping”: leaves, fruit, nuts, berries, seeds in easy reach, ordinary leafy greens, simple shoots, and typical underground parts once uncovered (**volume** belongs in `harvest_yield`, not here).
+- **Raise above `1` only** when the work is inherently slow or strenuous compared to simple picking—examples: **outer/inner bark**, **heavy or woody branches**, **large structural roots** or taproots where extraction stays difficult even after digging (`10-20` for tree-scale roots is reasonable). Do **not** inflate ticks for “there are lots of nuts”—use larger `units_per_action` / `actions_until_depleted` instead.
+- **`dig_ticks_to_discover`** handles the digging phase for buried parts; after discovery, **`harvest_base_ticks`** still defaults to **`1`** unless the pulled-up harvest itself should stay costly (then increase it).
 
 **`harvest_tool_modifiers`** (object, required)
 - Tool speed multipliers for harvest action
@@ -735,26 +770,29 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - **Differs from `harvest_tool_modifiers`:** modifiers only reduce tick cost when a tool is present; they do **not** block bare-handed harvest. This field blocks harvest until a matching tool exists.
 
 **`harvest_yield`** (object or null, required)
-- Defines the **full-strength** harvest economics for this sub-stage at the reference age (see `harvest_yield_full_age_days`). The engine scales both the per-action unit midpoint and the `actions_until_depleted` midpoint by plant age relative to that reference (floor scale 0.1). Pools resync on harvest validation/apply using current `plant.age`; no global daily scan.
-- **Authoring convention:** Set `harvest_yield` for the mature / intended full-yield case. Young plants automatically get fewer actions and fewer units per action via scaling; use per-sub-stage `harvest_yield_full_age_days` only when the reference age should differ from species `age_of_maturity`.
+- Defines the **full-strength** harvest economics for this sub-stage at the reference age (see `harvest_yield_full_age_days`). **Age scaling:** The engine scales both the per-action unit midpoint and the `actions_until_depleted` midpoint by plant age relative to that reference (floor scale 0.1). **Patch scaling:** Only the **`actions_until_depleted`** midpoint is multiplied by patch capacity (same rules as `age_of_maturity`—see above); `units_per_action` does **not** get that multiplier. Pools resync on harvest validation/apply using current `plant.age`; no global daily scan.
+- **Authoring convention:** Set `harvest_yield` for the mature / intended full-yield case **per single plant instance** on the tile (not per whole tile clump). Young plants automatically get fewer actions and fewer units per action via age scaling; use per-sub-stage `harvest_yield_full_age_days` only when the reference age should differ from species `age_of_maturity`.
+- **Same part, different seasonal sub-stages** (e.g. unripe vs ripe nuts): until we model **shared budgets or dependence** between sub-stages, **use the same `harvest_yield` on each** as the default convention so seasonal variants stay symmetric and easy to reason about; diverge only when you need distinct gameplay or once cross-sub-stage logic exists.
 - At runtime, inventory units per harvest action use the **scaled** midpoint of `units_per_action` (rounded, minimum 1), multiplied by the number of harvest actions applied in that tick.
 - Required on all directly-harvested sub-stages (those with non-empty `available_life_stages`)
 - Set to `null` on output-only parts (those with `available_life_stages: []`)
 - Object format:
   - `units_per_action` (array of 2 ints `[min, max]`): Per-action inventory unit yield range; engine uses the midpoint per applied harvest action
   - `actions_until_depleted` (array of 2 ints `[min, max]`): Seasonal harvest-action budget range for one depletion cycle; engine uses the midpoint (deterministic, same as other midpoint “rolls” in sim tests)
-- **Realistic yield guidance** (based on actual plant productivity):
-  - **Berry bushes** (blackberry, raspberry, elderberry, blueberry): Mature bushes produce 10-20 lbs (900-4,500 berries). Use `units_per_action: [20, 50]`, `actions_until_depleted: [20, 40]` for total yields of 400-2,000 berries per bush
+- **Realistic yield guidance** (always **per instance**; multiply mentally by patch capacity only for **actions**, not units—see `scaledHarvestActionsCap` / `scaledUnitsPerHarvestActionMidpoint` in `harvestYieldResolve.mjs`):
+  - **Berry bushes** (patch capacity often 1 for large shrubs): Mature bushes produce 10-20 lbs (900-4,500 berries). Use `units_per_action: [20, 50]`, `actions_until_depleted: [20, 40]` for total yields of 400-2,000 berries **per bush entity** (one occupancy).
   - **Small berry bushes** (strawberry, low-growing): Much lower yields (~1 lb = 90-225 berries). Use `units_per_action: [5, 15]`, `actions_until_depleted: [6, 12]`
-  - **Fruit trees** (cherry, plum, crabapple): Trees are very productive. Use `units_per_action: [30, 80]`, `actions_until_depleted: [15, 30]` for hundreds to thousands of fruits
+  - **Fruit trees** (patch capacity 1): Trees are very productive. Use `units_per_action: [30, 80]`, `actions_until_depleted: [15, 30]` for hundreds to thousands of fruits **per tree**
   - **Large tree fruits** (pawpaw, persimmon): Fewer but larger fruits. Use `units_per_action: [8, 20]`, `actions_until_depleted: [10, 25]`
   - **Nuts** (acorns, hickory): Trees produce heavily. Use `units_per_action: [15, 40]`, `actions_until_depleted: [20, 50]`
   - **Pods** (honey locust, redbud): Use `units_per_action: [3, 8]`, `actions_until_depleted: [4, 10]`
-  - **Leaves/greens (herbaceous plants)**: Use `units_per_action: [10, 25]`, `actions_until_depleted: [3, 8]` with regrowth
-  - **Tree leaves**: Trees have MUCH more foliage than small plants. Use `units_per_action: [40, 100]`, `actions_until_depleted: [15, 30]` for mature trees. A single mature tree can yield thousands of leaves.
+  - **Leaves/greens / stems (small herbs, forbs; patch capacity often 2–4):** Author **one picking motion’s** worth in `units_per_action` (often `[1, 3]` for leaves, `[1, 1]` for a single stem/shoot). Keep `actions_until_depleted` midpoints low (e.g. `[1, 2]`) so patch scaling does not explode totals. Reserve larger `[10, 25]`-style bundles for species whose patch capacity is 1 or when modeling an entire tree crown as one instance.
+  - **Tree leaves** (patch capacity 1): Trees have MUCH more foliage than small plants. Use `units_per_action: [40, 100]`, `actions_until_depleted: [15, 30]` for mature trees. A single mature tree can yield thousands of leaves.
 - Example: `{"units_per_action": [20, 50], "actions_until_depleted": [20, 40]}`
-- **For tree species only:** Add `ground_action_fraction` to `harvest_yield` when **effective** reach tier (after `reach_tier_by_life_stage`, see below) is `"elevated"` or `"canopy"`
-  - `ground_action_fraction` (float 0.0-1.0): Fraction of total harvest actions accessible without tools (fallen material, drooping branches, low-hanging fruit)
+- **`ground_action_fraction` (in `harvest_yield`)** — required in JSON (see validation checklist) when **effective** reach tier is `"elevated"` or `"canopy"` (after `reach_tier_by_life_stage`, see below). **Engine behavior:** the sim splits the **total** harvest-action budget for the depletion cycle into pools: for **`reach_tier: "elevated"`**, a fraction of actions are **from the ground** (no stool/ladder) and the remainder require **stool or ladder**; for **`reach_tier: "canopy"`**, the same field participates in the **ground / elevated / canopy** split (with optional `elevated_action_fraction` for canopy-tier parts). This applies to **elevated** and **canopy** tiers — not only “trees.”
+  - `ground_action_fraction` (float 0.0-1.0): Share of **total** actions in that depletion cycle that are **reachable without stool/ladder** (low-hanging material, drooping branches, ground-level strip, etc.). The rest of the budget (for elevated tier) is the **stool/ladder** pool. **Omit only when** effective reach tier is `"ground"`.
+  - **Runtime default:** if a sub-stage is effectively **`"elevated"`** and a **synthetic** pool init runs without an explicit fraction, the engine uses **0.6** so at most ~40% of actions require stool/ladder. **Author explicit values** in shipped JSON; do not rely on the default in catalog data.
+  - **Large shrubs (mature `size` ~5-6, head-height clumps):** treat like “short woodies” — in most cases keep **`ground_action_fraction` ≥ 0.6** (at most ~40% of actions “above” comfortable standing reach) unless a part is explicitly tip-of-canopy (e.g. a few high fruiting tips), in which case document why the fraction is lower.
   - Example: `{"units_per_action": [3, 8], "actions_until_depleted": [4, 10], "ground_action_fraction": 0.15}`
   - See `reach_tier` field below for when this is required
 
@@ -767,12 +805,12 @@ All other fields are automatically copied from the first sub-stage. This makes i
 - **Squirrel caches** and other sources without a live plant age still use catalog `unit_weight_g` (full size). Stew nutrition preview scales plant-part ingredients by **actual** stockpile mass vs catalog so small roots contribute proportionally fewer calories.
 
 **`reach_tier`** (string enum, conditionally required)
-- **Required on all directly-harvested sub-stages of tree species** (typically species whose mature life stage is in canopy size bands, usually `size >= 7`)
+- **Required on all directly-harvested sub-stages of tree species** (typically species whose mature life stage is in canopy size bands, usually `size >= 7`) and of **shrub** or small-tree species where hand-harvested parts are not strictly at foot level (use **`"ground"`** only when the part is plausibly gathered without leaving the ground, e.g. many low herbs, or parts explicitly modeled as shed/dropped).
 - **Must be omitted** on all non-tree, underground, and output-only parts
 - Values:
   - `"ground"` — accessible without any tool (ground-level parts, fallen material)
-  - `"elevated"` — requires stool for full access (small understory trees, shrubs at face height)
-  - `"canopy"` — requires ladder for full access (tall canopy trees)
+  - `"elevated"` — requires stool for **part** of the budget (see `ground_action_fraction`); use for **understory trees, face-height shrubs** (often mature `size` ~5-7), not only “trees”
+  - `"canopy"` — requires ladder for **part** of the budget when combined with `ground_action_fraction` / `elevated_action_fraction`; tall canopy trees
 - When **effective** reach tier is `"elevated"` or `"canopy"`, `harvest_yield` must include `ground_action_fraction`
 - When **effective** reach tier is `"ground"`, do NOT include `ground_action_fraction` (validation error if included)
 - **Guidance for tree species:**
@@ -822,7 +860,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
   - Medium roots (most herbaceous plants): `25-30`
   - Deep roots (tap roots, tubers): `35-40`
   - Tree roots: `40+`
-- **Set `harvest_base_ticks` to `1` for most roots** — only use higher values (10-20) for tree roots or extremely tough extractions
+- After discovery, **`harvest_base_ticks`** on the root sub-stage still follows the global rule: **`1`** unless extraction stays genuinely difficult (see **`harvest_base_ticks`** above—large tree roots often use **10-20**)
 - Underground parts are invisible until discovered via dig action
 
 **`on_harvest_injury`** (object or null, optional — omit if not applicable)
@@ -939,8 +977,7 @@ For `contact_rash` harvest injuries (e.g., wild parsnip leaves), use `health_hit
   - **Use for:** Tree branches (thumb-thick or larger), sapling trunks, shrub main stems. Must be substantial enough to make a tool handle or structural component.
   - **Do NOT use for:** Small twigs, thin flexible shoots, or anything less than ~2cm diameter. If it's called a "twig" in the part name, it should NOT have this tag.
   - Examples: hardwood tree branches, sapling trunks, mature shrub main stems
-- `"tinder"` — dry, fine, ignitable material
-  - Examples: cattail fluff, dry grass, dry birch bark flakes
+- **`tinder` is not used** — fire-starting and fine fuel are not modeled as a craft dimension. Do **not** assign a `tinder` craft tag. Soft seed down and similar fluff that is only useful as insulation in-game should use **`insulation_material`** only. Dry stalks or shells that in reality would burn easily but have no implemented craft use should use **`craft_tags: []`** (you may mention burning in `game_description` as flavor if you want).
 - `"resin"` — sticky or waterproofing material
   - Examples: pine pitch sub-stage
 - `"insulation_material"` — soft, bulky material for coat filling
@@ -1010,6 +1047,7 @@ For species where cambium quality shifts seasonally, apply these tags to the spe
 - `soil.fertility.tolerance_range` — array of 2 floats `[min, max]`, valid range [0.0, 1.0], must satisfy `min <= max`
 - `soil.moisture.tolerance_range` — array of 2 floats `[min, max]`, valid range [0.0, 1.0], must satisfy `min <= max`
 - `soil.shade.tolerance_range` — array of 2 floats `[min, max]`, valid range [0.0, 1.0], must satisfy `min <= max`
+- `soil.salinity.tolerance_range` — array of 2 floats `[min, max]`, valid range [0.0, 1.0], must satisfy `min <= max`; see soil.salinity field reference for botanical mapping to tile salinity index
 - `ph_effect_on_soil` — float, typical range -0.3 to +0.3
 - `dispersal.base_radius_tiles` — int, typical range 1-30
 - `dispersal.germination_rate` — float 0.0-1.0
@@ -1029,7 +1067,7 @@ For species where cambium quality shifts seasonally, apply these tags to the spe
 - `average_fiber_length_cm` — float, typical range 1.0-30.0
 - `fiber_strength_modifier` — float, typical range 0.1-2.0 (>1.0 = high quality)
 - `potency_multiplier` — float, typical range 0.1-5.0
-- `harvest_base_ticks` — int, usually 1 for underground parts (digging tool modifiers apply automatically when `dig_ticks_to_discover` is present), 3-15 for above-ground parts, 10-20 for tree roots or very difficult underground extractions. Use harvest_yield.units_per_action to scale amount harvested
+- `harvest_base_ticks` — int; **default `1`** for routine harvests (leaves, fruit, nuts, etc.). Use **`harvest_yield`** to scale how much you get per minute-ish action. Reserve **`>1`** for intrinsically slow work (bark, difficult roots, heavy wood). Digging discovery uses `dig_ticks_to_discover`, not this field
 - `harvest_yield.units_per_action` — array of 2 ints [min, max]; required on directly-harvested sub-stages; null on output-only parts
 - `harvest_yield.actions_until_depleted` — array of 2 ints [min, max]; required on directly-harvested sub-stages; null on output-only parts
 - `harvest_damage` — float 0.0-1.0; required on directly-harvested sub-stages; null on output-only parts
@@ -1058,7 +1096,7 @@ For species where cambium quality shifts seasonally, apply these tags to the spe
 
 1. **Processing options:** If `processing_options` exists, it must be a non-empty array. Each option must have all four fields: `id`, `ticks`, `location`, `outputs`. Omit the field entirely if no processing is available (don't use null or empty array).
 2. **Processing outputs:** All sub-stages must have `unit_weight_g`; `output_unit_weight_g` on each output entry within `processing_options` must match the `unit_weight_g` on the referenced output part's sub-stage
-3. **Harvest yield:** Directly-harvested sub-stages (those with non-empty `available_life_stages`) must have `harvest_yield` as an object with `units_per_action` and `actions_until_depleted`; output-only parts (`available_life_stages: []`) must have `harvest_yield: null`
+3. **Harvest yield:** Directly-harvested sub-stages (those with non-empty `available_life_stages`) must have `harvest_yield` as an object with `units_per_action` and `actions_until_depleted`; output-only parts (`available_life_stages: []`) must have `harvest_yield: null`. Both ranges are **per single plant instance**; only `actions_until_depleted` is multiplied by patch capacity at runtime—do not encode whole-tile bulk in `units_per_action`.
 4. **Harvest damage:** Directly-harvested sub-stages must have `harvest_damage` (float 0.0-1.0); output-only parts must have `harvest_damage: null`
 5. **Regrowth fields:** Both `regrowth_days` and `regrowth_max_harvests` are required on all sub-stages; set to `null` for non-regrowing parts; set to non-null only for vegetative parts that realistically regrow (leaves, shoots)
 6. **Underground parts:** `dig_ticks_to_discover` must be present on all sub-stages of underground parts and must be omitted on all above-ground parts
@@ -1089,7 +1127,7 @@ For species where cambium quality shifts seasonally, apply these tags to the spe
 Plus anything else that makes sense for the plant.
 
 15. **Single part nutrition:** Reasonable defaults for various things: 1 leaf = .01 calories, 1 serviceberry = .6 calories, inner bark = 0.8 calories per gram, most inedible roots = 0.1 calorie per gram (but edibility almost 0), flowers .2 calories per gram.
-18. **Tree harvest tiers:** `reach_tier` must be present on all directly-harvested sub-stages of tree species (typically species whose mature life stage is in canopy size bands, usually `size >= 7`) and must be omitted on all non-tree, underground, and output-only parts. **Effective** reach tier is `reach_tier_by_life_stage[stage]` when defined, otherwise `reach_tier`. When effective tier is `"elevated"` or `"canopy"`, `harvest_yield` must include `ground_action_fraction` (float 0.0-1.0, cannot be 1.0). When effective tier is `"ground"`, `ground_action_fraction` must NOT be present (validation error if included).
+18. **Tree / shrub harvest tiers:** `reach_tier` must be present on all directly-harvested sub-stages of **tree** species (typically mature `size >= 7`) **and** of **shrub / thicket** species where hand-harvested parts are not strictly foot-level (see `reach_tier` section); must be omitted on low forbs/herbs, underground, and output-only parts. **Effective** reach tier is `reach_tier_by_life_stage[stage]` when defined, otherwise `reach_tier`. When effective tier is `"elevated"` or `"canopy"`, `harvest_yield` must include `ground_action_fraction` (float 0.0-1.0, cannot be 1.0). The **engine** applies that fraction to **both** elevated- and canopy-tier pools (not only canopy). For **`"elevated"`** with no fraction in an edge case, the sim defaults to **0.6**; **shipped JSON must still author the field.** When effective tier is `"ground"`, `ground_action_fraction` must NOT be present (validation error if included).
 19. **Life stage name consistency:** All stage names used in `available_life_stages` arrays must exactly match stage names defined in the plant's `life_stages` array. Do not use modified or prefixed versions of stage names. The same applies to every key in `reach_tier_by_life_stage`.
 20. **Seasonal sub-stage completeness:** If a part's `game_description` mentions seasonal changes in properties (edibility, texture, toxicity, etc.), the part must have multiple sub-stages with different `seasonal_window` ranges to model those changes. Don't describe variation without modeling it. Remember: later sub-stages inherit from the first, so you only need to specify changed fields.
 21. **Sub-stage inheritance:** The first sub-stage in a part's `sub_stages` array must be fully specified. Subsequent sub-stages inherit all fields from the first sub-stage except those explicitly overridden. Always override: `id`, `seasonal_window`, `field_description`, `game_description`. Override other fields only when they actually differ from the first sub-stage.
@@ -1584,6 +1622,7 @@ This uses sub-stage inheritance: the second sub-stage only overrides changed fie
    - Set `seasonal_window` with `start_day` and `end_day` (in-game days 1-40) for seasonal stages, or `null` for age-only stages
    - Order stages by `min_age_days` ascending
    - Consider all applicable stage types: `seedling`, `vegetative`, `flowering`, `fruiting`, `seed_set`, `senescent`, `dormant`, or `mature`
+   - **Trees:** After sapling/pole growth, apply the **same seasonal staging goals** as herbaceous perennials—deciduous crowns and evergreen cones must be **life-stage-visible**, not hidden only in part sub-stages (see [Life Stage Granularity and Sprite Pipeline](#life-stage-granularity-and-sprite-pipeline)). Align use of `dormant` with whether leafless trees must remain rendered on the tile.
    - For biennials, use `first_year` (age ~3-4) and `second_year` stages (age 46+), can be split further with seasonal windows
    - For annuals, remember they die when `seeding_window.end` is reached regardless of life stage
    - For perennials, seasonal stages will cycle annually once age threshold is reached
@@ -1628,9 +1667,15 @@ This uses sub-stage inheritance: the second sub-stage only overrides changed fie
 
 ---
 
-**Document Version:** 5.1  
+**Document Version:** 5.2  
 **Last Updated:** Based on GDD v1.61  
 **Source:** 10000 BC Game Design Document
+
+**Major Changes in v5.2:**
+- Clarified that **deciduous trees** follow the same seasonal **life-stage** philosophy as herbaceous perennials (longer age timelines only)—map sprites must expose mast, flowering, and canopy changes, not only part sub-stages.
+- Clarified that **evergreen / cone-bearing** trees are **not** modeled as a single timeless `mature` sprite when cones or pollen structures matter for forager readability.
+- Replaced the old “evergreen = one sprite year-round” example with **deciduous** and **evergreen conifer** seasonal examples; added notes on **`dormant`** vs visible bare deciduous crowns and renderer coordination.
+- Added Overview bullet on **world-map readability** via life-stage sprites.
 
 **Major Changes in v5.1:**
 - Added explicit tree cambium guidance: model barked woody species with `outer_bark` + `inner_bark` where appropriate.

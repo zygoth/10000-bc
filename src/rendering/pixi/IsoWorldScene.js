@@ -3,13 +3,20 @@ import {
 } from 'pixi.js';
 import { getTileAt } from '../../game/simCore.mjs';
 import {
+  getCampStationWorldSpriteFrame,
+  getCampWigwamSpriteFrame,
+} from '../../game/campSpriteCatalog.mjs';
+import {
   getDeadLogSpriteFrame,
   getPlantSpriteFrame,
   getRockSpriteFrame,
   getTerrainSpriteFrame,
 } from '../../game/plantSpriteCatalog.mjs';
+import { getGroundFungusZoneTileSpriteFrame } from '../../game/groundFungusSpriteCatalog.mjs';
 import { PLANT_BY_ID } from '../../game/plantCatalog.mjs';
 import {
+  deterministicMushroomScaleJitter,
+  groundFungusClusterCountForYieldGrams,
   lifeStageSizeVisualScaleMultiplier,
   patchSpriteScaleForCapacity,
   resolvePatchCapacity,
@@ -20,6 +27,7 @@ import {
   buildTileEntityTokens,
   getStationIdAtTile,
 } from '../../game/tileEntityTokens.mjs';
+import { resolveInventoryItemSpriteFrame } from '../../game/inventoryItemSpriteResolve.mjs';
 import {
   computeOccupantAnchorYFromTileTop,
   computeTileTopCenterYFromGroundAnchor,
@@ -28,12 +36,17 @@ import {
   ISO_BASE_SCALE,
   ISO_OCCUPANT_VISUAL_NUDGE_PX,
   ISO_ROCK_STACK_OFFSET_PX,
+  ISO_CAMP_WORLD_SPRITE_NUDGE_UP_PX,
+  ISO_CAMP_WORLD_SPRITE_SCALE_MULT,
+  ISO_GROUND_FUNGUS_ZONE_REL_TO_OCCUPANT,
   ISO_SOURCE_TILE_WIDTH,
   ISO_TILE_ENTITY_TEXT_NUDGE_DOWN_PX,
   ISO_TILE_HALF_HEIGHT_PX,
   ISO_TILE_HALF_WIDTH_PX,
   ISO_TILE_HEIGHT_PX,
   ISO_WATER_VERTICAL_OFFSET_PX,
+  ISO_WORLD_ITEM_FOOT_NUDGE_PX,
+  ISO_WORLD_ITEM_SCALE_MULT,
   elevationToIsoOffsetPx,
 } from './isoConstants.js';
 import { computeVisibleIsoTiles, sortVisibleIsoTiles } from './isoMath.js';
@@ -42,6 +55,8 @@ import { getSubTextureForSprite } from './textureCache.js';
 
 /** Tile-to-tile player label motion (ms). */
 const PLAYER_MOVE_TWEEN_MS = 280;
+/** Dropped item flight: player-tile to target-tile (ms). */
+const ITEM_DROP_ARRIVAL_MS = 360;
 
 function easeOutCubic(t) {
   const u = Math.min(1, Math.max(0, t));
@@ -134,8 +149,15 @@ function computeIsoTileContentSignature(gameState, worldX, worldY, tile) {
   const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
 
   const zone = tile.groundFungusZone;
+  const zYieldN = zone ? Number(zone.yieldCurrentGrams) : 0;
+  const zCluster = zone && zYieldN > 0
+    ? groundFungusClusterCountForYieldGrams(zYieldN)
+    : 0;
+  const zHasGfArt = zone && zYieldN > 0 && zone.speciesId
+    ? Boolean(getGroundFungusZoneTileSpriteFrame(zone.speciesId))
+    : false;
   const zoneSig = zone
-    ? `${zone.speciesId || ''}:${Number(zone.yieldCurrentGrams) || 0}`
+    ? `${zone.speciesId || ''}:${zYieldN}:gfz:${zHasGfArt ? 1 : 0}:gcl:${zCluster}`
     : '';
 
   const worldItems = Array.isArray(gameState.worldItemsByTile?.[`${worldX},${worldY}`])
@@ -143,6 +165,9 @@ function computeIsoTileContentSignature(gameState, worldX, worldY, tile) {
     : [];
   const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
   const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
+  const campArtSig = stationAtTile
+    ? (getCampStationWorldSpriteFrame(stationAtTile) ? `st:${stationAtTile}` : `st0:${stationAtTile}`)
+    : (isCampTile ? (getCampWigwamSpriteFrame() ? 'wig:1' : 'wig:0') : '');
   const drying = gameState?.camp?.dryingRackUnlocked ? '1' : '0';
 
   const southSig = south
@@ -167,7 +192,7 @@ function computeIsoTileContentSignature(gameState, worldX, worldY, tile) {
     plantOrLogScale,
     tile.deadLog ? `dl:${isoDeadLogFungiSig(tile.deadLog)}` : '',
     zoneSig,
-    tile.beehive ? 'b' : '',
+    tile.beehive?.active ? 'b' : '',
     tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? `c:${Math.floor(Number(tile.squirrelCache.nutContentGrams) || 0)}` : '',
     tile.simpleSnare?.active ? 's' : '',
     tile.deadfallTrap?.active ? 'd' : '',
@@ -177,6 +202,7 @@ function computeIsoTileContentSignature(gameState, worldX, worldY, tile) {
     tile.leachingBasket?.active ? 'l' : '',
     isCampTile ? `camp:${drying}` : '',
     stationAtTile || '',
+    campArtSig,
     isoWorldItemsSig(worldItems),
     southSig,
     eastSig,
@@ -215,6 +241,25 @@ export class IsoWorldScene {
     this.worldPanLayer.addChild(this.playerTokenRoot);
     this.worldPanLayer.addChild(this.selectionGraphics);
     this.worldPanLayer.addChild(this.hoverMoveTargetGraphics);
+    /** Short-lived “item falling to ground” overlay (uses player `lastDrop`). */
+    this.dropArrivalRoot = new Container();
+    this.worldPanLayer.addChild(this.dropArrivalRoot);
+    this._pixiApp = null;
+    /** @type {string | null} */
+    this._lastDropArrivalKey = null;
+    /**
+     * Current item-drop flight (endpoints reprojected from world each frame so camera/Origin
+     * updates mid-flight do not stutter the sprite).
+     * @type {null | { t0: number, node: import('pixi.js').Sprite | import('pixi.js').Text, fromW: { x: number, y: number }, toW: { x: number, y: number }, itemId: string, startAbovePx: number }}
+     */
+    this._dropArrivalFlight = null;
+    /** @type {import('../../game/simCore.mjs').GameState | null} */
+    this._viewGameState = null;
+    this._lastSyncBaseCamX = 0;
+    this._lastSyncBaseCamY = 0;
+    /** Distinguish overlapping async texture loads (see _playDropItemArrivalIfNew). */
+    this._dropPendingKey = null;
+    this._dropArrivalFrame = this._onDropArrivalFrame.bind(this);
     this.root.addChild(this.worldPanLayer);
     this.tileContainers = new Map();
     this.lastSorted = [];
@@ -280,6 +325,211 @@ export class IsoWorldScene {
   applyCameraPixelRoll(cameraFx, cameraFy) {
     const { px, py } = computeWorldPanLayerPixels(cameraFx, cameraFy);
     this.worldPanLayer.position.set(px, py);
+  }
+
+  /**
+   * Provides `ticker` for one-shot item-drop flights (set from PixiWorldView after `Application` init).
+   * @param {import('pixi.js').Application} app
+   */
+  attachApplication(app) {
+    this._pixiApp = app;
+  }
+
+  _stopDropArrivalAnim() {
+    const f = this._dropArrivalFlight;
+    if (f) {
+      if (this._pixiApp?.ticker) {
+        this._pixiApp.ticker.remove(this._dropArrivalFrame);
+      }
+      this._setGroundWorldItemSpriteVisibleOnTile(f.toW.x, f.toW.y, f.itemId, true);
+      if (f.node?.parent) {
+        f.node.destroy();
+      }
+    }
+    this._dropArrivalFlight = null;
+    this.dropArrivalRoot.removeChildren();
+  }
+
+  /**
+   * @returns {{ screenX: number, groundY: number } | null}
+   */
+  _screenGroundForIntegerTile(gameState, worldX, worldY, baseCamX, baseCamY) {
+    const { originX, originY } = this.lastOrigin;
+    const localX = worldX - baseCamX;
+    const localY = worldY - baseCamY;
+    const screenX = Math.round((localX - localY) * ISO_TILE_HALF_WIDTH_PX + originX);
+    const screenY = Math.round((localX + localY) * ISO_TILE_HALF_HEIGHT_PX + originY);
+    const tile = getTileAt(gameState, worldX, worldY);
+    const elev = tile ? elevationToIsoOffsetPx(tile.elevation) : 0;
+    const groundY = screenY + ISO_TILE_HALF_HEIGHT_PX - elev;
+    return { screenX, groundY };
+  }
+
+  /**
+   * One item-drop: Pixi `ticker` drives the ease; from/to in **screen** space are recomputed from
+   * `lastOrigin` + base cam each frame so a mid-flight `sync` (e.g. camera crossing a tile) does
+   * not leave the flyer on stale coordinates.
+   */
+  _onDropArrivalFrame() {
+    const f = this._dropArrivalFlight;
+    if (!f?.node) {
+      return;
+    }
+    if (!f.node.parent) {
+      if (this._pixiApp?.ticker) {
+        this._pixiApp.ticker.remove(this._dropArrivalFrame);
+      }
+      this._dropArrivalFlight = null;
+      this._setGroundWorldItemSpriteVisibleOnTile(f.toW.x, f.toW.y, f.itemId, true);
+      return;
+    }
+    const gs = this._viewGameState;
+    if (!gs) {
+      this._stopDropArrivalAnim();
+      return;
+    }
+    const bax = this._lastSyncBaseCamX;
+    const bay = this._lastSyncBaseCamY;
+    const fromG = this._screenGroundForIntegerTile(gs, f.fromW.x, f.fromW.y, bax, bay);
+    const toG = this._screenGroundForIntegerTile(gs, f.toW.x, f.toW.y, bax, bay);
+    if (!fromG || !toG) {
+      this._stopDropArrivalAnim();
+      return;
+    }
+    const nudge = ISO_WORLD_ITEM_FOOT_NUDGE_PX;
+    const fx = fromG.screenX;
+    const fy = fromG.groundY - f.startAbovePx - nudge;
+    const tx = toG.screenX;
+    const ty = toG.groundY - nudge;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const u = Math.min(1, (now - f.t0) / ITEM_DROP_ARRIVAL_MS);
+    const e = easeOutCubic(u);
+    f.node.position.set(lerp(fx, tx, e), lerp(fy, ty, e));
+    if (u >= 1) {
+      if (this._pixiApp?.ticker) {
+        this._pixiApp.ticker.remove(this._dropArrivalFrame);
+      }
+      this._dropArrivalFlight = null;
+      this._setGroundWorldItemSpriteVisibleOnTile(f.toW.x, f.toW.y, f.itemId, true);
+      f.node.destroy();
+    }
+  }
+
+  /**
+   * If `player.lastDrop` is from the current sim tick, animate one flying sprite to the drop target.
+   * @param {import('../../game/simCore.mjs').GameState} gameState
+   */
+  async _playDropItemArrivalIfNew(gameState, baseCamX, baseCamY) {
+    if (!this._pixiApp?.ticker) {
+      return;
+    }
+    const ld = gameState?.actors?.player?.lastDrop;
+    if (!ld || !Number.isInteger(ld.x) || !Number.isInteger(ld.y)) {
+      return;
+    }
+    const day = Number.isInteger(ld.day) ? ld.day : 0;
+    const dropTick = Math.max(0, Math.floor(Number(ld.dayTick) || 0));
+    const stDay = Number.isInteger(gameState?.totalDaysSimulated) ? gameState.totalDaysSimulated : 0;
+    const stTick = Math.max(0, Math.floor(Number(gameState?.dayTick) || 0));
+    if (day !== stDay) {
+      return;
+    }
+    // `lastDrop` is written during applyActionEffect, then the action runner advances `dayTick`
+    // (item_drop costs 1 tick), so the stored tick is usually `stTick - 1`.
+    if (dropTick !== stTick && dropTick !== stTick - 1) {
+      return;
+    }
+    const itemId = typeof ld.itemId === 'string' ? ld.itemId : '';
+    if (!itemId) {
+      return;
+    }
+    const p = gameState.actors?.player;
+    const px = Number(p?.x);
+    const py = Number(p?.y);
+    if (!Number.isInteger(px) || !Number.isInteger(py)) {
+      return;
+    }
+
+    const q = Math.max(0, Math.floor(Number(ld.quantity) || 0));
+    const key = `d|${stDay}|${dropTick}|${ld.x}|${ld.y}|${itemId}|${q}`;
+    if (key === this._lastDropArrivalKey) {
+      return;
+    }
+
+    const from = this._screenGroundForIntegerTile(gameState, px, py, baseCamX, baseCamY);
+    const to = this._screenGroundForIntegerTile(gameState, ld.x, ld.y, baseCamX, baseCamY);
+    if (!from || !to) {
+      return;
+    }
+
+    this._stopDropArrivalAnim();
+    this._dropPendingKey = key;
+
+    const startAbovePx = 28;
+    const worldSprite = resolveInventoryItemSpriteFrame(itemId);
+
+    const startFlight = (node) => {
+      if (this._dropPendingKey !== key) {
+        return;
+      }
+      this._setGroundWorldItemSpriteVisibleOnTile(ld.x, ld.y, itemId, false);
+      this._lastDropArrivalKey = key;
+      this._dropPendingKey = null;
+      this.dropArrivalRoot.addChild(node);
+      const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const gs0 = this._viewGameState || gameState;
+      const bax = this._lastSyncBaseCamX;
+      const bay = this._lastSyncBaseCamY;
+      const fromG0 = this._screenGroundForIntegerTile(gs0, px, py, bax, bay);
+      if (fromG0) {
+        const nudge = ISO_WORLD_ITEM_FOOT_NUDGE_PX;
+        node.position.set(
+          fromG0.screenX,
+          fromG0.groundY - startAbovePx - nudge,
+        );
+      }
+      this._dropArrivalFlight = {
+        t0,
+        node,
+        fromW: { x: px, y: py },
+        toW: { x: ld.x, y: ld.y },
+        itemId,
+        startAbovePx,
+      };
+      this._pixiApp.ticker.add(this._dropArrivalFrame);
+    };
+
+    if (worldSprite) {
+      const tex = await getSubTextureForSprite(worldSprite);
+      if (this._dropPendingKey !== key) {
+        return;
+      }
+      const spr = new Sprite(tex);
+      const f = worldSprite.frame;
+      const sourceW = f?.sourceW ?? f?.w ?? 64;
+      const sourceH = f?.sourceH ?? f?.h ?? 64;
+      const m = ISO_BASE_SCALE * ISO_WORLD_ITEM_SCALE_MULT;
+      spr.width = sourceW * m;
+      spr.height = sourceH * m;
+      spr.anchor.set(0.5, 0.9);
+      startFlight(spr);
+    } else {
+      if (this._dropPendingKey !== key) {
+        return;
+      }
+      const t = new Text({
+        text: itemId.includes(':') ? (itemId.split(':')[1] || '?').slice(0, 3) : itemId.slice(0, 3),
+        style: {
+          fontFamily: 'system-ui, Segoe UI, sans-serif',
+          fontSize: 12,
+          fill: 0xfff4d8,
+          fontWeight: '800',
+          stroke: { color: 0x000000, width: 3 },
+        },
+      });
+      t.anchor.set(0.5, 1);
+      startFlight(t);
+    }
   }
 
   /**
@@ -378,6 +628,18 @@ export class IsoWorldScene {
 
   _isoGlobalLayoutSig(originX, originY, windowWidth, windowHeight, cameraAnchorElevationPx, showAnchorDebug) {
     return `${originX}\u001f${originY}\u001f${windowWidth}\u001f${windowHeight}\u001f${cameraAnchorElevationPx}\u001f${showAnchorDebug ? 1 : 0}`;
+  }
+
+  _setGroundWorldItemSpriteVisibleOnTile(wx, wy, itemId, vis) {
+    const tileC = this.tileContainers.get(`${wx},${wy}`);
+    if (!tileC) {
+      return;
+    }
+    for (const ch of tileC.children) {
+      if (ch?.__isoWorldGroundItem && ch?.__isoWorldItemId === itemId) {
+        ch.visible = vis;
+      }
+    }
   }
 
   _applyIsoTileCameraPanOffset(tileC, baseCamX, baseCamY) {
@@ -487,7 +749,6 @@ export class IsoWorldScene {
     showAnchorDebug,
   }) {
     this._syncGeneration += 1;
-    const syncGen = this._syncGeneration;
 
     const { visible, originX, originY } = computeVisibleIsoTiles(
       gameState,
@@ -503,6 +764,9 @@ export class IsoWorldScene {
 
     const baseCamX = Math.floor(Number(cameraX) + 1e-9);
     const baseCamY = Math.floor(Number(cameraY) + 1e-9);
+    this._viewGameState = gameState;
+    this._lastSyncBaseCamX = baseCamX;
+    this._lastSyncBaseCamY = baseCamY;
 
     const nextKeys = new Set(sorted.map(({ worldX, worldY }) => `${worldX},${worldY}`));
     for (const key of this.tileContainers.keys()) {
@@ -535,6 +799,7 @@ export class IsoWorldScene {
 
     for (const { worldX, worldY, tile } of sorted) {
       const key = `${worldX},${worldY}`;
+      const depthKey = worldY + worldX;
       let tileC = this.tileContainers.get(key);
       if (!tileC) {
         tileC = new Container();
@@ -547,7 +812,6 @@ export class IsoWorldScene {
         && tileC.__isoContentSig === contentSig
         && tileC.children.length > 0;
 
-      const depthKey = worldY + worldX;
       const localX = worldX - baseCamX;
       const localY = worldY - baseCamY;
       const screenX = Math.round((localX - localY) * ISO_TILE_HALF_WIDTH_PX + originX);
@@ -568,7 +832,14 @@ export class IsoWorldScene {
       const plantOrLogScale = plant ? isoPlantScale(plant) : ISO_BASE_SCALE;
 
       const zone = tile.groundFungusZone;
-      const zoneSymbol = zone && Number(zone.yieldCurrentGrams) > 0
+      const groundYieldN = zone ? Number(zone.yieldCurrentGrams) : 0;
+      const groundClusterN = zone && groundYieldN > 0
+        ? groundFungusClusterCountForYieldGrams(groundYieldN)
+        : 0;
+      const groundZoneFr = groundClusterN > 0 && zone?.speciesId
+        ? getGroundFungusZoneTileSpriteFrame(zone.speciesId)
+        : null;
+      const zoneSymbol = zone && groundYieldN > 0 && !groundZoneFr && zone.speciesId
         ? zone.speciesId[0].toUpperCase()
         : '';
       const logMushroomSymbol = tile.deadLog
@@ -577,7 +848,7 @@ export class IsoWorldScene {
           ?.species_id?.[0]?.toUpperCase() || '')
         : '';
       const mushroomOverlaySymbol = logMushroomSymbol || (!plant && zoneSymbol ? zoneSymbol : '');
-      const featureOverlaySymbol = tile.beehive
+      const featureOverlaySymbol = (showAnchorDebug && tile.beehive?.active)
         ? 'B'
         : (tile.squirrelCache && Number(tile.squirrelCache.nutContentGrams) > 0 ? 'C' : '');
       const combinedOverlaySymbol = [mushroomOverlaySymbol, featureOverlaySymbol].filter(Boolean).join('');
@@ -587,12 +858,16 @@ export class IsoWorldScene {
         : [];
       const isCampTile = Number(gameState?.camp?.anchorX) === worldX && Number(gameState?.camp?.anchorY) === worldY;
       const stationAtTile = getStationIdAtTile(gameState?.camp, worldX, worldY);
+      const campWorldSprite = stationAtTile
+        ? getCampStationWorldSpriteFrame(stationAtTile)
+        : (isCampTile ? getCampWigwamSpriteFrame() : null);
       const tileEntityTokens = buildTileEntityTokens(tile, {
         isPlayerTile: false,
         isCampTile,
         stationAtTile,
         worldItems,
         camp: gameState?.camp,
+        omitCampEntityLabels: Boolean(campWorldSprite),
       });
 
       const grassSprite = !tile.waterType ? getTerrainSpriteFrame('grass') : null;
@@ -642,6 +917,21 @@ export class IsoWorldScene {
         })
         : [{ x: 0, y: 0, depthY: 0 }];
 
+      const mushroomBaseScale = ISO_BASE_SCALE * ISO_GROUND_FUNGUS_ZONE_REL_TO_OCCUPANT;
+      // Match `applyAnchoredSprite`: use logical source size, not atlas rect `w`/`h` (often 4× larger).
+      const mf = groundZoneFr?.frame;
+      const mushLogicalW = Number(mf?.sourceW) || Number(mf?.w) || 32;
+      const mushLogicalH = Number(mf?.sourceH) || Number(mf?.h) || 32;
+      const mVis = Math.max(mushLogicalW, mushLogicalH) * mushroomBaseScale;
+      const minMushroomSpacingPx = Math.max(14, 0.78 * mVis);
+      const groundFungusCopies = (groundClusterN > 0 && groundZoneFr && zone?.speciesId)
+        ? resolvePatchLayout(groundClusterN, `gfp:${worldX},${worldY}:${zone.speciesId},${groundYieldN}`, {
+          radiusPx: Math.max(16, ISO_TILE_HALF_WIDTH_PX * 0.34, minMushroomSpacingPx * 0.85,
+            minMushroomSpacingPx * Math.sqrt(groundClusterN) * 0.48),
+          minSpacingPx: minMushroomSpacingPx,
+        })
+        : [{ x: 0, y: 0, depthY: 0 }];
+
       const rockSprite = tile.rockType ? getRockSpriteFrame(tile.rockType) : null;
       const iceSprite = tile.waterFrozen ? getTerrainSpriteFrame('ice') : null;
       const southTile = getTileAt(gameState, worldX, worldY + 1);
@@ -662,7 +952,9 @@ export class IsoWorldScene {
         tileC.addChild(s);
         texturePromises.push(
           getSubTextureForSprite(spriteRef).then((tex) => {
-            if (syncGen !== this._syncGeneration) {
+            // Do not use `_syncGeneration` here: a later `sync` may `canSkip` and bump the gen while
+            // this texture is still in flight—then the sprite would never get a texture (invisible).
+            if (!s.parent || s.parent !== tileC) {
               return;
             }
             applyAnchoredSprite(s, spriteRef, scale, ax, ay, tex, opts);
@@ -718,6 +1010,20 @@ export class IsoWorldScene {
       if (rockSprite) {
         pushSprite(rockSprite, ISO_BASE_SCALE, screenX, groundY - ISO_ROCK_STACK_OFFSET_PX);
       }
+      if (groundClusterN > 0 && groundZoneFr) {
+        groundFungusCopies.forEach((copy, gi) => {
+          const jitter = deterministicMushroomScaleJitter(
+            `gfs:sc:${worldX},${worldY},${gi},${zone.speciesId}`,
+          );
+          pushSprite(
+            groundZoneFr,
+            mushroomBaseScale * jitter,
+            screenX + copy.x,
+            occupantAnchorY + copy.y,
+            null,
+          );
+        });
+      }
       if (occupantSprite) {
         occupantCopies.forEach((copy) => {
           pushSprite(
@@ -728,6 +1034,39 @@ export class IsoWorldScene {
             deadLogSprite ? { anchorYOffsetPx: ISO_TILE_HEIGHT_PX } : null,
           );
         });
+      }
+
+      if (campWorldSprite) {
+        pushSprite(
+          campWorldSprite,
+          ISO_BASE_SCALE * ISO_CAMP_WORLD_SPRITE_SCALE_MULT,
+          screenX,
+          occupantAnchorY,
+          { anchorYOffsetPx: ISO_CAMP_WORLD_SPRITE_NUDGE_UP_PX },
+        );
+      }
+
+      const worldStack0 = Array.isArray(worldItems) && worldItems.length > 0 ? worldItems[0] : null;
+      const worldItemId0 = typeof worldStack0?.itemId === 'string' ? worldStack0.itemId : '';
+      const worldItemSpriteForTile = worldItemId0
+        ? resolveInventoryItemSpriteFrame(worldItemId0)
+        : null;
+      if (worldItemSpriteForTile) {
+        const s = new Sprite();
+        s.__isoWorldGroundItem = true;
+        s.__isoWorldItemId = worldItemId0;
+        tileC.addChild(s);
+        const wRef = worldItemSpriteForTile;
+        const wScale = ISO_BASE_SCALE * ISO_WORLD_ITEM_SCALE_MULT;
+        const wAy = groundY - ISO_WORLD_ITEM_FOOT_NUDGE_PX;
+        texturePromises.push(
+          getSubTextureForSprite(wRef).then((tex) => {
+            if (!s.parent || s.parent !== tileC) {
+              return;
+            }
+            applyAnchoredSprite(s, wRef, wScale, screenX, wAy, tex, null);
+          }),
+        );
       }
 
       this._appendIsoTileOverlayLabels(labelOverlayQueue, {
@@ -773,6 +1112,8 @@ export class IsoWorldScene {
     }
 
     await Promise.all(texturePromises);
+
+    await this._playDropItemArrivalIfNew(gameState, baseCamX, baseCamY);
 
     this.selectionGraphics.clear();
     if (Number.isInteger(selectedTileX) && Number.isInteger(selectedTileY)) {
@@ -862,6 +1203,7 @@ export class IsoWorldScene {
 
   destroy() {
     this._syncGeneration += 1;
+    this._stopDropArrivalAnim();
     this.tileContainers.clear();
     this._playerLastSim = null;
     this._playerTween = null;

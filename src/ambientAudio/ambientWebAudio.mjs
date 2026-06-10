@@ -1,4 +1,3 @@
-import { isAmbientDebugEnabled, runAmbientDebugThrottled } from './ambientDebug.mjs';
 import { pickAmbientVariantUrl } from './ambientSoundVariants.mjs';
 import { gainFromDistance, panFromDelta } from './ambientPlayHeadless.mjs';
 
@@ -12,6 +11,9 @@ export class AmbientWebAudio {
   constructor() {
     /** @type {AudioContext|null} */
     this.ctx = null;
+    /** Master out (SFX / ambient) before `destination`; user volume 0..1. */
+    /** @type {GainNode|null} */
+    this._masterOut = null;
     this.bufferCache = new Map();
     this.failedUrls = new Set();
     /** @type {Map<string, { source: AudioBufferSourceNode, gain: GainNode, panner: StereoPannerNode, logicalUrl: string, resolvedUrl: string }>} */
@@ -33,15 +35,45 @@ export class AmbientWebAudio {
   }
 
   getOrCreateContext() {
-    if (this.ctx) {
-      return this.ctx;
-    }
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
     if (!AC) {
       return null;
     }
+    if (this.ctx) {
+      this._ensureMasterOut();
+      return this.ctx;
+    }
     this.ctx = new AC();
+    this._masterOut = this.ctx.createGain();
+    this._masterOut.gain.value = 1;
+    this._masterOut.connect(this.ctx.destination);
     return this.ctx;
+  }
+
+  _ensureMasterOut() {
+    const ctx = this.ctx;
+    if (!ctx) {
+      return;
+    }
+    if (!this._masterOut) {
+      this._masterOut = ctx.createGain();
+      this._masterOut.gain.value = 1;
+      this._masterOut.connect(this.ctx.destination);
+    }
+  }
+
+  /**
+   * @param {number} linear 0..1; scales all ambient and world one-shots / loops.
+   */
+  setSfxVolume(linear) {
+    this.getOrCreateContext();
+    this._ensureMasterOut();
+    const g = this._masterOut;
+    if (!g) {
+      return;
+    }
+    const t = Number(linear);
+    g.gain.value = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 1;
   }
 
   async resumeFromUserGesture() {
@@ -160,7 +192,8 @@ export class AmbientWebAudio {
       panner.pan.value = Math.max(-1, Math.min(1, Number(opts?.pan) || 0));
       src.connect(g);
       g.connect(panner);
-      panner.connect(this.ctx.destination);
+      this._ensureMasterOut();
+      panner.connect(this._masterOut || this.ctx.destination);
       this.oneShots.add(src);
       const flight = opts?.flightSweep && Number.isFinite(Number(opts.sweepMs)) && Number(opts.sweepMs) > 50;
       const ex = Number(opts?.emitterX);
@@ -309,14 +342,6 @@ export class AmbientWebAudio {
       return;
     }
     this._clearLoopFadeOutTimer(loopId);
-    if (isAmbientDebugEnabled() && loopId === 'campfire') {
-      runAmbientDebugThrottled('wa-ensure', 500, () => {
-        // eslint-disable-next-line no-console
-        console.log('[ambient] webAudio ensureLoop', {
-          loopId, gainLinear: gLin, hadLoop: this.loops.has(loopId), logicalUrl: logicalUrl?.slice(-24),
-        });
-      });
-    }
     const existing = this.loops.get(loopId);
     if (existing && existing.logicalUrl === logicalUrl) {
       const t0 = ctx.currentTime;
@@ -366,7 +391,8 @@ export class AmbientWebAudio {
       panner.pan.value = Math.max(-1, Math.min(1, pan));
       src.connect(g);
       g.connect(panner);
-      panner.connect(this.ctx.destination);
+      this._ensureMasterOut();
+      panner.connect(this._masterOut || this.ctx.destination);
       src.start();
       this.loops.set(loopId, {
         source: src, gain: g, panner, logicalUrl, resolvedUrl,
@@ -376,14 +402,6 @@ export class AmbientWebAudio {
 
   stopLoop(loopId) {
     this._clearLoopFadeOutTimer(loopId);
-    if (isAmbientDebugEnabled() && loopId === 'campfire') {
-      const had = this.loops.has(loopId);
-      const gen = (this._loopStopGen.get(loopId) || 0) + 1;
-      runAmbientDebugThrottled('wa-stop', 500, () => {
-        // eslint-disable-next-line no-console
-        console.log('[ambient] webAudio stopLoop', { loopId, had, nextGen: gen });
-      });
-    }
     this._loopStopGen.set(
       loopId,
       (this._loopStopGen.get(loopId) || 0) + 1,
@@ -430,6 +448,7 @@ export class AmbientWebAudio {
         /* ignore */
       }
     }
+    this._masterOut = null;
     this.ctx = null;
     this.bufferCache.clear();
     this._variantLoadPromise = null;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { buildInventoryGridItemTooltipTitle } from '../../../game/inventorySlotDecayDryness.mjs';
+import { MODAL_INVENTORY_SLOT_PX } from '../../inventorySlotSpriteFill/hudInventorySlotWidthPx.mjs';
 import InventorySlotSpriteStack from '../../inventorySlotSpriteFill/InventorySlotSpriteStack.jsx';
 import DryingRackGrid from './DryingRackGrid.jsx';
 
@@ -87,6 +88,8 @@ function sortStockpileEntriesForDebrief(entries, mode) {
   return list;
 }
 
+/** @typedef {'inventory' | 'stockpile' | 'dryingRack' | 'ground' | 'sled'} InventoryTabId */
+
 export default function InventoryPanel({
   gameState = undefined,
   isDebriefActive,
@@ -127,8 +130,11 @@ export default function InventoryPanel({
   setSelectedSledItemId,
   onRunSledQuickAction,
   onRunQuickAction,
+  onRequestClose = () => {},
 }) {
   const [stockpileSortMode, setStockpileSortMode] = useState('spoilage');
+  /** @type {[InventoryTabId, import('react').Dispatch<import('react').SetStateAction<InventoryTabId>>]} */
+  const [activeTab, setActiveTab] = useState('inventory');
 
   useEffect(() => {
     if (!isDebriefActive) {
@@ -143,6 +149,30 @@ export default function InventoryPanel({
     }
     return sortStockpileEntriesForDebrief(rows, stockpileSortMode);
   }, [campStockpileStacks, isDebriefActive, stockpileSortMode]);
+
+  const tabDefs = useMemo(() => {
+    /** @type {{ id: InventoryTabId, label: string }[]} */
+    const tabs = [{ id: 'inventory', label: 'Inventory' }];
+    if (playerAtCamp) {
+      tabs.push({ id: 'stockpile', label: 'Stockpile' });
+    }
+    if (playerAtCamp && campHasDryingRackStation) {
+      tabs.push({ id: 'dryingRack', label: 'Drying rack' });
+    }
+    if (Array.isArray(selectedTileWorldItems) && selectedTileWorldItems.length > 0) {
+      tabs.push({ id: 'ground', label: 'On ground' });
+    }
+    if (sledPanelVisible) {
+      tabs.push({ id: 'sled', label: 'Sled' });
+    }
+    return tabs;
+  }, [playerAtCamp, campHasDryingRackStation, selectedTileWorldItems, sledPanelVisible]);
+
+  useEffect(() => {
+    if (!tabDefs.some((t) => t.id === activeTab)) {
+      setActiveTab('inventory');
+    }
+  }, [activeTab, tabDefs]);
 
   if (!isOpen) {
     return null;
@@ -245,6 +275,7 @@ export default function InventoryPanel({
             fallbackLabel={gridEntry.name}
             isFullyDried={gridEntry.isFullyDried === true}
             spoilageProgress={gridEntry.spoilageProgress}
+            fixedSlotWidthPx={MODAL_INVENTORY_SLOT_PX}
           />
           <span className="slot-overlay">
             <span className="slot-overlay-text slot-overlay-qty">×{gridEntry.quantity}</span>
@@ -255,251 +286,319 @@ export default function InventoryPanel({
     }
   }
 
+  const equipmentBar = (
+    <aside className="hud-inventory-equipment-bar" aria-label="Equipment">
+      <span className="hud-inventory-equipment-bar-label">Equip</span>
+      <div className="hud-inventory-equipment-chips">
+        {equipmentSlots.map((slot) => {
+          const equipped = playerEquipment?.[slot];
+          const itemId = equipped?.itemId;
+          return (
+            <div key={`equip-${slot}`} className="hud-equip-chip">
+              <span className="hud-equip-chip-slot" title={slot}>{slot}</span>
+              <span className="hud-equip-chip-item" title={itemId || undefined}>
+                {itemId || '—'}
+              </span>
+              {equipped ? (
+                <button type="button" className="hud-equip-chip-unequip" onClick={() => onUnequipSlot(slot)} aria-label={`Unequip ${slot}`}>✕</button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </aside>
+  );
+
+  const showFooter = (
+    (activeTab === 'inventory' && selectedInventoryEntry)
+    || (activeTab === 'stockpile' && selectedStockpileEntry)
+    || (activeTab === 'ground' && selectedTileWorldItems.length > 0)
+    || (activeTab === 'sled' && sledPanelVisible)
+  );
+
   return (
-    <aside
-      className={`hud-inventory-panel${isDebriefActive ? ' hud-inventory-panel--debrief' : ''}`}
-      aria-label="Inventory"
+    <div
+      className="hud-inventory-modal-backdrop"
+      onClick={() => onRequestClose()}
+      role="presentation"
     >
-      <div className="hud-inventory-header">
-        <h3>Inventory</h3>
-        <span
-          className={`hud-weight-label ${carryWeightSeverity === 'critical' ? 'hud-weight-critical' : carryWeightSeverity === 'warning' ? 'hud-weight-warn' : ''}`}
-        >
-          <span className="hud-weight-prefix">Carry weight: </span>
-          {formatWeightLabel(playerCarryWeightKg)} / {formatWeightLabel(playerCarryCapacityKg)}
-        </span>
-      </div>
-
       <div
-        className="inventory-grid hud-inventory-player-grid"
-        style={{ '--inv-cols': gw }}
-        role="listbox"
-        aria-label="Inventory items"
+        className={`hud-inventory-modal${isDebriefActive ? ' hud-inventory-modal--debrief' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Inventory"
       >
-        {inventoryGridCells}
-      </div>
-
-      {selectedInventoryEntry ? (
-        <div className="hud-item-actions">
-          <p className="hud-item-name">{selectedInventoryEntry.name} ×{selectedInventoryEntry.quantity}</p>
-          <p className="hud-empty-note">Right-click an item to open actions.</p>
-        </div>
-      ) : null}
-
-      <div className="hud-equipment">
-        <h4>Equipment</h4>
-        {equipmentSlots.map((slot) => (
-          <div key={`equip-${slot}`} className="hud-equip-row">
-            <span className="hud-equip-slot">{slot}</span>
-            <span className="hud-equip-item">{playerEquipment?.[slot]?.itemId || '—'}</span>
-            {playerEquipment?.[slot] ? (
-              <button type="button" className="hud-equip-unequip" onClick={() => onUnequipSlot(slot)}>✕</button>
-            ) : null}
-          </div>
-        ))}
-      </div>
-
-      {playerAtCamp ? (
-        <>
-          <h4>Camp Stockpile</h4>
-          {isDebriefActive ? (
-            <div className="stockpile-sort-bar" role="group" aria-label="Stockpile sort">
-              {[
-                { id: 'spoilage', label: 'Spoilage' },
-                { id: 'weight', label: 'Weight' },
-                { id: 'category', label: 'Category' },
-              ].map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`stockpile-sort-btn${stockpileSortMode === id ? ' stockpile-sort-btn--active' : ''}`}
-                  onClick={() => setStockpileSortMode(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div className="inventory-grid" role="listbox" aria-label="Stockpile items">
-            {displayStockpileEntries.length === 0 ? (
-              <p className="hud-empty-note">Empty</p>
-            ) : (
-              displayStockpileEntries.map((entry) => {
-                const spoilageUrgent = Number.isFinite(entry.decayDaysRemaining)
-                  && entry.decayDaysRemaining <= SPOIL_BEFORE_NEXT_DEBRIEF_DAYS;
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    role="option"
-                    aria-selected={selectedStockpileItemId === entry.itemId}
-                    aria-label={gridEntryAriaLabel(entry, formatWeightLabel)}
-                    className={`inventory-slot inventory-slot--stockpile ${selectedStockpileItemId === entry.itemId ? 'selected' : ''}`}
-                    onClick={() => setSelectedStockpileItemId(entry.itemId)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      onOpenContextMenu({
-                        source: 'stockpile',
-                        itemId: entry.itemId,
-                        x: event.clientX,
-                        y: event.clientY,
-                      });
-                    }}
-                    title={gridEntryTooltip(entry, formatWeightLabel)}
-                  >
-                    {spoilageUrgent ? (
-                      <span
-                        className="stockpile-spoil-clock"
-                        title="Will hit full spoilage before next debrief"
-                        aria-label="Spoilage warning"
-                      />
-                    ) : null}
-                    <InventorySlotSpriteStack
-                      sprite={entry.inventorySprite}
-                      fallbackLabel={entry.name}
-                      isFullyDried={entry.isFullyDried === true}
-                      spoilageProgress={entry.spoilageProgress}
-                    />
-                    <span className="slot-overlay">
-                      <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
-                      <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-          {selectedStockpileEntry ? (
-            <div className="hud-item-actions">
-              <p className="hud-item-name">{selectedStockpileEntry.name} ×{selectedStockpileEntry.quantity}</p>
-              <p className="hud-empty-note">Right-click an item for more actions.</p>
-              <div className="hud-item-btns">
-                <button
-                  type="button"
-                  disabled={stockpileWithdrawDisabled}
-                  title={stockpileWithdrawDisabled && stockpileWithdrawDisabledReason ? stockpileWithdrawDisabledReason : undefined}
-                  onClick={() => onRunQuickAction('camp_stockpile_remove')}
-                >
-                  Withdraw
-                </button>
-                {stockpileWithdrawDisabled && stockpileWithdrawDisabledReason ? (
-                  <p className="hud-empty-note hud-pickup-blocked-note">{stockpileWithdrawDisabledReason}</p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {campHasDryingRackStation ? (
-            <>
-              <h4>Drying Rack</h4>
-              <p className="hud-empty-note" style={{ marginTop: 0, marginBottom: '6px', fontSize: '12px' }}>
-                Right-click the rack tile → Inspect Drying Rack for details.
-              </p>
-              <DryingRackGrid
-                gameState={gameState}
-                slots={campDryingRackSlots}
-                showEmptyHint
-                onRemoveSlot={onDryingRackRemove}
-              />
-            </>
-          ) : null}
-        </>
-      ) : null}
-
-      {selectedTileWorldItems.length > 0 ? (
-        <>
-          <h4>On Ground</h4>
-          <div className="inventory-grid" role="listbox" aria-label="Ground items">
-            {selectedTileWorldItems.map((entry) => (
+        <div className="hud-inventory-main">
+          <nav className="hud-inventory-tabs hud-inventory-tabs--modal-top" aria-label="Inventory sections">
+            {tabDefs.map(({ id, label }) => (
               <button
-                key={entry.key}
+                key={id}
                 type="button"
-                role="option"
-                aria-selected={selectedWorldItemId === entry.itemId}
-                aria-label={gridEntryAriaLabel(entry, formatWeightLabel)}
-                className={`inventory-slot ${selectedWorldItemId === entry.itemId ? 'selected' : ''}`}
-                onClick={() => setSelectedWorldItemId(entry.itemId)}
-                title={gridEntryTooltip(entry, formatWeightLabel)}
+                className={`hud-inventory-tab${activeTab === id ? ' hud-inventory-tab--active' : ''}`}
+                onClick={() => setActiveTab(id)}
               >
-                <InventorySlotSpriteStack
-                  sprite={entry.inventorySprite}
-                  fallbackLabel={entry.name}
-                  isFullyDried={entry.isFullyDried === true}
-                  spoilageProgress={entry.spoilageProgress}
-                />
-                <span className="slot-overlay">
-                  <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
-                  <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
-                </span>
+                {label}
               </button>
             ))}
-          </div>
-          <div className="hud-item-btns">
-            <button
-              type="button"
-              disabled={worldItemPickupDisabled}
-              title={worldItemPickupDisabled && worldItemPickupDisabledReason ? worldItemPickupDisabledReason : undefined}
-              onClick={() => onRunQuickAction('item_pickup')}
-            >
-              Pick Up
-            </button>
-            {worldItemPickupDisabled && worldItemPickupDisabledReason ? (
-              <p className="hud-empty-note hud-pickup-blocked-note">{worldItemPickupDisabledReason}</p>
+          </nav>
+          <section className="hud-inventory-tab-content">
+            {activeTab === 'inventory' ? (
+              <div
+                className="inventory-grid hud-inventory-player-grid"
+                style={{ '--inv-cols': gw }}
+                role="listbox"
+                aria-label="Inventory items"
+              >
+                {inventoryGridCells}
+              </div>
             ) : null}
-          </div>
-        </>
-      ) : null}
 
-      {sledPanelVisible ? (
-        <>
-          <h4>Sled {sledAttached ? '(Attached)' : ''}</h4>
-          {sledPanelSubtitle ? <p className="hud-empty-note">{sledPanelSubtitle}</p> : null}
-          <div className="inventory-grid" role="listbox" aria-label="Sled items">
-            {Array.isArray(sledStacks) && sledStacks.length > 0 ? (
-              sledStacks.map((entry) => (
-                <button
-                  key={`sled-${entry.itemId}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selectedSledItemId === entry.itemId}
-                  className={`inventory-slot ${selectedSledItemId === entry.itemId ? 'selected' : ''}`}
-                  onClick={() => setSelectedSledItemId?.(entry.itemId)}
-                  title={gridEntryTooltip(entry, formatWeightLabel)}
-                >
-                  <InventorySlotSpriteStack
-                    sprite={entry.inventorySprite}
-                    fallbackLabel={entry.name}
-                    isFullyDried={entry.isFullyDried === true}
-                    spoilageProgress={entry.spoilageProgress}
-                  />
-                  <span className="slot-overlay">
-                    <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
-                    <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
-                  </span>
-                </button>
-              ))
-            ) : (
-              <p className="hud-empty-note">No items in sled</p>
-            )}
-          </div>
-          <div className="hud-item-btns">
+            {activeTab === 'stockpile' && playerAtCamp ? (
+              <>
+                <h4>Camp stockpile</h4>
+                {isDebriefActive ? (
+                  <div className="stockpile-sort-bar" role="group" aria-label="Stockpile sort">
+                    {[
+                      { id: 'spoilage', label: 'Spoilage' },
+                      { id: 'weight', label: 'Weight' },
+                      { id: 'category', label: 'Category' },
+                    ].map(({ id, label }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`stockpile-sort-btn${stockpileSortMode === id ? ' stockpile-sort-btn--active' : ''}`}
+                        onClick={() => setStockpileSortMode(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="inventory-grid" role="listbox" aria-label="Stockpile items">
+                  {displayStockpileEntries.length === 0 ? (
+                    <p className="hud-empty-note">Empty</p>
+                  ) : (
+                    displayStockpileEntries.map((entry) => {
+                      const spoilageUrgent = Number.isFinite(entry.decayDaysRemaining)
+                        && entry.decayDaysRemaining <= SPOIL_BEFORE_NEXT_DEBRIEF_DAYS;
+                      return (
+                        <button
+                          key={entry.key}
+                          type="button"
+                          role="option"
+                          aria-selected={selectedStockpileItemId === entry.itemId}
+                          aria-label={gridEntryAriaLabel(entry, formatWeightLabel)}
+                          className={`inventory-slot inventory-slot--stockpile ${selectedStockpileItemId === entry.itemId ? 'selected' : ''}`}
+                          onClick={() => setSelectedStockpileItemId(entry.itemId)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            onOpenContextMenu({
+                              source: 'stockpile',
+                              itemId: entry.itemId,
+                              x: event.clientX,
+                              y: event.clientY,
+                            });
+                          }}
+                          title={gridEntryTooltip(entry, formatWeightLabel)}
+                        >
+                          {spoilageUrgent ? (
+                            <span
+                              className="stockpile-spoil-clock"
+                              title="Will hit full spoilage before next debrief"
+                              aria-label="Spoilage warning"
+                            />
+                          ) : null}
+                          <InventorySlotSpriteStack
+                            sprite={entry.inventorySprite}
+                            fallbackLabel={entry.name}
+                            isFullyDried={entry.isFullyDried === true}
+                            spoilageProgress={entry.spoilageProgress}
+                            fixedSlotWidthPx={MODAL_INVENTORY_SLOT_PX}
+                          />
+                          <span className="slot-overlay">
+                            <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
+                            <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            ) : null}
+
+            {activeTab === 'dryingRack' && playerAtCamp && campHasDryingRackStation ? (
+              <>
+                <h4>Drying rack</h4>
+                <p className="hud-empty-note" style={{ marginTop: 0, marginBottom: '6px', fontSize: '12px' }}>
+                  Right-click the rack tile → Inspect Drying Rack for details.
+                </p>
+                <DryingRackGrid
+                  gameState={gameState}
+                  slots={campDryingRackSlots}
+                  showEmptyHint
+                  onRemoveSlot={onDryingRackRemove}
+                />
+              </>
+            ) : null}
+
+            {activeTab === 'ground' && selectedTileWorldItems.length > 0 ? (
+              <>
+                <h4>On ground</h4>
+                <div className="inventory-grid" role="listbox" aria-label="Ground items">
+                  {selectedTileWorldItems.map((entry) => (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedWorldItemId === entry.itemId}
+                      aria-label={gridEntryAriaLabel(entry, formatWeightLabel)}
+                      className={`inventory-slot ${selectedWorldItemId === entry.itemId ? 'selected' : ''}`}
+                      onClick={() => setSelectedWorldItemId(entry.itemId)}
+                      title={gridEntryTooltip(entry, formatWeightLabel)}
+                    >
+                      <InventorySlotSpriteStack
+                        sprite={entry.inventorySprite}
+                        fallbackLabel={entry.name}
+                        isFullyDried={entry.isFullyDried === true}
+                        spoilageProgress={entry.spoilageProgress}
+                        fixedSlotWidthPx={MODAL_INVENTORY_SLOT_PX}
+                      />
+                      <span className="slot-overlay">
+                        <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
+                        <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {activeTab === 'sled' && sledPanelVisible ? (
+              <>
+                <h4>Sled {sledAttached ? '(attached)' : ''}</h4>
+                {sledPanelSubtitle ? <p className="hud-empty-note">{sledPanelSubtitle}</p> : null}
+                <div className="inventory-grid" role="listbox" aria-label="Sled items">
+                  {Array.isArray(sledStacks) && sledStacks.length > 0 ? (
+                    sledStacks.map((entry) => (
+                      <button
+                        key={`sled-${entry.itemId}`}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedSledItemId === entry.itemId}
+                        className={`inventory-slot ${selectedSledItemId === entry.itemId ? 'selected' : ''}`}
+                        onClick={() => setSelectedSledItemId?.(entry.itemId)}
+                        title={gridEntryTooltip(entry, formatWeightLabel)}
+                      >
+                        <InventorySlotSpriteStack
+                          sprite={entry.inventorySprite}
+                          fallbackLabel={entry.name}
+                          isFullyDried={entry.isFullyDried === true}
+                          spoilageProgress={entry.spoilageProgress}
+                          fixedSlotWidthPx={MODAL_INVENTORY_SLOT_PX}
+                        />
+                        <span className="slot-overlay">
+                          <span className="slot-overlay-text slot-overlay-qty">×{entry.quantity}</span>
+                          <span className="slot-overlay-text slot-overlay-wt">{formatWeightLabel(entry.totalWeightKg ?? 0)}</span>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="hud-empty-note">No items in sled</p>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </section>
+        </div>
+
+        <aside className="hud-inventory-side" aria-label="Inventory actions and filters">
+          <div className="hud-inventory-side-header">
+            <h3 className="hud-inventory-modal-title">Inventory</h3>
             <button
               type="button"
-              onClick={() => onRunSledQuickAction?.('add')}
-              disabled={!selectedInventoryEntry}
+              className="hud-inventory-modal-close"
+              onClick={() => onRequestClose()}
+              aria-label="Close inventory"
             >
-              Add from Inventory
-            </button>
-            <button
-              type="button"
-              onClick={() => onRunSledQuickAction?.('remove')}
-              disabled={!selectedSledItemId}
-            >
-              Take from Sled
+              ✕
             </button>
           </div>
-        </>
-      ) : null}
-    </aside>
+          <span
+            className={`hud-weight-label hud-weight-label--side ${carryWeightSeverity === 'critical' ? 'hud-weight-critical' : carryWeightSeverity === 'warning' ? 'hud-weight-warn' : ''}`}
+          >
+            <span className="hud-weight-prefix">Carry: </span>
+            {formatWeightLabel(playerCarryWeightKg)} / {formatWeightLabel(playerCarryCapacityKg)}
+          </span>
+          {activeTab === 'inventory' ? equipmentBar : null}
+          {showFooter ? (
+            <div className="hud-inventory-footer">
+              {activeTab === 'inventory' && selectedInventoryEntry ? (
+                <div className="hud-item-actions">
+                  <p className="hud-item-name">{selectedInventoryEntry.name} ×{selectedInventoryEntry.quantity}</p>
+                  <p className="hud-empty-note">Right-click an item to open actions.</p>
+                </div>
+              ) : null}
+
+              {activeTab === 'stockpile' && selectedStockpileEntry ? (
+                <div className="hud-item-actions">
+                  <p className="hud-item-name">{selectedStockpileEntry.name} ×{selectedStockpileEntry.quantity}</p>
+                  <p className="hud-empty-note">Right-click an item for more actions.</p>
+                  <div className="hud-item-btns">
+                    <button
+                      type="button"
+                      disabled={stockpileWithdrawDisabled}
+                      title={stockpileWithdrawDisabled && stockpileWithdrawDisabledReason ? stockpileWithdrawDisabledReason : undefined}
+                      onClick={() => onRunQuickAction('camp_stockpile_remove')}
+                    >
+                      Withdraw
+                    </button>
+                    {stockpileWithdrawDisabled && stockpileWithdrawDisabledReason ? (
+                      <p className="hud-empty-note hud-pickup-blocked-note">{stockpileWithdrawDisabledReason}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {activeTab === 'ground' && selectedTileWorldItems.length > 0 ? (
+                <div className="hud-item-btns">
+                  <button
+                    type="button"
+                    disabled={worldItemPickupDisabled}
+                    title={worldItemPickupDisabled && worldItemPickupDisabledReason ? worldItemPickupDisabledReason : undefined}
+                    onClick={() => onRunQuickAction('item_pickup')}
+                  >
+                    Pick up
+                  </button>
+                  {worldItemPickupDisabled && worldItemPickupDisabledReason ? (
+                    <p className="hud-empty-note hud-pickup-blocked-note">{worldItemPickupDisabledReason}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {activeTab === 'sled' && sledPanelVisible ? (
+                <div className="hud-item-btns">
+                  <button
+                    type="button"
+                    onClick={() => onRunSledQuickAction?.('add')}
+                    disabled={!selectedInventoryEntry}
+                  >
+                    Add from inventory
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRunSledQuickAction?.('remove')}
+                    disabled={!selectedSledItemId}
+                  >
+                    Take from sled
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </aside>
+      </div>
+    </div>
   );
 }

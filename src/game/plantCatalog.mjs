@@ -130,6 +130,7 @@ export function getSeason(dayOfYear) {
 
 function normalizePlant(rawPlant) {
   const shadeToleranceRange = normalizeToleranceRange(rawPlant.soil?.shade?.tolerance_range);
+  const salinityToleranceRange = normalizeToleranceRange(rawPlant.soil?.salinity?.tolerance_range);
   const drainageToleranceRange = normalizeToleranceRange(rawPlant.soil?.drainage?.tolerance_range);
   const fertilityToleranceRange = normalizeToleranceRange(rawPlant.soil?.fertility?.tolerance_range);
   const moistureToleranceRange = normalizeToleranceRange(rawPlant.soil?.moisture?.tolerance_range);
@@ -150,6 +151,10 @@ function normalizePlant(rawPlant) {
     shade: {
       ...(rawPlant.soil?.shade || {}),
       tolerance_range: shadeToleranceRange,
+    },
+    salinity: {
+      ...(rawPlant.soil?.salinity || {}),
+      tolerance_range: salinityToleranceRange,
     },
   };
   const normalizedParts = (rawPlant.parts || []).map((part) => ({

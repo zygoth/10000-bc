@@ -154,6 +154,7 @@ export default function PixiWorldView({
         const cf2 = gameCameraFloatRef?.current;
         if (cf2) {
           scene.applyCameraPixelRoll(cf2.x, cf2.y);
+          scene.bumpWindViewportFrameAfterSync(cf2.x, cf2.y);
           scene.stepPlayerVisual(gs, cf2.x, cf2.y);
         }
         refreshHoverAfterSceneSync();
@@ -286,6 +287,8 @@ export default function PixiWorldView({
       const ax = Math.floor(Number(cf.x) + 1e-9);
       const ay = Math.floor(Number(cf.y) + 1e-9);
       scene.applyCameraPixelRoll(cf.x, cf.y);
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      scene.stepWindEffects(nowMs, gs, windowWidth, windowHeight, cf.x, cf.y);
       if (ax !== lastSyncedFloorRef.current.x || ay !== lastSyncedFloorRef.current.y) {
         runSceneSync();
       }
@@ -296,7 +299,7 @@ export default function PixiWorldView({
         cancelAnimationFrame(rafId);
       }
     };
-  }, [ready, runSceneSync]);
+  }, [ready, runSceneSync, windowWidth, windowHeight]);
 
   useEffect(() => {
     const el = hostRef.current;

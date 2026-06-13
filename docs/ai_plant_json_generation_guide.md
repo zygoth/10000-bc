@@ -1,6 +1,9 @@
 # AI Plant Object Generation Guide
 ## 10000 BC Survival Game
 
+> **Single source of truth:** This file lives in `10000BC/docs/`. The Plant Creation Workflow repo uses an NTFS hard link at `ai_plant_json_generation_guide.md` (repo root) pointing here. Edit only this copy; recreate the link on new machines with:
+> `mklink /H "..\AI Game Dev Attempts\Plant Creation Workflow\ai_plant_json_generation_guide.md" "..\10000BC\docs\ai_plant_json_generation_guide.md"`
+
 This document contains all information needed to generate valid plant object JSON files for the 10000 BC game data pipeline.
 
 ---
@@ -423,7 +426,7 @@ Each life stage maps directly to a distinct sprite in the sprite generation pipe
 
 Typical stage splits to consider (not all apply to every plant):
 
-- **`seedling`** — young plant before it reaches harvestable size or reproductive maturity; visually small and leaf-only. Don't forget to include this stage in leaf valid stages array, otherwise this stage will have no above-ground parts and can't be rendered.
+- **`seedling`** — young plant before reproductive maturity; for deciduous trees use prefixed seasonal names (`seedling_vegetative`, etc.) instead of a single year-round `seedling` row.
 - **`vegetative`** — full-sized but not yet flowering; leaves and stem structure dominant (use instead of `mature` when a distinct flowering stage follows)
 - **`flowering`** — visible flowers present; signals the plant is in bloom and flower parts are available; visually distinct from vegetative state
 - **`fruiting`** — flowers have dropped and fruit or berries are forming or ripe; plant silhouette changes with visible fruit clusters
@@ -492,18 +495,30 @@ Note: Dies on day 36 of year 2 when no valid life stage exists (gap at days 36-4
 ```
 Note: Year 1 stages cover all 40 days (vegetative days 1-35, dormant days 36-40), preventing premature death. Year 2 stages leave gap at days 36-40, triggering death after seeding.
 
-**Deciduous tree (temperate hardwood — seasonal canopy after maturity):**
+**Deciduous tree (temperate hardwood — youth canopy + seasonal maturity):**
 ```json
 "life_stages": [
-  {"stage": "seedling", "min_age_days": 0, "seasonal_window": null, "size": 2, "field_description": "..."},
-  {"stage": "sapling", "min_age_days": 240, "seasonal_window": null, "size": 5, "field_description": "..."},
-  {"stage": "vegetative", "min_age_days": 360, "seasonal_window": {"start_day": 1, "end_day": 20}, "size": 9, "field_description": "Full green canopy; mast not prominent in silhouette."},
-  {"stage": "fruiting", "min_age_days": 361, "seasonal_window": {"start_day": 21, "end_day": 30}, "size": 9, "field_description": "Nut or samara silhouettes visible in crown."},
-  {"stage": "senescent", "min_age_days": 362, "seasonal_window": {"start_day": 31, "end_day": 35}, "size": 9, "field_description": "Fall color; mast still visible or shedding."},
-  {"stage": "dormant", "min_age_days": 363, "seasonal_window": {"start_day": 36, "end_day": 40}, "size": 9, "field_description": "Leafless branching crown; outline reads clearly against sky."}
+  {"stage": "seedling_vegetative", "min_age_days": 0, "seasonal_window": {"start_day": 1, "end_day": 20}, "size": 2, "field_description": "Small shoot; green leaves."},
+  {"stage": "seedling_senescent", "min_age_days": 0, "seasonal_window": {"start_day": 21, "end_day": 30}, "size": 2, "field_description": "Small shoot; browning leaves dropping."},
+  {"stage": "seedling_winter_bare", "min_age_days": 0, "seasonal_window": {"start_day": 31, "end_day": 40}, "size": 2, "field_description": "Leafless twig silhouette."},
+  {"stage": "sapling_vegetative", "min_age_days": 240, "seasonal_window": {"start_day": 1, "end_day": 20}, "size": 5, "field_description": "Young tree; green crown."},
+  {"stage": "sapling_senescent", "min_age_days": 240, "seasonal_window": {"start_day": 21, "end_day": 30}, "size": 5, "field_description": "Young tree; fall color."},
+  {"stage": "sapling_winter_bare", "min_age_days": 240, "seasonal_window": {"start_day": 31, "end_day": 40}, "size": 5, "field_description": "Leafless young tree."},
+  {"stage": "vegetative", "min_age_days": 360, "seasonal_window": {"start_day": 1, "end_day": 10}, "size": 9, "field_description": "Full green canopy; mast not prominent."},
+  {"stage": "flowering", "min_age_days": 361, "seasonal_window": {"start_day": 11, "end_day": 15}, "size": 9, "field_description": "Catkins visible among foliage."},
+  {"stage": "fruiting", "min_age_days": 362, "seasonal_window": {"start_day": 16, "end_day": 25}, "size": 9, "field_description": "Nuts visible in crown."},
+  {"stage": "senescent", "min_age_days": 363, "seasonal_window": {"start_day": 21, "end_day": 30}, "size": 9, "field_description": "Fall color; leaves shedding."},
+  {"stage": "winter_bare", "min_age_days": 364, "seasonal_window": {"start_day": 31, "end_day": 40}, "size": 9, "field_description": "Leafless branching crown."}
 ]
 ```
-Note: Ages are illustrative—use your species’ timeline. Give each seasonal band its **own stage name** so `available_life_stages` on parts stays unambiguous. If your build ties **`dormant`** to **no** tile sprite, do not use that token for leafless hardwoods that must remain visible—pick a project-approved stage name that still renders a bare-canopy sprite.
+Note: Ages are illustrative. **Youth tiers before reproductive `min_age_days` must not use `seasonal_window: null`** — use the three-band foliage model above. **Do not** author `{tier}_flowering` or `{tier}_fruiting` on seedlings/saplings; reproduction life stages begin only at mature `min_age_days`. Youth `_vegetative` ends at day **20** so fall leaf part sub-stages (starting `early_fall`, day 21) align with `_senescent` life-stage sprites. List same-`min_age_days` rows in calendar order. Use `winter_bare` (not `dormant`) when the tile must still show a bare woody silhouette.
+
+**Deciduous youth seasonal canopy (CRITICAL):**
+
+- `seasonal_window: null` on youth tiers is **invalid** for leaf-off deciduous species.
+- Before reproductive age: only `{tier}_vegetative`, `{tier}_senescent`, `{tier}_winter_bare`.
+- Part `available_life_stages` for green leaf sub-stages: youth/mature green bands only. For fall leaf sub-stages: `*_senescent` life stages only. No leaf part on `*_winter_bare`.
+- Part sub-stages are calendar-gated **independently** of life-stage sprites — fall debris and brown leaves require matching `_senescent` life stages on the tile.
 
 **Evergreen conifer (persistent foliage; seasonal cones/reproduction):**
 ```json
@@ -824,7 +839,7 @@ All other fields are automatically copied from the first sub-stage. This makes i
 **`reach_tier_by_life_stage`** (object or omit)
 - Optional. Keys are life stage names from `life_stages`; values are `ground` | `elevated` | `canopy`.
 - When the plant is in a listed stage, that value **overrides** `reach_tier` for harvest tool gating and for how harvest action pools are initialized.
-- Use for trees where young stages share the same leaf part/sprites as adults but foliage is reachable from the ground, while mature growth is canopy-tier (e.g. black walnut `leaf` on `seedling`/`sapling` → `ground`, mature stages → `canopy` from base `reach_tier`).
+- Use for trees where young stages share the same leaf part/sprites as adults but foliage is reachable from the ground, while mature growth is canopy-tier (e.g. black walnut `leaf` on `seedling_vegetative`/`sapling_vegetative` → `ground`, mature stages → `canopy` from base `reach_tier`).
 
 **`harvest_damage`** (float 0.0-1.0 or null, required)
 - Total vitality budget this sub-stage can remove when one depletion cycle (one full round of `actions_until_depleted`) is fully exploited
@@ -836,6 +851,12 @@ All other fields are automatically copied from the first sub-stage. This makes i
   - `vitality_loss_per_action = harvest_damage / actions_until_depleted_roll`
   - This is the same for both non-regrowing and regrowing parts
   - Regrowing parts can therefore accumulate additional vitality loss across repeated regrowth cycles within the same seasonal window
+
+**`wind_debris`** (object, optional)
+- Renderer-only wind effect when this sub-stage is active and wind is strong enough. Omit on parts that never shed visibly (roots, bark, etc.).
+- **`behavior`**: `"fall"` (gravity + tumble) or `"float"` (drift; use `visual_part` / `visual_sub_stage` when the shed visual differs from the host sub-stage, e.g. milkweed fluff).
+- **`mass`**, **`wind_drag`**, **`terminal_fall_speed`** (fall only), **`spawn_rate_per_minute`** `[min, max]`, **`min_wind_strength`** (0.0-1.0).
+- Author only on fall-leaf / seed-head sub-stages whose `available_life_stages` (at the part level) include matching `*_senescent` life stages — never on year-round green youth sprites. Tile sprite and debris must agree (see Deciduous youth seasonal canopy).
 
 **`regrowth_days`** (int or null, required)
 - In-game days required for this sub-stage to regrow after depletion

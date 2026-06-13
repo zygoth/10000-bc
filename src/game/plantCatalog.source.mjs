@@ -1519,7 +1519,20 @@ const PLANT_CATALOG_SOURCE = [
             "stew_nutrition_factor": 0,
             "cooking_detoxifies": false,
             "cooked_edibility_score": 0,
-            "cooked_harshness": 1
+            "cooked_harshness": 1,
+            "wind_debris": {
+              "behavior": "float",
+              "mass": 0.06,
+              "wind_drag": 0.92,
+              "rise_speed": 10,
+              "spawn_rate_per_minute": [
+                1.2,
+                7.5
+              ],
+              "min_wind_strength": 0.3,
+              "visual_part": "fluff",
+              "visual_sub_stage": "dry"
+            }
           }
         ]
       },
@@ -1835,18 +1848,64 @@ const PLANT_CATALOG_SOURCE = [
     },
     "life_stages": [
       {
-        "stage": "seedling",
+        "stage": "seedling_vegetative",
         "min_age_days": 0,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 1,
-        "field_description": "A small sapling with a few oval, fuzzy leaves."
+        "field_description": "A small shoot with a few oval, fuzzy green leaves."
       },
       {
-        "stage": "sapling",
+        "stage": "seedling_senescent",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 1,
+        "field_description": "A small shoot whose oval leaves are browning and dropping."
+      },
+      {
+        "stage": "seedling_winter_bare",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 1,
+        "field_description": "A tiny leafless shoot with bare twigs."
+      },
+      {
+        "stage": "sapling_vegetative",
         "min_age_days": 120,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 4,
-        "field_description": "A multi-stemmed young shrub with oval leaves, but no catkins or nuts."
+        "field_description": "A multi-stemmed young shrub with oval green leaves, but no catkins or nuts."
+      },
+      {
+        "stage": "sapling_senescent",
+        "min_age_days": 120,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 4,
+        "field_description": "A young hazel shrub with browning oval leaves thinning from the stems."
+      },
+      {
+        "stage": "sapling_winter_bare",
+        "min_age_days": 120,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 4,
+        "field_description": "A bare multi-stemmed young shrub with tight winter buds on the twigs."
       },
       {
         "stage": "mature_flowering",
@@ -1893,8 +1952,8 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "leaf",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "sapling_vegetative",
           "mature_flowering",
           "mature_fruiting",
           "mature_seed_set"
@@ -1949,7 +2008,18 @@ const PLANT_CATALOG_SOURCE = [
             "regrowth_max_harvests": 2,
             "decay_days": 3,
             "can_dry": false,
-            "stew_nutrition_factor": 1
+            "stew_nutrition_factor": 1,
+            "wind_debris": {
+              "behavior": "fall",
+              "mass": 0.35,
+              "wind_drag": 0.62,
+              "terminal_fall_speed": 52,
+              "spawn_rate_per_minute": [
+                0.4,
+                2.8
+              ],
+              "min_wind_strength": 0.25
+            }
           }
         ]
       },
@@ -2214,7 +2284,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "branch",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_flowering",
           "mature_fruiting",
           "mature_seed_set",
@@ -2293,7 +2365,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "outer_bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_flowering",
           "mature_fruiting",
           "mature_seed_set",
@@ -2360,7 +2434,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "inner_bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_flowering",
           "mature_fruiting",
           "mature_seed_set",
@@ -2455,8 +2531,12 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "root",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "seedling_senescent",
+          "seedling_winter_bare",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_flowering",
           "mature_fruiting",
           "mature_seed_set",
@@ -3580,18 +3660,64 @@ const PLANT_CATALOG_SOURCE = [
     },
     "life_stages": [
       {
-        "stage": "seedling",
+        "stage": "seedling_vegetative",
         "min_age_days": 0,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 1,
-        "field_description": "A young, single-stemmed sapling with large pinnately compound leaves. It emits a pungent, spicy-citrus odor when bruised."
+        "field_description": "A young, single-stemmed shoot with large pinnately compound green leaves. It emits a pungent, spicy-citrus odor when bruised."
       },
       {
-        "stage": "sapling",
+        "stage": "seedling_senescent",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 1,
+        "field_description": "A small shoot whose compound leaves are yellowing and drying, several already fallen."
+      },
+      {
+        "stage": "seedling_winter_bare",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 1,
+        "field_description": "A leafless young shoot with a single gray stem and prominent leaf scars."
+      },
+      {
+        "stage": "sapling_vegetative",
         "min_age_days": 280,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 5,
-        "field_description": "A slender young tree with smooth, gray-brown bark and a few sturdy branches bearing long compound leaves."
+        "field_description": "A slender young tree with smooth, gray-brown bark and sturdy branches bearing long green compound leaves."
+      },
+      {
+        "stage": "sapling_senescent",
+        "min_age_days": 280,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 5,
+        "field_description": "A young walnut with yellow-brown compound foliage thinning as leaves drop in autumn."
+      },
+      {
+        "stage": "sapling_winter_bare",
+        "min_age_days": 280,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 5,
+        "field_description": "A leafless young walnut with smooth gray-brown bark and bare fine branches."
       },
       {
         "stage": "mature_vegetative",
@@ -3638,10 +3764,12 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "leaf",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "sapling_vegetative",
           "mature_vegetative",
           "mature_fruiting",
+          "seedling_senescent",
+          "sapling_senescent",
           "mature_seed_set"
         ],
         "sub_stages": [
@@ -3693,8 +3821,10 @@ const PLANT_CATALOG_SOURCE = [
             },
             "reach_tier": "canopy",
             "reach_tier_by_life_stage": {
-              "seedling": "ground",
-              "sapling": "ground"
+              "seedling_vegetative": "ground",
+              "seedling_senescent": "ground",
+              "sapling_vegetative": "ground",
+              "sapling_senescent": "ground"
             },
             "harvest_damage": 0.05,
             "regrowth_days": 15,
@@ -3717,8 +3847,10 @@ const PLANT_CATALOG_SOURCE = [
             "potency_multiplier": 0.1,
             "reach_tier": "canopy",
             "reach_tier_by_life_stage": {
-              "seedling": "ground",
-              "sapling": "ground"
+              "seedling_vegetative": "ground",
+              "seedling_senescent": "ground",
+              "sapling_vegetative": "ground",
+              "sapling_senescent": "ground"
             },
             "harvest_yield": {
               "units_per_action": [
@@ -3734,14 +3866,27 @@ const PLANT_CATALOG_SOURCE = [
             },
             "harvest_damage": 0.05,
             "decay_days": 5,
-            "can_dry": true
+            "can_dry": true,
+            "wind_debris": {
+              "behavior": "fall",
+              "mass": 0.3,
+              "wind_drag": 0.72,
+              "terminal_fall_speed": 54,
+              "spawn_rate_per_minute": [
+                0.5,
+                3.2
+              ],
+              "min_wind_strength": 0.22
+            }
           }
         ]
       },
       {
         "name": "branch",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_vegetative",
           "mature_fruiting",
           "mature_seed_set",
@@ -3809,7 +3954,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_vegetative",
           "mature_fruiting",
           "mature_seed_set",
@@ -3880,7 +4027,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "inner_bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_vegetative",
           "mature_fruiting",
           "mature_seed_set",
@@ -4024,8 +4173,12 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "root",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "seedling_senescent",
+          "seedling_winter_bare",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "mature_vegetative",
           "mature_fruiting",
           "mature_seed_set",
@@ -5542,18 +5695,64 @@ const PLANT_CATALOG_SOURCE = [
     },
     "life_stages": [
       {
-        "stage": "seedling",
+        "stage": "seedling_vegetative",
         "min_age_days": 0,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 2,
         "field_description": "A small woody shoot with a few deeply lobed, pale green leaves."
       },
       {
-        "stage": "sapling",
+        "stage": "seedling_senescent",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 2,
+        "field_description": "A small shoot whose few lobed leaves are turning brown and crisp, some already dropped."
+      },
+      {
+        "stage": "seedling_winter_bare",
+        "min_age_days": 0,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 2,
+        "field_description": "A leafless woody shoot with thin gray twigs and no remaining foliage."
+      },
+      {
+        "stage": "sapling_vegetative",
         "min_age_days": 240,
-        "seasonal_window": null,
+        "seasonal_window": {
+          "start_day": 1,
+          "end_day": 20
+        },
         "size": 6,
-        "field_description": "A young tree with light gray, slightly scaly bark and a spreading crown of lobed leaves."
+        "field_description": "A young tree with light gray, slightly scaly bark and a spreading crown of lobed green leaves."
+      },
+      {
+        "stage": "sapling_senescent",
+        "min_age_days": 240,
+        "seasonal_window": {
+          "start_day": 21,
+          "end_day": 30
+        },
+        "size": 6,
+        "field_description": "A young oak with browning lobed leaves thinning from the crown as autumn progresses."
+      },
+      {
+        "stage": "sapling_winter_bare",
+        "min_age_days": 240,
+        "seasonal_window": {
+          "start_day": 31,
+          "end_day": 40
+        },
+        "size": 6,
+        "field_description": "A leafless young tree with light gray bark and fine branching visible against the sky."
       },
       {
         "stage": "vegetative",
@@ -5589,7 +5788,7 @@ const PLANT_CATALOG_SOURCE = [
         "stage": "senescent",
         "min_age_days": 363,
         "seasonal_window": {
-          "start_day": 26,
+          "start_day": 21,
           "end_day": 30
         },
         "size": 10,
@@ -5610,11 +5809,13 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "leaf",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "sapling_vegetative",
           "vegetative",
           "flowering",
           "fruiting",
+          "seedling_senescent",
+          "sapling_senescent",
           "senescent"
         ],
         "sub_stages": [
@@ -5665,8 +5866,10 @@ const PLANT_CATALOG_SOURCE = [
             },
             "reach_tier": "canopy",
             "reach_tier_by_life_stage": {
-              "seedling": "ground",
-              "sapling": "elevated"
+              "seedling_vegetative": "ground",
+              "seedling_senescent": "ground",
+              "sapling_vegetative": "elevated",
+              "sapling_senescent": "elevated"
             },
             "harvest_damage": 0.05,
             "regrowth_days": 15,
@@ -5706,7 +5909,18 @@ const PLANT_CATALOG_SOURCE = [
               "ground_action_fraction": 0.3
             },
             "regrowth_days": null,
-            "regrowth_max_harvests": null
+            "regrowth_max_harvests": null,
+            "wind_debris": {
+              "behavior": "fall",
+              "mass": 0.28,
+              "wind_drag": 0.7,
+              "terminal_fall_speed": 56,
+              "spawn_rate_per_minute": [
+                0.5,
+                3.2
+              ],
+              "min_wind_strength": 0.22
+            }
           }
         ]
       },
@@ -6011,7 +6225,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "outer_bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "vegetative",
           "flowering",
           "fruiting",
@@ -6084,7 +6300,9 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "inner_bark",
         "available_life_stages": [
-          "sapling",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "vegetative",
           "flowering",
           "fruiting",
@@ -6196,8 +6414,12 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "branch",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "seedling_senescent",
+          "seedling_winter_bare",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "vegetative",
           "flowering",
           "fruiting",
@@ -6256,8 +6478,10 @@ const PLANT_CATALOG_SOURCE = [
             },
             "reach_tier": "canopy",
             "reach_tier_by_life_stage": {
-              "seedling": "ground",
-              "sapling": "elevated"
+              "seedling_vegetative": "ground",
+              "seedling_senescent": "ground",
+              "sapling_vegetative": "elevated",
+              "sapling_senescent": "elevated"
             },
             "harvest_damage": 0.1,
             "regrowth_days": null,
@@ -6273,8 +6497,12 @@ const PLANT_CATALOG_SOURCE = [
       {
         "name": "root",
         "available_life_stages": [
-          "seedling",
-          "sapling",
+          "seedling_vegetative",
+          "seedling_senescent",
+          "seedling_winter_bare",
+          "sapling_vegetative",
+          "sapling_senescent",
+          "sapling_winter_bare",
           "vegetative",
           "flowering",
           "fruiting",
@@ -7351,7 +7579,20 @@ const PLANT_CATALOG_SOURCE = [
             "does_blickey_help_harvest": false,
             "can_squirrel_cache": false,
             "decay_days": 60,
-            "can_dry": true
+            "can_dry": true,
+            "wind_debris": {
+              "behavior": "float",
+              "mass": 0.08,
+              "wind_drag": 0.9,
+              "rise_speed": 12,
+              "spawn_rate_per_minute": [
+                1,
+                8
+              ],
+              "min_wind_strength": 0.32,
+              "visual_part": "fluff",
+              "visual_sub_stage": "dry"
+            }
           }
         ]
       },

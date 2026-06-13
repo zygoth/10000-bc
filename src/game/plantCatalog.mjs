@@ -1,5 +1,6 @@
 import PLANT_CATALOG_SOURCE from './plantCatalog.source.mjs';
 import { assertKnownItemId } from './itemCatalog.mjs';
+import { normalizeWindDebris } from './windDebrisConfig.mjs';
 
 const SEASON_ORDER = ['spring', 'summer', 'fall', 'winter'];
 
@@ -167,6 +168,7 @@ function normalizePlant(rawPlant) {
         || subStage.harvestUnitWeightScalesWithAge === true,
       seasonalWindow: normalizeSeasonalWindow(subStage.seasonal_window),
       tannin_level: normalizeOptionalUnitInterval(subStage.tannin_level),
+      windDebris: normalizeWindDebris(subStage.wind_debris),
       processing_options: normalizeProcessingOptions(
         subStage.processing_options,
         `${rawPlant.id || 'unknown_plant'}:${part.name || 'unknown_part'}:${subStage.id || 'unknown_sub_stage'}`,

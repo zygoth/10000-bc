@@ -49,9 +49,20 @@ import {
   ISO_WORLD_ITEM_SCALE_MULT,
   elevationToIsoOffsetPx,
 } from './isoConstants.js';
-import { computeVisibleIsoTiles, sortVisibleIsoTiles } from './isoMath.js';
-import { computeWorldPanLayerPixels } from './isoCameraRoll.js';
+import { computeVisibleIsoTiles, pickTopTileAtScreen, sortVisibleIsoTiles } from './isoMath.js';
+import { computeWorldPanLayerPixelsForSyncAnchor } from './isoCameraRoll.js';
 import { getSubTextureForSprite } from './textureCache.js';
+import { WindDustLayer } from './wind/windDust.js';
+import { computeViewportScrollDelta } from './wind/windDustViewport.mjs';
+import {
+  capturePlantWindSwayBaseScale,
+  resolveSwayMode,
+  stepPlantWindSway,
+  swayPhaseOffset,
+} from './wind/plantWindSway.mjs';
+import { isoOccupantDepthZ } from './wind/windDebrisDepth.mjs';
+import { WindDebrisLayer } from './wind/WindDebrisLayer.js';
+import { isWindCalm, WindStrengthField } from './wind/windStrengthField.mjs';
 
 /** Tile-to-tile player label motion (ms). */
 const PLAYER_MOVE_TWEEN_MS = 280;
@@ -81,8 +92,8 @@ function applyAnchoredSprite(pixiSprite, sprite, scale, anchorScreenX, anchorScr
     pixiSprite.visible = false;
     return;
   }
-  // Destroyed Pixi v8 sprites null out `anchor`; ignore stale async texture callbacks.
-  if (!pixiSprite.anchor) {
+  // Destroyed Pixi v8 sprites null out `anchor`/`scale`; ignore stale async texture callbacks.
+  if (!pixiSprite.anchor || !pixiSprite.scale) {
     return;
   }
   const f = sprite.frame;
@@ -96,6 +107,9 @@ function applyAnchoredSprite(pixiSprite, sprite, scale, anchorScreenX, anchorScr
   pixiSprite.width = sourceW * scale;
   pixiSprite.height = sourceH * scale;
   pixiSprite.position.set(anchorScreenX, anchorScreenY + anchorYOffsetPx);
+  if (Number.isFinite(Number(options?.depthZ))) {
+    pixiSprite.zIndex = Number(options.depthZ);
+  }
   pixiSprite.visible = true;
   if (options?.tint !== undefined && options?.tint !== null) {
     pixiSprite.tint = options.tint;
@@ -261,6 +275,15 @@ export class IsoWorldScene {
     this._dropPendingKey = null;
     this._dropArrivalFrame = this._onDropArrivalFrame.bind(this);
     this.root.addChild(this.worldPanLayer);
+    /** Viewport-pinned dust; counter-scrolled each frame to match world motion. */
+    this.windDustRoot = new Container();
+    this.root.addChild(this.windDustRoot);
+    this.windStrengthField = new WindStrengthField();
+    this.windDustLayer = new WindDustLayer(this.windDustRoot);
+    this.windDebrisLayer = new WindDebrisLayer();
+    this._windLastMs = 0;
+    /** @type {import('./wind/windDustViewport.mjs').ViewportFrameState | null} */
+    this._windViewportPrev = null;
     this.tileContainers = new Map();
     this.lastSorted = [];
     this.lastOrigin = { originX: 0, originY: 0 };
@@ -323,8 +346,47 @@ export class IsoWorldScene {
    * by shifting the whole world layer — avoids rebuilding sprites every sub-tile frame.
    */
   applyCameraPixelRoll(cameraFx, cameraFy) {
-    const { px, py } = computeWorldPanLayerPixels(cameraFx, cameraFy);
+    const { px, py } = this._panPixelsForCamera(cameraFx, cameraFy);
     this.worldPanLayer.position.set(px, py);
+  }
+
+  /**
+   * Pan relative to the last sync tile anchor so roll stays continuous until async sync runs.
+   * @param {number} cameraFx
+   * @param {number} cameraFy
+   */
+  _panPixelsForCamera(cameraFx, cameraFy) {
+    if (!this.lastSorted?.length) {
+      return { px: 0, py: 0 };
+    }
+    return computeWorldPanLayerPixelsForSyncAnchor(
+      cameraFx,
+      cameraFy,
+      this._lastSyncBaseCamX,
+      this._lastSyncBaseCamY,
+    );
+  }
+
+  /**
+   * After async tile sync, align dust scroll baseline so the next frame does not replay the re-anchor.
+   * @param {number} cameraFx
+   * @param {number} cameraFy
+   */
+  bumpWindViewportFrameAfterSync(cameraFx, cameraFy) {
+    if (!this.windDustLayer || !this.lastSorted?.length) {
+      this._windViewportPrev = null;
+      return;
+    }
+    const { px, py } = this._panPixelsForCamera(cameraFx, cameraFy);
+    const { originX, originY } = this.lastOrigin;
+    this._windViewportPrev = {
+      panPx: px,
+      panPy: py,
+      originX,
+      originY,
+      baseCamX: this._lastSyncBaseCamX,
+      baseCamY: this._lastSyncBaseCamY,
+    };
   }
 
   /**
@@ -529,6 +591,75 @@ export class IsoWorldScene {
       });
       t.anchor.set(0.5, 1);
       startFlight(t);
+    }
+  }
+
+  /**
+   * Per-frame wind field + viewport-pinned dust. Call after applyCameraPixelRoll.
+   * @param {number} nowMs
+   * @param {import('../../game/simCore.mjs').GameState | null} gameState
+   * @param {number} viewportW
+   * @param {number} viewportH
+   * @param {number} cameraFx
+   * @param {number} cameraFy
+   */
+  stepWindEffects(nowMs, gameState, viewportW, viewportH, cameraFx, cameraFy) {
+    if (!this.windStrengthField || !this.windDustLayer) {
+      return;
+    }
+    const wind = gameState?.dailyWindVector || null;
+    if (!wind || !this.lastSorted?.length) {
+      return;
+    }
+    if (!this._windLastMs) {
+      this._windLastMs = nowMs;
+      return;
+    }
+    const dtMs = Math.max(1, Math.min(50, nowMs - this._windLastMs));
+    this._windLastMs = nowMs;
+    const app = this._pixiApp;
+    const viewW = Math.max(1, Math.floor(Number(app?.screen?.width) || Number(viewportW) || 1));
+    const viewH = Math.max(1, Math.floor(Number(app?.screen?.height) || Number(viewportH) || 1));
+    const { originX, originY } = this.lastOrigin;
+    const { px: panPx, py: panPy } = this._panPixelsForCamera(cameraFx, cameraFy);
+    const frame = {
+      panPx,
+      panPy,
+      originX,
+      originY,
+      baseCamX: this._lastSyncBaseCamX,
+      baseCamY: this._lastSyncBaseCamY,
+    };
+    const scrollDelta = computeViewportScrollDelta(this._windViewportPrev, frame);
+    this.windStrengthField.tick(dtMs, wind);
+    this.windDustLayer.step(dtMs, this.windStrengthField, wind, viewW, viewH, scrollDelta);
+    stepPlantWindSway(nowMs, wind, this.tileContainers);
+    const pickTileAtScreen = (screenX, screenY) => pickTopTileAtScreen(
+      this.lastSorted,
+      gameState,
+      cameraFx,
+      cameraFy,
+      originX,
+      originY,
+      screenX,
+      screenY,
+    );
+    this.windDebrisLayer.step(
+      dtMs,
+      gameState,
+      wind,
+      this.windStrengthField,
+      this.lastSorted,
+      this.tileContainers,
+      this.worldPanLayer,
+      viewW,
+      viewH,
+      pickTileAtScreen,
+    );
+    if (isWindCalm(wind.strength)) {
+      this._windViewportPrev = null;
+    } else {
+      this._windViewportPrev = frame;
     }
   }
 
@@ -771,6 +902,7 @@ export class IsoWorldScene {
     const nextKeys = new Set(sorted.map(({ worldX, worldY }) => `${worldX},${worldY}`));
     for (const key of this.tileContainers.keys()) {
       if (!nextKeys.has(key)) {
+        this.windDebrisLayer.recycleForTile(key);
         const c = this.tileContainers.get(key);
         this.tilesRoot.removeChild(c);
         c.destroy({ children: true });
@@ -908,7 +1040,11 @@ export class IsoWorldScene {
       }
 
       tileC.position.set(0, 0);
-      tileC.removeChildren();
+      tileC.sortableChildren = true;
+      this.windDebrisLayer.recycleForTile(key);
+      for (const ch of tileC.removeChildren()) {
+        ch.destroy({ children: false });
+      }
 
       const occupantCopies = (plant && occupantSprite && patchCapacity > 1)
         ? resolvePatchLayout(patchCapacity, `iso:${worldX},${worldY}:${plant.id}`, {
@@ -949,15 +1085,27 @@ export class IsoWorldScene {
       const pushSprite = (spriteRef, scale, ax, ay, opts) => {
         if (!spriteRef) return;
         const s = new Sprite();
+        const windSwayMeta = opts?.windSwayMeta;
+        if (windSwayMeta) {
+          s.__windSwayMeta = {
+            plantId: windSwayMeta.plantId,
+            stageSize: windSwayMeta.stageSize,
+            mode: resolveSwayMode(windSwayMeta.frame),
+            phase: swayPhaseOffset(windSwayMeta.plantId),
+          };
+        }
         tileC.addChild(s);
         texturePromises.push(
           getSubTextureForSprite(spriteRef).then((tex) => {
             // Do not use `_syncGeneration` here: a later `sync` may `canSkip` and bump the gen while
             // this texture is still in flight—then the sprite would never get a texture (invisible).
-            if (!s.parent || s.parent !== tileC) {
+            if (!s.parent || s.parent !== tileC || !s.scale || !s.anchor) {
               return;
             }
             applyAnchoredSprite(s, spriteRef, scale, ax, ay, tex, opts);
+            if (s.__windSwayMeta) {
+              capturePlantWindSwayBaseScale(s);
+            }
           }),
         );
       };
@@ -1031,7 +1179,29 @@ export class IsoWorldScene {
             plantOrLogScale * patchScale,
             screenX + copy.x,
             occupantAnchorY + copy.y,
-            deadLogSprite ? { anchorYOffsetPx: ISO_TILE_HEIGHT_PX } : null,
+            plant
+              ? {
+                depthZ: isoOccupantDepthZ(
+                  screenX + copy.x,
+                  occupantAnchorY + copy.y,
+                  copy.depthY,
+                ),
+                windSwayMeta: {
+                  plantId: plant.id,
+                  stageSize,
+                  frame: occupantSprite.frame,
+                },
+              }
+              : deadLogSprite
+                ? {
+                  anchorYOffsetPx: ISO_TILE_HEIGHT_PX,
+                  depthZ: isoOccupantDepthZ(
+                    screenX + copy.x,
+                    occupantAnchorY + copy.y,
+                    copy.depthY,
+                  ),
+                }
+                : null,
           );
         });
       }
@@ -1083,6 +1253,16 @@ export class IsoWorldScene {
       });
       tileC.__isoContentSig = contentSig;
       tileC.__isoBuildBaseCam = { x: baseCamX, y: baseCamY };
+      tileC.__isoOccupantLayout = {
+        plantId: firstPlantId || '',
+        screenX,
+        occupantAnchorY,
+        groundY,
+        patchCapacity,
+        patchScale,
+        stageSize,
+        plantOrLogScale,
+      };
     }
 
     labelOverlayQueue.sort((a, b) => {
@@ -1207,6 +1387,7 @@ export class IsoWorldScene {
     this.tileContainers.clear();
     this._playerLastSim = null;
     this._playerTween = null;
+    this.windDustLayer?.destroy();
     this.worldPanLayer.destroy({ children: true });
     this.root.destroy({ children: true });
   }

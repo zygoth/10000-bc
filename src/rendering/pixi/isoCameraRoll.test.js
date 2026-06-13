@@ -1,7 +1,9 @@
 import {
   computeWorldPanLayerPixels,
+  computeWorldPanLayerPixelsForSyncAnchor,
   tileAnchorFromFloat,
 } from './isoCameraRoll.js';
+import { ISO_TILE_HALF_WIDTH_PX } from './isoConstants.js';
 
 describe('tileAnchorFromFloat', () => {
   it('matches Math.floor with 1e-9 epsilon', () => {
@@ -38,6 +40,35 @@ describe('computeWorldPanLayerPixels', () => {
     expect(after.bx).toBe(11);
     expect(typeof before.px).toBe('number');
     expect(typeof after.px).toBe('number');
+  });
+});
+
+describe('computeWorldPanLayerPixelsForSyncAnchor', () => {
+  it('stays continuous across a tile edge while sync anchor is unchanged', () => {
+    const baseX = 10;
+    const baseY = 10;
+    const before = computeWorldPanLayerPixelsForSyncAnchor(10.99, 10.99, baseX, baseY);
+    const after = computeWorldPanLayerPixelsForSyncAnchor(11.01, 11.01, baseX, baseY);
+    expect(Math.abs(after.px - before.px)).toBeLessThan(10);
+    expect(Math.abs(after.py - before.py)).toBeLessThan(10);
+  });
+
+  it('keeps world screen position when sync anchor catches up to the camera', () => {
+    const camX = 11.01;
+    const camY = 11.01;
+    const worldX = 15;
+    const worldY = 12;
+    const originX = 640;
+    const originY = 400;
+    const pendingPan = computeWorldPanLayerPixelsForSyncAnchor(camX, camY, 10, 10);
+    const syncedPan = computeWorldPanLayerPixelsForSyncAnchor(camX, camY, 11, 11);
+    const pendingLayerX =
+      ((worldX - 10) - (worldY - 10)) * ISO_TILE_HALF_WIDTH_PX + originX;
+    const syncedLayerX =
+      ((worldX - 11) - (worldY - 11)) * ISO_TILE_HALF_WIDTH_PX + originX;
+    const pendingScreenX = pendingPan.px + pendingLayerX;
+    const syncedScreenX = syncedPan.px + syncedLayerX;
+    expect(syncedScreenX).toBeCloseTo(pendingScreenX, 5);
   });
 });
 
